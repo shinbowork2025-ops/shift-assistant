@@ -1,12 +1,13 @@
 import {
-  SHIFT_TYPES,
   state,
   getDaysInMonth,
   getShift,
+  getShiftType,
   employeeSummary,
   normalizeState,
   saveNow
 } from "./model.js";
+import { SAMPLE_MASTER_CSV } from "./csv.js";
 
 function downloadFile(fileName, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
@@ -25,25 +26,33 @@ function csvCell(value) {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
+function formatHours(hours) {
+  return Number.isInteger(hours) ? hours : hours.toFixed(1);
+}
+
 export function exportCsv() {
   const numberOfDays = getDaysInMonth(state.selectedMonth);
   const header = ["氏名", "コード"];
   for (let day = 1; day <= numberOfDays; day += 1) header.push(`${day}日`);
-  header.push("勤務日数", "勤務時間");
+  header.push("勤務日数", "実働時間");
 
   const rows = [header];
   for (const employee of state.employees) {
     const row = [employee.name, employee.code];
     for (let day = 1; day <= numberOfDays; day += 1) {
-      row.push(SHIFT_TYPES[getShift(employee.id, day)]?.label ?? "");
+      row.push(getShiftType(getShift(employee.id, day))?.name ?? "");
     }
     const summary = employeeSummary(employee.id);
-    row.push(summary.workDays, summary.hours);
+    row.push(summary.workDays, formatHours(summary.hours));
     rows.push(row);
   }
 
   const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
   downloadFile(`shift-${state.selectedMonth}.csv`, csv, "text/csv;charset=utf-8");
+}
+
+export function downloadMasterCsvSample() {
+  downloadFile("shift-assistant-master-sample.csv", `\uFEFF${SAMPLE_MASTER_CSV}`, "text/csv;charset=utf-8");
 }
 
 export function backupJson() {
