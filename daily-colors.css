@@ -1,0 +1,22 @@
+.timeline-work {
+  background-color: #dcfce7 !important;
+  border-top: 4px solid #86c98f;
+  border-bottom: 4px solid #86c98f;
+}
+
+.timeline-break {
+  background-color: #ffedd5;
+  background-image: none;
+}
+
+.timeline-small-break {
+  background-color: #fff1df;
+  border-top: 4px solid #d97706;
+  border-bottom: 4px solid #d97706;
+}
+
+.timeline-lunch {
+  background-color: #fed7aa;
+  border-top: 4px solid #c2410c;
+  border-bottom: 4px solid #c2410c;
+}
