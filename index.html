@@ -9,6 +9,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Shift Assistant</title>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./daily-colors.css">
 </head>
 <body>
   <header class="app-header">
@@ -85,7 +86,7 @@
       <div class="schedule-heading">
         <div>
           <h2 id="dailyTitle">時間帯チャート</h2>
-          <p class="muted">青系のセルが勤務、網掛けが休憩です。下段は休憩を除いた実配置人数です。</p>
+          <p class="muted">薄緑が勤務中、薄オレンジが休憩中です。下段は休憩を除いた実配置人数で、0人は赤く表示します。</p>
         </div>
       </div>
       <div id="dailyEmptyState" class="empty-state" hidden>
