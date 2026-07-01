@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="ブラウザ内だけで動くシフト作成支援ツール">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Shift Assistant</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">LOCAL-ONLY SHIFT TOOL</p>
+      <h1>Shift Assistant</h1>
+      <p class="subtitle">入力内容はこのブラウザ内に保存され、外部サーバーには送信されません。</p>
+    </div>
+    <span class="privacy-badge" title="通信処理を持たない静的アプリです">端末内保存</span>
+  </header>
+
+  <main class="app-main">
+    <section class="toolbar panel" aria-label="操作">
+      <div class="month-controls">
+        <button id="previousMonthButton" class="button secondary" type="button" aria-label="前月">←</button>
+        <label>
+          <span>対象月</span>
+          <input id="monthInput" type="month">
+        </label>
+        <button id="nextMonthButton" class="button secondary" type="button" aria-label="翌月">→</button>
+      </div>
+
+      <div class="toolbar-actions">
+        <button id="addEmployeeButton" class="button primary" type="button">従業員を追加</button>
+        <button id="exportCsvButton" class="button secondary" type="button">CSV出力</button>
+        <button id="backupButton" class="button secondary" type="button">JSONバックアップ</button>
+        <button id="restoreButton" class="button secondary" type="button">JSON復元</button>
+        <input id="restoreInput" type="file" accept="application/json,.json" hidden>
+      </div>
+    </section>
+
+    <section class="legend panel" aria-label="勤務区分">
+      <div><span class="swatch shift-early"></span>早番 8h</div>
+      <div><span class="swatch shift-middle"></span>中番 8h</div>
+      <div><span class="swatch shift-late"></span>遅番 8h</div>
+      <div><span class="swatch shift-short"></span>短時間 4h</div>
+      <div><span class="swatch shift-off"></span>公休</div>
+      <div><span class="swatch shift-paid"></span>有休</div>
+      <div><span class="swatch shift-request"></span>希望休</div>
+    </section>
+
+    <section class="panel schedule-panel">
+      <div class="schedule-heading">
+        <div>
+          <h2 id="scheduleTitle">シフト表</h2>
+          <p id="saveStatus" class="save-status" role="status">保存準備中</p>
+        </div>
+        <button id="clearMonthButton" class="button danger-ghost" type="button">この月をクリア</button>
+      </div>
+
+      <div id="emptyState" class="empty-state" hidden>
+        <h3>従業員が登録されていません</h3>
+        <p>「従業員を追加」から登録すると、月間シフト表が表示されます。</p>
+      </div>
+
+      <div id="tableContainer" class="table-container" tabindex="0" aria-label="月間シフト表"></div>
+    </section>
+
+    <section class="panel notes-panel">
+      <h2>この版でできること</h2>
+      <p>従業員登録、月別シフト入力、勤務日数・時間集計、日別人数集計、端末内自動保存、CSV出力、JSONバックアップ・復元。</p>
+      <p class="muted">ブラウザの閲覧データを削除すると保存内容も消えるため、定期的にJSONバックアップを作成してください。</p>
+    </section>
+  </main>
+
+  <dialog id="employeeDialog">
+    <form id="employeeForm" method="dialog">
+      <div class="dialog-header">
+        <h2 id="employeeDialogTitle">従業員を追加</h2>
+        <button id="closeEmployeeDialogButton" class="icon-button" type="button" aria-label="閉じる">×</button>
+      </div>
+      <input id="employeeIdInput" type="hidden">
+      <label>
+        <span>氏名</span>
+        <input id="employeeNameInput" type="text" maxlength="40" required autocomplete="off">
+      </label>
+      <label>
+        <span>表示用コード（任意）</span>
+        <input id="employeeCodeInput" type="text" maxlength="12" autocomplete="off" placeholder="例：A01">
+      </label>
+      <div class="dialog-actions">
+        <button id="deleteEmployeeButton" class="button danger-ghost" type="button" hidden>削除</button>
+        <span class="spacer"></span>
+        <button id="cancelEmployeeButton" class="button secondary" type="button">キャンセル</button>
+        <button class="button primary" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirmDialog">
+    <form method="dialog">
+      <h2 id="confirmTitle">確認</h2>
+      <p id="confirmMessage"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button id="confirmCancelButton" class="button secondary" value="cancel">キャンセル</button>
+        <button id="confirmOkButton" class="button danger" value="ok">実行</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="shiftSelectTemplate">
+    <select class="shift-select" aria-label="勤務区分">
+      <option value="">未入力</option>
+      <option value="early">早番</option>
+      <option value="middle">中番</option>
+      <option value="late">遅番</option>
+      <option value="short">短時間</option>
+      <option value="off">公休</option>
+      <option value="paid">有休</option>
+      <option value="request">希望休</option>
+    </select>
+  </template>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
