@@ -1,7 +1,6 @@
 import { state } from "../model.js";
 import { ensureBreaksForDate } from "../breaks.js";
 import { importMasterCsvText, importMasterRows, formatImportSummary } from "../csv.js";
-import { readFirstWorksheetRows } from "../xlsx-lite.js";
 import { restoreJson } from "../files.js";
 import { runWithHistory, clearHistory } from "../history.js";
 import { setSaveStatus, setImportStatus } from "../elements.js";
@@ -13,6 +12,7 @@ export async function importMasterFile(file) {
   let sourceLabel;
 
   if (lowerName.endsWith(".xlsx")) {
+    const { readFirstWorksheetRows } = await import("../xlsx-lite.js");
     const workbook = await readFirstWorksheetRows(file);
     summary = runWithHistory("Excelマスターを読み込み", () => importMasterRows(workbook.rows));
     sourceLabel = `Excel「${workbook.sheetName}」`;
