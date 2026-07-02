@@ -1,0 +1,151 @@
+const MINUTES_PER_DAY = 24 * 60;
+
+function normalizeMinute(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number) : null;
+}
+
+function parseTime(value) {
+  if (typeof value !== "string" || !/^\d{1,2}:\d{2}$/.test(value.trim())) return null;
+  const [hours, minutes] = value.trim().split(":").map(Number);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+export function requiredBreakMinutes(workMinutes) {
+  const work = Math.max(0, normalizeMinute(workMinutes) ?? 0);
+  if (work > 480) return 60;
+  if (work > 360) return 45;
+  return 0;
+}
+
+export function plannedBreakTemplates(spanMinutes) {
+  const span = Math.max(0, normalizeMinute(spanMinutes) ?? 0);
+
+  if (span <= 240) return [];
+
+  // 店舗ルールとして、4時間超〜6時間15分までは任意の15分休憩を入れる。
+  // 6時間15分までは、この15分を差し引くと実働6時間以下になる。
+  if (span <= 375) {
+    return [{ type: "small", label: "小休憩", duration: 15, targetOffset: 120 }];
+  }
+
+  // 45分を差し引いた実働が8時間以下に収まる拘束時間帯。
+  if (span <= 525) {
+    return [{
+      type: "lunch",
+      label: "昼休憩",
+      duration: 45,
+      targetOffset: Math.max(60, Math.round((span - 45) / 2))
+    }];
+  }
+
+  // 8時間46分〜8時間59分は60分を配置する。
+  if (span < 540) {
+    return [{
+      type: "lunch",
+      label: "昼休憩",
+      duration: 60,
+      targetOffset: Math.max(60, Math.round((span - 60) / 2))
+    }];
+  }
+
+  // 通常の長時間シフトは店舗ルールを維持し、15分+60分+15分を配置する。
+  return [
+    { type: "small", label: "小休憩", duration: 15, targetOffset: 120 },
+    { type: "lunch", label: "昼休憩", duration: 60, targetOffset: Math.max(180, Math.round((span - 60) / 2)) },
+    { type: "small", label: "小休憩", duration: 15, targetOffset: Math.max(300, span - 105) }
+  ];
+}
+
+export function plannedBreakMinutes(spanMinutes) {
+  return plannedBreakTemplates(spanMinutes).reduce((sum, item) => sum + item.duration, 0);
+}
+
+export function validateBreakTotals(spanMinutes, actualBreakMinutes) {
+  const span = Math.max(0, normalizeMinute(spanMinutes) ?? 0);
+  const actual = Math.max(0, normalizeMinute(actualBreakMinutes) ?? 0);
+  const work = Math.max(0, span - actual);
+  const required = requiredBreakMinutes(work);
+  return {
+    ok: actual >= required,
+    span,
+    work,
+    required,
+    actual,
+    shortage: Math.max(0, required - actual)
+  };
+}
+
+function mergedBreakMinutes(intervals) {
+  if (intervals.length === 0) return 0;
+  const sorted = [...intervals].sort((a, b) => a.start - b.start || a.end - b.end);
+  let total = 0;
+  let currentStart = sorted[0].start;
+  let currentEnd = sorted[0].end;
+
+  for (const interval of sorted.slice(1)) {
+    if (interval.start <= currentEnd) {
+      currentEnd = Math.max(currentEnd, interval.end);
+    } else {
+      total += currentEnd - currentStart;
+      currentStart = interval.start;
+      currentEnd = interval.end;
+    }
+  }
+  return total + currentEnd - currentStart;
+}
+
+export function validateBreaks(shiftType, breaks = []) {
+  if (!shiftType?.isWork) {
+    return { ok: true, span: 0, work: 0, required: 0, actual: 0, shortage: 0, issues: [] };
+  }
+
+  const shiftStart = parseTime(shiftType.start);
+  const shiftEnd = parseTime(shiftType.end);
+  if (shiftStart === null || shiftEnd === null || shiftEnd <= shiftStart || shiftEnd > MINUTES_PER_DAY) {
+    return {
+      ok: false,
+      span: 0,
+      work: 0,
+      required: 0,
+      actual: 0,
+      shortage: 0,
+      issues: ["シフトの開始・終了時刻が不正です。"]
+    };
+  }
+
+  const issues = [];
+  const intervals = [];
+  for (const breakItem of Array.isArray(breaks) ? breaks : []) {
+    const start = parseTime(breakItem?.start);
+    const end = parseTime(breakItem?.end);
+    if (start === null || end === null || end <= start) {
+      issues.push("開始・終了時刻が不正な休憩があります。");
+      continue;
+    }
+    if (start <= shiftStart || end >= shiftEnd) {
+      issues.push("休憩は勤務時間の途中に配置してください。");
+    }
+    intervals.push({ start: Math.max(start, shiftStart), end: Math.min(end, shiftEnd) });
+  }
+
+  const sorted = [...intervals].sort((a, b) => a.start - b.start || a.end - b.end);
+  for (let index = 1; index < sorted.length; index += 1) {
+    if (sorted[index].start < sorted[index - 1].end) {
+      issues.push("休憩時間が重複しています。");
+      break;
+    }
+  }
+
+  const totals = validateBreakTotals(shiftEnd - shiftStart, mergedBreakMinutes(intervals));
+  if (!totals.ok) {
+    issues.push(`休憩が${totals.shortage}分不足しています。`);
+  }
+
+  return {
+    ...totals,
+    ok: totals.ok && issues.length === 0,
+    issues: [...new Set(issues)]
+  };
+}
