@@ -1,7 +1,7 @@
 import { state, workspaceState, loadSavedState, setStatusHandler } from "./model.js";
 import { ensureBreaksForDate } from "./breaks.js";
 import { bindEvents } from "./events.js";
-import { refresh, undoLastAction, redoLastAction } from "./actions.js";
+import { refreshActiveView, undoLastAction, redoLastAction } from "./actions.js";
 import { initializeHistoryUi } from "./history-ui.js";
 import { initializePaintInput } from "./paint-input.js";
 import { elements, setSaveStatus } from "./elements.js";
@@ -23,7 +23,7 @@ async function initialize() {
   initializeHistoryUi({ onUndo: undoLastAction, onRedo: redoLastAction });
   initializePaintInput({
     tableContainer: elements.tableContainer,
-    onStrokeComplete: refresh,
+    onStrokeComplete: refreshActiveView,
     setStatus: setSaveStatus
   });
   bindEvents();
