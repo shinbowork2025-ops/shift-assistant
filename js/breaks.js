@@ -8,23 +8,9 @@ import {
   minutesToTime,
   setBreaksForDate
 } from "./model.js";
+import { plannedBreakTemplates } from "./break-rules.js";
 
 const SLOT_MINUTES = 15;
-
-function breakTemplates(shiftType) {
-  const duration = shiftDurationMinutes(shiftType);
-  if (duration >= 480) {
-    return [
-      { type: "small", label: "小休憩", duration: 15, targetOffset: 120 },
-      { type: "lunch", label: "昼休憩", duration: 60, targetOffset: 255 },
-      { type: "small", label: "小休憩", duration: 15, targetOffset: 435 }
-    ];
-  }
-  if (duration >= 240) {
-    return [{ type: "small", label: "小休憩", duration: 15, targetOffset: 120 }];
-  }
-  return [];
-}
 
 function workingAssignments(dateValue) {
   const day = dayFromDate(dateValue);
@@ -92,16 +78,38 @@ function chooseBreakStart({ target, earliest, latest, duration, active, breakLoa
   return best;
 }
 
-export function generateBreaksForDate(dateValue) {
+function addExistingBreaksToLoad(breaks, breakLoad) {
+  for (const breakItem of breaks ?? []) {
+    const start = timeToMinutes(breakItem.start);
+    const end = timeToMinutes(breakItem.end);
+    if (start === null || end === null || end <= start) continue;
+    for (const slot of slotRange(start, end - start)) {
+      breakLoad.set(slot, (breakLoad.get(slot) ?? 0) + 1);
+    }
+  }
+}
+
+export function generateBreaksForDate(dateValue, employeeIds = null) {
   const assignments = workingAssignments(dateValue);
   const active = activeWorkersBySlot(assignments);
   const breakLoad = new Map();
-  const result = {};
+  const targetIds = employeeIds ? new Set(employeeIds) : new Set(assignments.map(({ employee }) => employee.id));
+  const result = employeeIds ? structuredClone(state.breaks[dateValue] ?? {}) : {};
+
+  for (const employeeId of targetIds) delete result[employeeId];
+
+  if (employeeIds) {
+    for (const { employee } of assignments) {
+      if (!targetIds.has(employee.id)) addExistingBreaksToLoad(result[employee.id], breakLoad);
+    }
+  }
 
   for (const { employee, shiftType } of assignments) {
+    if (!targetIds.has(employee.id)) continue;
+
     const shiftStart = timeToMinutes(shiftType.start);
     const shiftEnd = timeToMinutes(shiftType.end);
-    const templates = breakTemplates(shiftType);
+    const templates = plannedBreakTemplates(shiftDurationMinutes(shiftType));
     let previousEnd = shiftStart;
     result[employee.id] = [];
 
@@ -138,13 +146,10 @@ export function generateBreaksForDate(dateValue) {
   return result;
 }
 
+// 旧データを開いただけでは休憩を再配置しない。
+// 不足や不正な配置は画面側の検証警告で知らせ、再配置はユーザー操作で行う。
 export function ensureBreaksForDate(dateValue) {
-  const dayBreaks = state.breaks[dateValue];
-  const assignments = workingAssignments(dateValue);
-  const expectedIds = assignments.map(({ employee }) => employee.id).sort();
-  const currentIds = dayBreaks ? Object.keys(dayBreaks).sort() : [];
-  const isCurrent = expectedIds.length === currentIds.length && expectedIds.every((id, index) => id === currentIds[index]);
-  return isCurrent ? dayBreaks : generateBreaksForDate(dateValue);
+  return state.breaks[dateValue] ?? {};
 }
 
 export function availableWorkersAt(dateValue, slotStart) {
