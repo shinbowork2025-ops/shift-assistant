@@ -41,10 +41,20 @@ function shiftDurationMinutes(shiftType) {
   return start === null || end === null || end <= start ? 0 : end - start;
 }
 
-function mergedBreakMinutes(breaks = []) {
+function mergedBreakMinutes(breaks = [], shiftType = null) {
+  const shiftStart = timeToMinutes(shiftType?.start);
+  const shiftEnd = timeToMinutes(shiftType?.end);
   const intervals = breaks
-    .map((item) => ({ start: timeToMinutes(item?.start), end: timeToMinutes(item?.end) }))
-    .filter((item) => item.start !== null && item.end !== null && item.end > item.start)
+    .map((item) => {
+      const start = timeToMinutes(item?.start);
+      const end = timeToMinutes(item?.end);
+      if (start === null || end === null || end <= start) return null;
+      if (shiftStart === null || shiftEnd === null) return { start, end };
+      const clippedStart = Math.max(start, shiftStart);
+      const clippedEnd = Math.min(end, shiftEnd);
+      return clippedEnd > clippedStart ? { start: clippedStart, end: clippedEnd } : null;
+    })
+    .filter(Boolean)
     .sort((a, b) => a.start - b.start || a.end - b.end);
 
   if (!intervals.length) return 0;
@@ -67,7 +77,9 @@ function paidMinutesForShift(shiftType, breaks = [], useActualBreaks = false) {
   if (Number.isFinite(Number(shiftType.paidMinutes))) return Math.max(0, Number(shiftType.paidMinutes));
   if (!shiftType.isWork) return 0;
   const span = shiftDurationMinutes(shiftType);
-  const breakMinutes = useActualBreaks ? mergedBreakMinutes(breaks) : plannedBreakMinutes(span);
+  const breakMinutes = useActualBreaks
+    ? mergedBreakMinutes(breaks, shiftType)
+    : plannedBreakMinutes(span);
   return Math.max(0, span - breakMinutes);
 }
 
@@ -134,8 +146,10 @@ export function buildMonthlyPrintData(workspace) {
   return { monthValue, days, rows, legend };
 }
 
-function breakText(breaks = []) {
-  if (!breaks.length) return "なし";
+function breakText(breaks, shiftType) {
+  if (!breaks.length) {
+    return plannedBreakMinutes(shiftDurationMinutes(shiftType)) > 0 ? "未配置" : "なし";
+  }
   return breaks
     .filter((item) => isValidTime(item?.start) && isValidTime(item?.end))
     .map((item) => `${item.start}–${item.end}`)
@@ -158,7 +172,7 @@ export function buildTransferPrintData(workspace) {
       if (!shiftType) continue;
       const breaks = workspace.breaks?.[info.dateValue]?.[employee.id] ?? [];
       const validation = validateBreaks(shiftType, breaks);
-      const actualBreakMinutes = mergedBreakMinutes(breaks);
+      const actualBreakMinutes = mergedBreakMinutes(breaks, shiftType);
       const workMinutes = paidMinutesForShift(shiftType, breaks, true);
 
       rows.push({
@@ -169,7 +183,7 @@ export function buildTransferPrintData(workspace) {
         shiftName: shiftType.name,
         shiftLabel: shiftType.shortLabel || shiftType.name,
         timeText: shiftType.isWork ? `${shiftType.start}–${shiftType.end}` : "",
-        breakText: shiftType.isWork ? breakText(breaks) : "",
+        breakText: shiftType.isWork ? breakText(breaks, shiftType) : "",
         breakMinutes: actualBreakMinutes,
         workMinutes,
         overtimeMinutes: Math.max(0, Number(shiftType.overtimeMinutes) || 0),
