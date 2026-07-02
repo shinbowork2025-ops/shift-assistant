@@ -12,6 +12,8 @@ import {
 } from "./elements.js";
 import {
   refresh,
+  refreshPrintPreview,
+  printCurrentWorkspace,
   changeWorkspace,
   saveWorkspaceFromDialog,
   duplicateCurrentWorkspace,
@@ -68,6 +70,10 @@ export function bindEvents() {
 
   elements.monthViewButton.addEventListener("click", () => changeView("month"));
   elements.dayViewButton.addEventListener("click", () => changeView("day"));
+  elements.printViewButton.addEventListener("click", () => changeView("print"));
+  elements.printModeSelect.addEventListener("change", refreshPrintPreview);
+  elements.printButton.addEventListener("click", printCurrentWorkspace);
+  globalThis.addEventListener("beforeprint", refreshPrintPreview);
   elements.autoBreakButton.addEventListener("click", autoPlaceBreaks);
 
   elements.addEmployeeButton.addEventListener("click", () => openEmployeeDialog());
