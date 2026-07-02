@@ -32,6 +32,8 @@ export function initializeHistoryUi({ onUndo, onRedo }) {
   heading.textContent = "操作履歴";
   const status = document.createElement("p");
   status.className = "history-status";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
   textArea.append(heading, status);
 
   const actions = document.createElement("div");
@@ -62,7 +64,7 @@ export function initializeHistoryUi({ onUndo, onRedo }) {
   redoButton.addEventListener("click", onRedo);
 
   document.addEventListener("keydown", (event) => {
-    if (event.repeat || event.altKey || isTextEditingTarget(event.target)) return;
+    if (event.repeat || event.altKey || document.querySelector("dialog[open]") || isTextEditingTarget(event.target)) return;
     const modifier = event.ctrlKey || event.metaKey;
     if (!modifier) return;
     const key = event.key.toLowerCase();
