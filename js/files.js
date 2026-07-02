@@ -4,8 +4,9 @@ import {
   getShift,
   getShiftType,
   employeeSummary,
-  normalizeState,
-  saveNow
+  getActiveWorkspace,
+  getApplicationBackup,
+  restoreApplicationState
 } from "./model.js";
 import { SAMPLE_MASTER_CSV } from "./csv.js";
 
@@ -28,6 +29,14 @@ function csvCell(value) {
 
 function formatHours(hours) {
   return Number.isInteger(hours) ? hours : Number(hours.toFixed(2));
+}
+
+function safeFilePart(value) {
+  return String(value ?? "shift")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, "-")
+    .slice(0, 40) || "shift";
 }
 
 export function exportCsv() {
@@ -54,7 +63,8 @@ export function exportCsv() {
   }
 
   const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
-  downloadFile(`shift-${state.selectedMonth}.csv`, csv, "text/csv;charset=utf-8");
+  const workspaceName = safeFilePart(getActiveWorkspace()?.name);
+  downloadFile(`${workspaceName}-${state.selectedMonth}.csv`, csv, "text/csv;charset=utf-8");
 }
 
 export function downloadMasterCsvSample() {
@@ -62,18 +72,13 @@ export function downloadMasterCsvSample() {
 }
 
 export function backupJson() {
-  const backup = {
-    ...structuredClone(state),
-    exportedAt: new Date().toISOString(),
-    application: "Shift Assistant"
-  };
-  const fileName = `shift-assistant-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const backup = getApplicationBackup();
+  const fileName = `shift-assistant-all-workspaces-${new Date().toISOString().slice(0, 10)}.json`;
   downloadFile(fileName, JSON.stringify(backup, null, 2), "application/json");
 }
 
 export async function restoreJson(file) {
   if (!file) return;
   const text = await file.text();
-  normalizeState(JSON.parse(text));
-  await saveNow();
+  await restoreApplicationState(JSON.parse(text));
 }
