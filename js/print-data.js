@@ -3,10 +3,10 @@ import { validateBreaks } from "./break-rules.js";
 import { buildMonthOverview, buildShiftTypeMap, getShiftCodeFromData } from "./month-overview.js";
 import {
   breakMinutesWithinShift,
+  expectedBreakMinutes,
   formatDurationMinutes,
   overtimeMinutesForShift,
-  paidMinutesForShift,
-  shiftDurationMinutes
+  paidMinutesForShift
 } from "./shift-metrics.js";
 
 export { formatDurationMinutes as formatDuration };
@@ -51,9 +51,7 @@ export function buildMonthlyPrintData(workspace) {
 }
 
 function breakText(breaks, shiftType) {
-  if (!breaks.length) {
-    return shiftDurationMinutes(shiftType) > 240 ? "未配置" : "なし";
-  }
+  if (!breaks.length) return expectedBreakMinutes(shiftType) > 0 ? "未配置" : "なし";
   return breaks
     .filter((item) => isValidTime(item?.start) && isValidTime(item?.end))
     .map((item) => `${item.start}–${item.end}`)
