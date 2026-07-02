@@ -27,14 +27,14 @@ function csvCell(value) {
 }
 
 function formatHours(hours) {
-  return Number.isInteger(hours) ? hours : hours.toFixed(1);
+  return Number.isInteger(hours) ? hours : Number(hours.toFixed(2));
 }
 
 export function exportCsv() {
   const numberOfDays = getDaysInMonth(state.selectedMonth);
   const header = ["氏名", "コード"];
   for (let day = 1; day <= numberOfDays; day += 1) header.push(`${day}日`);
-  header.push("勤務日数", "実働時間");
+  header.push("勤務日数", "実働時間", "残業見込時間", "固定残業時間", "固定残業残時間");
 
   const rows = [header];
   for (const employee of state.employees) {
@@ -43,7 +43,13 @@ export function exportCsv() {
       row.push(getShiftType(getShift(employee.id, day))?.name ?? "");
     }
     const summary = employeeSummary(employee.id);
-    row.push(summary.workDays, formatHours(summary.hours));
+    row.push(
+      summary.workDays,
+      formatHours(summary.hours),
+      formatHours(summary.overtimeHours),
+      formatHours(summary.fixedOvertimeHours),
+      formatHours(summary.overtimeRemainingHours)
+    );
     rows.push(row);
   }
 
