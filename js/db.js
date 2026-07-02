@@ -3,8 +3,12 @@ const DB_VERSION = 1;
 const STORE_NAME = "documents";
 const STATE_KEY = "app-state";
 
+let databasePromise = null;
+
 function openDatabase() {
-  return new Promise((resolve, reject) => {
+  if (databasePromise) return databasePromise;
+
+  databasePromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = () => {
@@ -14,10 +18,25 @@ function openDatabase() {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("IndexedDBを開けませんでした。"));
-    request.onblocked = () => reject(new Error("別のタブがデータベース更新を妨げています。"));
+    request.onsuccess = () => {
+      const database = request.result;
+      database.onversionchange = () => {
+        database.close();
+        databasePromise = null;
+      };
+      resolve(database);
+    };
+    request.onerror = () => {
+      databasePromise = null;
+      reject(request.error ?? new Error("IndexedDBを開けませんでした。"));
+    };
+    request.onblocked = () => {
+      databasePromise = null;
+      reject(new Error("別のタブがデータベース更新を妨げています。"));
+    };
   });
+
+  return databasePromise;
 }
 
 function completeTransaction(transaction) {
@@ -28,28 +47,23 @@ function completeTransaction(transaction) {
   });
 }
 
+function requestResult(request, fallbackMessage) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result ?? null);
+    request.onerror = () => reject(request.error ?? new Error(fallbackMessage));
+  });
+}
+
 export async function loadState() {
   const database = await openDatabase();
-  try {
-    const transaction = database.transaction(STORE_NAME, "readonly");
-    const request = transaction.objectStore(STORE_NAME).get(STATE_KEY);
-    const result = await new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result ?? null);
-      request.onerror = () => reject(request.error ?? new Error("保存データを読み込めませんでした。"));
-    });
-    return result;
-  } finally {
-    database.close();
-  }
+  const transaction = database.transaction(STORE_NAME, "readonly");
+  const request = transaction.objectStore(STORE_NAME).get(STATE_KEY);
+  return requestResult(request, "保存データを読み込めませんでした。");
 }
 
 export async function saveState(state) {
   const database = await openDatabase();
-  try {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).put(state, STATE_KEY);
-    await completeTransaction(transaction);
-  } finally {
-    database.close();
-  }
+  const transaction = database.transaction(STORE_NAME, "readwrite");
+  transaction.objectStore(STORE_NAME).put(state, STATE_KEY);
+  await completeTransaction(transaction);
 }
