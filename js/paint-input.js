@@ -36,13 +36,17 @@ function ensureSelectedShift() {
   if (!exists) paintState.selectedShiftCode = state.shiftTypes[0]?.code ?? "";
 }
 
-function selectedShiftLabel(code = selectedCode()) {
-  if (!code) return "未入力に戻す";
+function shiftName(code) {
+  if (!code) return "未入力";
   return getShiftType(code)?.name ?? code;
 }
 
+function paintActionLabel(code = selectedCode()) {
+  return code ? shiftName(code) : "消去";
+}
+
 function historyLabel(code = selectedCode()) {
-  return `ペイント入力：${selectedShiftLabel(code)}`;
+  return `ペイント入力：${paintActionLabel(code)}`;
 }
 
 function createControls() {
@@ -100,6 +104,7 @@ function renderPalette() {
   clearButton.className = "paint-palette-button paint-clear-button";
   clearButton.dataset.shiftCode = "";
   clearButton.textContent = "消去";
+  clearButton.title = "入力済みシフトを未入力へ戻す";
   clearButton.setAttribute("aria-pressed", String(selectedCode() === ""));
   clearButton.classList.toggle("selected", selectedCode() === "");
   fragment.append(clearButton);
@@ -129,7 +134,7 @@ function updateControls() {
   controls.toggleButton.classList.toggle("secondary", !paintState.enabled);
   controls.toggleButton.setAttribute("aria-pressed", String(paintState.enabled));
   controls.status.textContent = paintState.enabled
-    ? `「${selectedShiftLabel()}」をクリックまたはドラッグして連続入力します。`
+    ? `「${paintActionLabel()}」をクリックまたはドラッグして連続入力します。`
     : "OFF：通常のプルダウン入力です。シフトの色を選ぶとペイントを開始します。";
 }
 
@@ -141,11 +146,11 @@ function updateTableMode() {
     cell.tabIndex = paintState.enabled ? 0 : -1;
     cell.setAttribute("role", paintState.enabled ? "button" : "cell");
     const employeeName = state.employees.find((employee) => employee.id === cell.dataset.employeeId)?.name ?? "従業員";
-    const currentShift = selectedShiftLabel(getShift(cell.dataset.employeeId, Number(cell.dataset.day)));
+    const currentShift = shiftName(getShift(cell.dataset.employeeId, Number(cell.dataset.day)));
     cell.setAttribute(
       "aria-label",
       paintState.enabled
-        ? `${employeeName} ${cell.dataset.day}日。現在${currentShift}。${selectedShiftLabel()}を入力`
+        ? `${employeeName} ${cell.dataset.day}日。現在${currentShift}。${paintActionLabel()}を適用`
         : `${employeeName} ${cell.dataset.day}日のシフト`
     );
   });
@@ -241,7 +246,7 @@ function finishStroke(event) {
   if (summary.changedCount > 0) {
     commitHistoryTransaction(finished.transaction);
     onStrokeComplete();
-    setStatus(`${summary.changedCount}セルへ「${selectedShiftLabel(finished.shiftCode)}」を入力しました`);
+    setStatus(`${summary.changedCount}セルへ「${paintActionLabel(finished.shiftCode)}」を適用しました`);
   } else {
     cancelHistoryTransaction(finished.transaction);
     syncPaintInput();
@@ -260,7 +265,7 @@ function applyKeyboardPaint(event) {
   });
   if (changed) {
     onStrokeComplete();
-    setStatus(`1セルへ「${selectedShiftLabel(shiftCode)}」を入力しました`);
+    setStatus(`1セルへ「${paintActionLabel(shiftCode)}」を適用しました`);
   }
 }
 
