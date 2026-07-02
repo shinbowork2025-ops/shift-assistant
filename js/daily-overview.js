@@ -1,0 +1,104 @@
+import { dayFromDate, timeToMinutes } from "./date-time.js";
+import { validateBreaks } from "./break-rules.js";
+import { buildShiftTypeMap, getShiftCodeFromData } from "./month-overview.js";
+
+export const TIMELINE_SLOT_MINUTES = 15;
+
+function timelineRange(assignments) {
+  const starts = [];
+  const ends = [];
+  for (const assignment of assignments) {
+    if (!assignment.shiftType?.isWork) continue;
+    if (assignment.shiftStart !== null) starts.push(assignment.shiftStart);
+    if (assignment.shiftEnd !== null) ends.push(assignment.shiftEnd);
+  }
+  const start = starts.length ? Math.max(0, Math.floor(Math.min(...starts) / 60) * 60) : 8 * 60;
+  const end = ends.length ? Math.min(24 * 60, Math.ceil(Math.max(...ends) / 60) * 60) : 22 * 60;
+  return { start, end: Math.max(start + 60, end) };
+}
+
+function buildSlots(start, end) {
+  const slots = [];
+  for (let minute = start; minute < end; minute += TIMELINE_SLOT_MINUTES) slots.push(minute);
+  return slots;
+}
+
+function normalizedBreaks(breaks = []) {
+  return breaks.map((breakItem) => ({
+    ...breakItem,
+    startMinute: timeToMinutes(breakItem?.start),
+    endMinute: timeToMinutes(breakItem?.end)
+  })).filter((breakItem) => (
+    breakItem.startMinute !== null
+    && breakItem.endMinute !== null
+    && breakItem.endMinute > breakItem.startMinute
+  ));
+}
+
+function slotCell(assignment, slotStart) {
+  if (!assignment.shiftType?.isWork) return { kind: "off", title: "" };
+  if (slotStart < assignment.shiftStart || slotStart >= assignment.shiftEnd) {
+    return { kind: "off", title: "" };
+  }
+
+  const breakItem = assignment.breaks.find((item) => (
+    slotStart >= item.startMinute && slotStart < item.endMinute
+  ));
+  if (breakItem) {
+    return {
+      kind: "break",
+      breakType: breakItem.type,
+      title: `${breakItem.label} ${breakItem.start}〜${breakItem.end}`
+    };
+  }
+
+  return {
+    kind: "work",
+    shiftCode: assignment.shiftCode,
+    title: `${assignment.shiftType.name} ${assignment.shiftType.start}〜${assignment.shiftType.end}`
+  };
+}
+
+export function buildDailyOverview({ dateValue, employees = [], shiftTypes = [], shifts = {}, breaks = {} }) {
+  const monthValue = dateValue.slice(0, 7);
+  const day = dayFromDate(dateValue);
+  const shiftTypesByCode = buildShiftTypeMap(shiftTypes);
+
+  const assignments = employees.map((employee) => {
+    const shiftCode = getShiftCodeFromData(shifts, monthValue, employee.id, day);
+    const shiftType = shiftTypesByCode.get(shiftCode) ?? null;
+    const employeeBreaks = breaks?.[dateValue]?.[employee.id] ?? [];
+    return {
+      employee,
+      shiftCode,
+      shiftType,
+      shiftStart: timeToMinutes(shiftType?.start),
+      shiftEnd: timeToMinutes(shiftType?.end),
+      breaks: normalizedBreaks(employeeBreaks),
+      rawBreaks: employeeBreaks,
+      validation: validateBreaks(shiftType, employeeBreaks)
+    };
+  });
+
+  const range = timelineRange(assignments);
+  const slots = buildSlots(range.start, range.end);
+  const coverage = slots.map(() => 0);
+  const rows = assignments.map((assignment) => {
+    const cells = slots.map((slotStart, index) => {
+      const cell = slotCell(assignment, slotStart);
+      if (cell.kind === "work") coverage[index] += 1;
+      return cell;
+    });
+    return { ...assignment, cells };
+  });
+
+  return {
+    dateValue,
+    monthValue,
+    day,
+    range,
+    slots,
+    coverage,
+    rows
+  };
+}
