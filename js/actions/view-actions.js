@@ -46,8 +46,8 @@ export function selectDate(dateValue, switchToDay = true) {
   state.selectedMonth = dateValue.slice(0, 7);
   if (switchToDay) state.currentView = "day";
   ensureBreaksForDate(dateValue);
-  refresh();
   scheduleSave();
+  refresh();
 }
 
 export function shiftMonth(offset) {
@@ -55,8 +55,8 @@ export function shiftMonth(offset) {
   const currentDay = Math.min(Number(state.selectedDate.slice(-2)) || 1, getDaysInMonth(nextMonth));
   state.selectedMonth = nextMonth;
   state.selectedDate = dateKey(nextMonth, currentDay);
-  refresh();
   scheduleSave();
+  refresh();
 }
 
 export function shiftDay(offset) {
@@ -66,6 +66,6 @@ export function shiftDay(offset) {
 export function changeView(view) {
   state.currentView = view;
   if (view === "day") ensureBreaksForDate(state.selectedDate);
-  refresh();
   scheduleSave();
+  refresh();
 }
