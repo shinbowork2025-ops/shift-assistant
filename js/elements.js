@@ -1,6 +1,10 @@
-import { state } from "./model.js";
+import { state, getActiveWorkspace, currentMonthValue } from "./model.js";
 
 const elementIds = [
+  "workspaceSelect", "workspaceUpdatedAt", "newWorkspaceButton", "editWorkspaceButton",
+  "duplicateWorkspaceButton", "deleteWorkspaceButton", "workspaceDialog", "workspaceForm",
+  "workspaceDialogTitle", "workspaceModeInput", "workspaceNameInput", "workspaceMonthInput",
+  "closeWorkspaceDialogButton", "cancelWorkspaceButton",
   "monthControls", "dayControls", "monthInput", "dateInput", "previousMonthButton", "nextMonthButton",
   "previousDayButton", "nextDayButton", "monthViewButton", "dayViewButton", "addEmployeeButton",
   "importMasterButton", "importMasterInput", "downloadSampleButton", "exportCsvButton", "backupButton",
@@ -23,6 +27,22 @@ export function setSaveStatus(message, isError = false) {
 export function setImportStatus(message, isError = false) {
   elements.importStatus.textContent = message;
   elements.importStatus.classList.toggle("error", isError);
+}
+
+export function openWorkspaceDialog(mode = "new") {
+  const activeWorkspace = getActiveWorkspace();
+  const isEdit = mode === "edit";
+  elements.workspaceForm.reset();
+  elements.workspaceModeInput.value = mode;
+  elements.workspaceDialogTitle.textContent = isEdit ? "シフト表の設定" : "新しいシフト表";
+  elements.workspaceNameInput.value = isEdit ? activeWorkspace?.name ?? "" : "";
+  elements.workspaceMonthInput.value = isEdit ? state.selectedMonth : currentMonthValue();
+  elements.workspaceDialog.showModal();
+  elements.workspaceNameInput.focus();
+}
+
+export function closeWorkspaceDialog() {
+  elements.workspaceDialog.close();
 }
 
 export function openEmployeeDialog(employeeId = "") {
