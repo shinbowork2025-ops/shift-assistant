@@ -29,6 +29,18 @@ export function formatHours(hours) {
   return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
 }
 
+export function formatMinutesAsHours(minutes) {
+  return formatHours((Number(minutes) || 0) / 60);
+}
+
+function shiftDisplayText(shiftType) {
+  if (!shiftType.isWork) return shiftType.name;
+  const overtime = Number(shiftType.overtimeMinutes) > 0
+    ? `・残業${formatMinutesAsHours(shiftType.overtimeMinutes)}`
+    : "";
+  return `${shiftType.name} ${shiftType.start}〜${shiftType.end}${overtime}`;
+}
+
 export function createShiftSelect(employee, day, currentCode, compact = false) {
   const select = document.createElement("select");
   select.className = `shift-select ${shiftToneClass(currentCode)}`;
@@ -45,9 +57,7 @@ export function createShiftSelect(employee, day, currentCode, compact = false) {
   for (const shiftType of state.shiftTypes) {
     const option = document.createElement("option");
     option.value = shiftType.code;
-    option.textContent = shiftType.isWork
-      ? `${shiftType.name} ${shiftType.start}〜${shiftType.end}`
-      : shiftType.name;
+    option.textContent = shiftDisplayText(shiftType);
     select.append(option);
   }
   select.value = currentCode;
@@ -60,10 +70,7 @@ export function renderLegend(elements) {
     const item = document.createElement("div");
     const swatch = document.createElement("span");
     swatch.className = `swatch shift-tone-${index % 8}`;
-    const label = shiftType.isWork
-      ? `${shiftType.name} ${shiftType.start}〜${shiftType.end}`
-      : shiftType.name;
-    item.append(swatch, document.createTextNode(label));
+    item.append(swatch, document.createTextNode(shiftDisplayText(shiftType)));
     fragment.append(item);
   });
   elements.legend.replaceChildren(fragment);
