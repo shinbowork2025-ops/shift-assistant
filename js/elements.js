@@ -3,11 +3,11 @@ import { state } from "./model.js";
 const elementIds = [
   "monthControls", "dayControls", "monthInput", "dateInput", "previousMonthButton", "nextMonthButton",
   "previousDayButton", "nextDayButton", "monthViewButton", "dayViewButton", "addEmployeeButton",
-  "importCsvButton", "importCsvInput", "downloadSampleButton", "exportCsvButton", "backupButton",
+  "importMasterButton", "importMasterInput", "downloadSampleButton", "exportCsvButton", "backupButton",
   "restoreButton", "restoreInput", "autoBreakButton", "clearMonthButton", "scheduleTitle", "dailyTitle",
   "saveStatus", "importStatus", "emptyState", "dailyEmptyState", "tableContainer", "dailyChartContainer",
   "legend", "monthPanel", "dailyPanel", "employeeDialog", "employeeForm", "employeeDialogTitle",
-  "employeeIdInput", "employeeNameInput", "employeeCodeInput", "employeeDepartmentInput",
+  "employeeIdInput", "employeeNameInput", "employeeCodeInput", "employeeDepartmentInput", "employeeFixedOvertimeInput",
   "closeEmployeeDialogButton", "cancelEmployeeButton", "deleteEmployeeButton", "confirmDialog",
   "confirmTitle", "confirmMessage", "confirmCancelButton", "confirmOkButton"
 ];
@@ -32,6 +32,7 @@ export function openEmployeeDialog(employeeId = "") {
   elements.employeeNameInput.value = employee?.name ?? "";
   elements.employeeCodeInput.value = employee?.code ?? "";
   elements.employeeDepartmentInput.value = employee?.department ?? "";
+  elements.employeeFixedOvertimeInput.value = employee ? String((employee.fixedOvertimeMinutes ?? 0) / 60) : "0";
   elements.employeeDialogTitle.textContent = employee ? "従業員を編集" : "従業員を追加";
   elements.deleteEmployeeButton.hidden = !employee;
   elements.employeeDialog.showModal();
