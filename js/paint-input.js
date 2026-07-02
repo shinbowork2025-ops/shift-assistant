@@ -3,15 +3,15 @@ import {
   getShift,
   getShiftType,
   setShift,
-  dateKey
+  dateKey,
+  scheduleSave
 } from "./model.js";
 import { generateBreaksForDate } from "./breaks.js";
 import { shiftToneClass } from "./render-common.js";
 import {
   beginHistoryTransaction,
   commitHistoryTransaction,
-  cancelHistoryTransaction,
-  runWithHistory
+  cancelHistoryTransaction
 } from "./history.js";
 import { createPaintStroke } from "./paint-stroke.js";
 
@@ -141,12 +141,15 @@ function updateControls() {
 function updateTableMode() {
   if (!tableContainer) return;
   tableContainer.classList.toggle("paint-mode", paintState.enabled);
+  const employeeNames = new Map(state.employees.map((employee) => [employee.id, employee.name]));
+  const shiftNames = new Map(state.shiftTypes.map((shiftType) => [shiftType.code, shiftType.name]));
   const cells = tableContainer.querySelectorAll(".paint-cell");
   cells.forEach((cell) => {
     cell.tabIndex = paintState.enabled ? 0 : -1;
     cell.setAttribute("role", paintState.enabled ? "button" : "cell");
-    const employeeName = state.employees.find((employee) => employee.id === cell.dataset.employeeId)?.name ?? "従業員";
-    const currentShift = shiftName(getShift(cell.dataset.employeeId, Number(cell.dataset.day)));
+    const employeeName = employeeNames.get(cell.dataset.employeeId) ?? "従業員";
+    const currentCode = getShift(cell.dataset.employeeId, Number(cell.dataset.day));
+    const currentShift = currentCode ? shiftNames.get(currentCode) ?? currentCode : "未入力";
     cell.setAttribute(
       "aria-label",
       paintState.enabled
@@ -176,16 +179,29 @@ function updateCellVisual(cell, shiftCode) {
   cell.classList.add("paint-cell-touched");
 }
 
-function applyPaintToCell(cell, shiftCode) {
+function recordChangedCell(changesByDate, employeeId, day) {
+  const changedDate = dateKey(state.selectedMonth, day);
+  if (!changesByDate.has(changedDate)) changesByDate.set(changedDate, new Set());
+  changesByDate.get(changedDate).add(employeeId);
+}
+
+function applyPaintToCell(cell, shiftCode, changesByDate) {
   const employeeId = cell.dataset.employeeId;
   const day = Number(cell.dataset.day);
   if (!employeeId || !Number.isInteger(day)) return false;
   if (getShift(employeeId, day) === shiftCode) return false;
 
-  setShift(employeeId, day, shiftCode);
-  generateBreaksForDate(dateKey(state.selectedMonth, day), [employeeId]);
+  setShift(employeeId, day, shiftCode, { save: false });
+  recordChangedCell(changesByDate, employeeId, day);
   updateCellVisual(cell, shiftCode);
   return true;
+}
+
+function finalizePaintChanges(changesByDate) {
+  for (const [changedDate, employeeIds] of changesByDate) {
+    generateBreaksForDate(changedDate, [...employeeIds], { save: false });
+  }
+  scheduleSave();
 }
 
 function cellKey(cell) {
@@ -208,11 +224,13 @@ function beginStroke(event, cell) {
   event.preventDefault();
 
   const shiftCode = selectedCode();
+  const changesByDate = new Map();
   activeStroke = {
     pointerId: event.pointerId,
     shiftCode,
+    changesByDate,
     transaction: beginHistoryTransaction(historyLabel(shiftCode)),
-    stroke: createPaintStroke((targetCell) => applyPaintToCell(targetCell, shiftCode))
+    stroke: createPaintStroke((targetCell) => applyPaintToCell(targetCell, shiftCode, changesByDate))
   };
   tableContainer.classList.add("paint-stroke-active");
   document.body.classList.add("paint-dragging");
@@ -244,6 +262,7 @@ function finishStroke(event) {
 
   const summary = finished.stroke.summary();
   if (summary.changedCount > 0) {
+    finalizePaintChanges(finished.changesByDate);
     commitHistoryTransaction(finished.transaction);
     onStrokeComplete();
     setStatus(`${summary.changedCount}セルへ「${paintActionLabel(finished.shiftCode)}」を適用しました`);
@@ -258,14 +277,18 @@ function applyKeyboardPaint(event) {
   const cell = event.target.closest(".paint-cell");
   if (!cell) return;
   event.preventDefault();
+
   const shiftCode = selectedCode();
-  let changed = false;
-  runWithHistory(historyLabel(shiftCode), () => {
-    changed = applyPaintToCell(cell, shiftCode);
-  });
+  const changesByDate = new Map();
+  const transaction = beginHistoryTransaction(historyLabel(shiftCode));
+  const changed = applyPaintToCell(cell, shiftCode, changesByDate);
   if (changed) {
+    finalizePaintChanges(changesByDate);
+    commitHistoryTransaction(transaction);
     onStrokeComplete();
     setStatus(`1セルへ「${paintActionLabel(shiftCode)}」を適用しました`);
+  } else {
+    cancelHistoryTransaction(transaction);
   }
 }
 
