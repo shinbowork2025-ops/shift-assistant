@@ -1,7 +1,7 @@
 import { state, getDaysInMonth, dateKey, scheduleSave } from "../model.js";
 import { offsetDateValue, offsetMonthValue } from "../date-time.js";
 import { ensureBreaksForDate } from "../breaks.js";
-import { render, renderActiveView } from "../render.js";
+import { render } from "../render.js";
 import { renderPrintPreview } from "../render-print.js";
 import { undoHistory, redoHistory } from "../history.js";
 import { elements, setSaveStatus } from "../elements.js";
@@ -10,8 +10,10 @@ export function refresh() {
   render(elements);
 }
 
+// render()は表示中ビューだけを描画する。上部の更新日時も同期するため、
+// 部分更新の呼び出し元もこの入口を使う。
 export function refreshActiveView() {
-  renderActiveView(elements);
+  render(elements);
 }
 
 export function refreshPrintPreview() {
