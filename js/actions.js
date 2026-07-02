@@ -58,9 +58,10 @@ export function changeView(view) {
 
 export function handleShiftChange(select) {
   const day = Number(select.dataset.day);
+  const employeeId = select.dataset.employeeId;
   const changedDate = dateKey(state.selectedMonth, day);
-  setShift(select.dataset.employeeId, day, select.value);
-  generateBreaksForDate(changedDate);
+  setShift(employeeId, day, select.value);
+  generateBreaksForDate(changedDate, [employeeId]);
   if (state.currentView === "day") state.selectedDate = changedDate;
   refresh();
 }
@@ -88,7 +89,6 @@ export function saveEmployeeFromDialog() {
     });
   }
   closeEmployeeDialog();
-  generateBreaksForDate(state.selectedDate);
   refresh();
   scheduleSave();
 }
@@ -130,7 +130,8 @@ export async function importMasterFile(file) {
     throw new Error("対応形式はCSVまたは.xlsxです。古い.xls形式には対応していません。");
   }
 
-  state.breaks = {};
+  // マスター更新だけでは既存の休憩時刻を書き換えない。
+  // 時刻変更で不整合が出た場合は1日チャートに警告し、ユーザーが再配置する。
   ensureBreaksForDate(state.selectedDate);
   refresh();
   setImportStatus(formatImportSummary(summary, sourceLabel), summary.errors.length > 0);
