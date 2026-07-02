@@ -1,22 +1,61 @@
 import { loadState, saveState } from "./db.js";
-import { plannedBreakMinutes } from "./break-rules.js";
 import {
   APPLICATION_SCHEMA_VERSION,
   isWorkspaceEnvelope,
-  createBlankWorkspace,
   wrapLegacyState,
   duplicateWorkspaceRecord
 } from "./workspace-schema.js";
+import {
+  currentMonthValue,
+  currentDateValue,
+  isValidTime,
+  timeToMinutes,
+  minutesToTime,
+  getDaysInMonth,
+  dateKey,
+  dayFromDate,
+  getDayInfo,
+  monthDisplayName,
+  dateDisplayName
+} from "./date-time.js";
+import {
+  nonNegativeMinutes,
+  shiftDurationMinutes,
+  expectedBreakMinutes,
+  paidMinutesForShift,
+  overtimeMinutesForShift
+} from "./shift-metrics.js";
+import { buildMonthOverview } from "./month-overview.js";
+import { createId } from "./ids.js";
+import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
+import {
+  normalizeWorkspace,
+  createInitialWorkspace,
+  applyWorkspaceToState,
+  syncWorkspaceFromState,
+  updateWorkspaceMonth
+} from "./workspace-normalizer.js";
 
-export const DEFAULT_SHIFT_TYPES = Object.freeze([
-  { code: "early", name: "早番", shortLabel: "早", start: "09:00", end: "18:00", isWork: true, overtimeMinutes: 0 },
-  { code: "middle", name: "中番", shortLabel: "中", start: "11:00", end: "20:00", isWork: true, overtimeMinutes: 0 },
-  { code: "late", name: "遅番", shortLabel: "遅", start: "12:00", end: "21:00", isWork: true, overtimeMinutes: 0 },
-  { code: "short", name: "短時間", shortLabel: "短", start: "09:00", end: "13:00", isWork: true, overtimeMinutes: 0 },
-  { code: "off", name: "公休", shortLabel: "休", start: "", end: "", isWork: false, paidMinutes: 0, overtimeMinutes: 0 },
-  { code: "paid", name: "有休", shortLabel: "有", start: "", end: "", isWork: false, paidMinutes: 450, overtimeMinutes: 0 },
-  { code: "request", name: "希望休", shortLabel: "希", start: "", end: "", isWork: false, paidMinutes: 0, overtimeMinutes: 0 }
-]);
+export {
+  currentMonthValue,
+  currentDateValue,
+  isValidTime,
+  timeToMinutes,
+  minutesToTime,
+  getDaysInMonth,
+  dateKey,
+  dayFromDate,
+  getDayInfo,
+  monthDisplayName,
+  dateDisplayName,
+  nonNegativeMinutes,
+  shiftDurationMinutes,
+  expectedBreakMinutes,
+  paidMinutesForShift,
+  overtimeMinutesForShift,
+  createId,
+  DEFAULT_SHIFT_TYPES
+};
 
 export const state = {
   schemaVersion: 3,
@@ -39,132 +78,31 @@ export const workspaceState = {
 };
 
 let saveTimer = null;
+let saveInFlight = null;
+let saveQueued = false;
+let changeRevision = 0;
 let statusHandler = () => {};
 
 export function setStatusHandler(handler) {
   statusHandler = handler;
 }
 
-export function currentMonthValue() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+export function getActiveWorkspace() {
+  return workspaceState.workspaces.find((workspace) => workspace.id === workspaceState.activeWorkspaceId) ?? null;
 }
 
-export function currentDateValue() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
-export function createId(prefix = "item") {
-  if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`;
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function nonNegativeMinutes(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : fallback;
-}
-
-function normalizedEmployees(candidate) {
-  return (Array.isArray(candidate) ? candidate : [])
-    .filter((employee) => employee && typeof employee.id === "string" && typeof employee.name === "string")
-    .map((employee, index) => ({
-      id: employee.id,
-      name: employee.name.trim().slice(0, 40),
-      code: typeof employee.code === "string" ? employee.code.trim().slice(0, 20) : "",
-      department: typeof employee.department === "string" ? employee.department.trim().slice(0, 30) : "",
-      order: Number.isFinite(Number(employee.order)) ? Number(employee.order) : index + 1,
-      fixedOvertimeMinutes: nonNegativeMinutes(employee.fixedOvertimeMinutes)
-    }))
-    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja"));
-}
-
-function normalizeShiftType(shift, index) {
-  const start = isValidTime(shift.start) ? shift.start : "";
-  const end = isValidTime(shift.end) ? shift.end : "";
-  const isWork = Boolean(shift.isWork ?? (start && end));
-  return {
-    code: shift.code.trim().slice(0, 30) || `shift-${index + 1}`,
-    name: shift.name.trim().slice(0, 40),
-    shortLabel: String(shift.shortLabel || shift.name).trim().slice(0, 4),
-    start: isWork ? start : "",
-    end: isWork ? end : "",
-    isWork,
-    paidMinutes: Number.isFinite(Number(shift.paidMinutes)) ? Math.max(0, Number(shift.paidMinutes)) : undefined,
-    overtimeMinutes: nonNegativeMinutes(shift.overtimeMinutes)
-  };
-}
-
-function normalizedShiftTypes(candidate) {
-  const source = Array.isArray(candidate) && candidate.length ? candidate : DEFAULT_SHIFT_TYPES;
-  const result = source
-    .filter((shift) => shift && typeof shift.code === "string" && typeof shift.name === "string")
-    .map((shift, index) => normalizeShiftType(shift, index));
-  return result.length ? result : structuredClone(DEFAULT_SHIFT_TYPES);
-}
-
-function normalizeWorkspace(candidate, index = 0) {
-  if (!candidate || typeof candidate !== "object") throw new Error("シフト表の形式が正しくありません。");
-  const selectedMonth = /^\d{4}-\d{2}$/.test(candidate.selectedMonth ?? candidate.targetMonth)
-    ? (candidate.selectedMonth ?? candidate.targetMonth)
-    : currentMonthValue();
-  let selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(candidate.selectedDate)
-    ? candidate.selectedDate
-    : `${selectedMonth}-01`;
-  if (!selectedDate.startsWith(selectedMonth)) selectedDate = `${selectedMonth}-01`;
-  const now = new Date().toISOString();
-
-  return {
-    id: typeof candidate.id === "string" && candidate.id ? candidate.id : createId(`workspace-${index + 1}`),
-    name: String(candidate.name || "無題のシフト表").trim().slice(0, 60) || "無題のシフト表",
-    targetMonth: selectedMonth,
-    selectedMonth,
-    selectedDate,
-    currentView: candidate.currentView === "day" ? "day" : "month",
-    employees: normalizedEmployees(candidate.employees),
-    shiftTypes: normalizedShiftTypes(candidate.shiftTypes),
-    shifts: candidate.shifts && typeof candidate.shifts === "object" ? structuredClone(candidate.shifts) : {},
-    breaks: candidate.breaks && typeof candidate.breaks === "object" ? structuredClone(candidate.breaks) : {},
-    createdAt: candidate.createdAt ?? candidate.updatedAt ?? now,
-    updatedAt: candidate.updatedAt ?? now
-  };
-}
-
-function applyWorkspace(workspace) {
-  state.schemaVersion = 3;
-  state.selectedMonth = workspace.selectedMonth;
-  state.selectedDate = workspace.selectedDate;
-  state.currentView = workspace.currentView;
-  state.employees = structuredClone(workspace.employees);
-  state.shiftTypes = structuredClone(workspace.shiftTypes);
-  state.shifts = structuredClone(workspace.shifts);
-  state.breaks = structuredClone(workspace.breaks);
-  state.updatedAt = workspace.updatedAt;
-}
-
-function captureActiveWorkspace() {
-  const workspace = workspaceState.workspaces.find((item) => item.id === workspaceState.activeWorkspaceId);
-  if (!workspace) return null;
-  workspace.targetMonth = state.selectedMonth;
-  workspace.selectedMonth = state.selectedMonth;
-  workspace.selectedDate = state.selectedDate;
-  workspace.currentView = state.currentView;
-  workspace.employees = structuredClone(state.employees);
-  workspace.shiftTypes = structuredClone(state.shiftTypes);
-  workspace.shifts = structuredClone(state.shifts);
-  workspace.breaks = structuredClone(state.breaks);
-  workspace.updatedAt = state.updatedAt ?? workspace.updatedAt;
-  return workspace;
+function syncActiveWorkspace() {
+  return syncWorkspaceFromState(getActiveWorkspace(), state);
 }
 
 function applicationEnvelope() {
-  captureActiveWorkspace();
+  syncActiveWorkspace();
   return {
     application: "Shift Assistant",
     applicationSchemaVersion: APPLICATION_SCHEMA_VERSION,
     activeWorkspaceId: workspaceState.activeWorkspaceId,
-    workspaces: structuredClone(workspaceState.workspaces),
-    settings: structuredClone(workspaceState.settings)
+    workspaces: workspaceState.workspaces,
+    settings: workspaceState.settings
   };
 }
 
@@ -172,6 +110,7 @@ function loadApplicationEnvelope(candidate) {
   if (!isWorkspaceEnvelope(candidate)) throw new Error("バックアップの形式が正しくありません。");
   const workspaces = candidate.workspaces.map((workspace, index) => normalizeWorkspace(workspace, index));
   if (!workspaces.length) throw new Error("バックアップにシフト表がありません。");
+
   workspaceState.workspaces = workspaces;
   workspaceState.activeWorkspaceId = workspaces.some((item) => item.id === candidate.activeWorkspaceId)
     ? candidate.activeWorkspaceId
@@ -179,27 +118,10 @@ function loadApplicationEnvelope(candidate) {
   workspaceState.settings = {
     lastBackupAt: candidate.settings?.lastBackupAt ?? null
   };
-  const active = getActiveWorkspace();
-  applyWorkspace(active);
-}
-
-function createInitialWorkspace(name = "無題のシフト表", targetMonth = currentMonthValue()) {
-  const now = new Date().toISOString();
-  return normalizeWorkspace(createBlankWorkspace({
-    id: createId("workspace"),
-    name,
-    targetMonth,
-    now,
-    shiftTypes: DEFAULT_SHIFT_TYPES
-  }));
-}
-
-export function getActiveWorkspace() {
-  return workspaceState.workspaces.find((workspace) => workspace.id === workspaceState.activeWorkspaceId) ?? null;
+  applyWorkspaceToState(state, getActiveWorkspace());
 }
 
 export function getWorkspaceList() {
-  captureActiveWorkspace();
   return workspaceState.workspaces.map((workspace) => ({
     id: workspace.id,
     name: workspace.name,
@@ -210,10 +132,15 @@ export function getWorkspaceList() {
 }
 
 export function getApplicationBackup() {
-  return {
+  return structuredClone({
     ...applicationEnvelope(),
     exportedAt: new Date().toISOString()
-  };
+  });
+}
+
+async function persistApplicationStateNow() {
+  changeRevision += 1;
+  await saveNow();
 }
 
 export async function restoreApplicationState(candidate) {
@@ -229,25 +156,25 @@ export async function restoreApplicationState(candidate) {
     }));
     workspaceState.migratedLegacyState = true;
   }
-  await saveState(applicationEnvelope());
+  await persistApplicationStateNow();
 }
 
 export async function switchWorkspace(workspaceId) {
   if (workspaceId === workspaceState.activeWorkspaceId) return;
-  captureActiveWorkspace();
+  syncActiveWorkspace();
   const workspace = workspaceState.workspaces.find((item) => item.id === workspaceId);
   if (!workspace) throw new Error("選択したシフト表が見つかりません。");
   workspaceState.activeWorkspaceId = workspace.id;
-  applyWorkspace(workspace);
-  await saveState(applicationEnvelope());
+  applyWorkspaceToState(state, workspace);
+  await persistApplicationStateNow();
 }
 
 export function createWorkspace(name, targetMonth) {
-  captureActiveWorkspace();
+  syncActiveWorkspace();
   const workspace = createInitialWorkspace(name, targetMonth);
   workspaceState.workspaces.push(workspace);
   workspaceState.activeWorkspaceId = workspace.id;
-  applyWorkspace(workspace);
+  applyWorkspaceToState(state, workspace);
   scheduleSave();
   return workspace;
 }
@@ -255,16 +182,13 @@ export function createWorkspace(name, targetMonth) {
 export function updateActiveWorkspace(name, targetMonth) {
   const workspace = getActiveWorkspace();
   if (!workspace) throw new Error("編集中のシフト表が見つかりません。");
-  const month = /^\d{4}-\d{2}$/.test(targetMonth) ? targetMonth : state.selectedMonth;
-  const day = Math.min(Number(state.selectedDate.slice(-2)) || 1, getDaysInMonth(month));
   workspace.name = String(name || workspace.name).trim().slice(0, 60) || "無題のシフト表";
-  state.selectedMonth = month;
-  state.selectedDate = `${month}-${String(day).padStart(2, "0")}`;
+  updateWorkspaceMonth(state, targetMonth);
   scheduleSave();
 }
 
 export function duplicateActiveWorkspace() {
-  captureActiveWorkspace();
+  syncActiveWorkspace();
   const source = getActiveWorkspace();
   if (!source) throw new Error("複製するシフト表が見つかりません。");
   const now = new Date().toISOString();
@@ -275,7 +199,7 @@ export function duplicateActiveWorkspace() {
   }));
   workspaceState.workspaces.push(duplicate);
   workspaceState.activeWorkspaceId = duplicate.id;
-  applyWorkspace(duplicate);
+  applyWorkspaceToState(state, duplicate);
   scheduleSave();
   return duplicate;
 }
@@ -285,165 +209,130 @@ export async function deleteActiveWorkspace() {
   const activeId = workspaceState.activeWorkspaceId;
   workspaceState.workspaces = workspaceState.workspaces.filter((workspace) => workspace.id !== activeId);
   workspaceState.activeWorkspaceId = workspaceState.workspaces[0].id;
-  applyWorkspace(workspaceState.workspaces[0]);
-  await saveState(applicationEnvelope());
-}
-
-export function isValidTime(value) {
-  if (typeof value !== "string" || !/^\d{1,2}:\d{2}$/.test(value.trim())) return false;
-  const [hours, minutes] = value.trim().split(":").map(Number);
-  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
-}
-
-export function timeToMinutes(value) {
-  if (!isValidTime(value)) return null;
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-export function minutesToTime(totalMinutes) {
-  const normalized = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
-}
-
-export function shiftDurationMinutes(shiftType) {
-  if (!shiftType?.isWork) return 0;
-  const start = timeToMinutes(shiftType.start);
-  const end = timeToMinutes(shiftType.end);
-  if (start === null || end === null || end <= start) return 0;
-  return end - start;
-}
-
-export function expectedBreakMinutes(shiftType) {
-  return plannedBreakMinutes(shiftDurationMinutes(shiftType));
-}
-
-export function paidMinutesForShift(shiftType) {
-  if (!shiftType) return 0;
-  if (Number.isFinite(Number(shiftType.paidMinutes))) return Math.max(0, Number(shiftType.paidMinutes));
-  if (!shiftType.isWork) return 0;
-  return Math.max(0, shiftDurationMinutes(shiftType) - expectedBreakMinutes(shiftType));
-}
-
-export function overtimeMinutesForShift(shiftType) {
-  return shiftType ? nonNegativeMinutes(shiftType.overtimeMinutes) : 0;
+  applyWorkspaceToState(state, workspaceState.workspaces[0]);
+  await persistApplicationStateNow();
 }
 
 export function getShiftType(code) {
   return state.shiftTypes.find((shift) => shift.code === code) ?? null;
 }
 
-export function getDaysInMonth(monthValue) {
-  const [year, month] = monthValue.split("-").map(Number);
-  return new Date(year, month, 0).getDate();
-}
-
-export function dateKey(monthValue, day) {
-  return `${monthValue}-${String(day).padStart(2, "0")}`;
-}
-
-export function dayFromDate(dateValue) {
-  return Number(dateValue.slice(-2));
-}
-
-export function getDayInfo(monthValue, day) {
-  const [year, month] = monthValue.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return {
-    weekday: date.getDay(),
-    label: ["日", "月", "火", "水", "木", "金", "土"][date.getDay()]
-  };
-}
-
 export function getShift(employeeId, day) {
   return state.shifts[state.selectedMonth]?.[employeeId]?.[dateKey(state.selectedMonth, day)] ?? "";
 }
 
-export function setShift(employeeId, day, shiftCode) {
-  state.shifts[state.selectedMonth] ??= {};
-  state.shifts[state.selectedMonth][employeeId] ??= {};
-  const key = dateKey(state.selectedMonth, day);
-  if (shiftCode) state.shifts[state.selectedMonth][employeeId][key] = shiftCode;
-  else delete state.shifts[state.selectedMonth][employeeId][key];
+function removeEmptyShiftContainers(monthValue, employeeId) {
+  const employeeShifts = state.shifts[monthValue]?.[employeeId];
+  if (employeeShifts && Object.keys(employeeShifts).length === 0) delete state.shifts[monthValue][employeeId];
+  if (state.shifts[monthValue] && Object.keys(state.shifts[monthValue]).length === 0) delete state.shifts[monthValue];
+}
+
+function removeEmptyBreakContainers(dateValue) {
+  if (state.breaks[dateValue] && Object.keys(state.breaks[dateValue]).length === 0) delete state.breaks[dateValue];
+}
+
+export function setShift(employeeId, day, shiftCode, options = {}) {
+  const shouldSave = options.save !== false;
+  const monthValue = state.selectedMonth;
+  const key = dateKey(monthValue, day);
+
+  if (shiftCode) {
+    state.shifts[monthValue] ??= {};
+    state.shifts[monthValue][employeeId] ??= {};
+    state.shifts[monthValue][employeeId][key] = shiftCode;
+  } else {
+    delete state.shifts[monthValue]?.[employeeId]?.[key];
+    removeEmptyShiftContainers(monthValue, employeeId);
+  }
+
   delete state.breaks[key]?.[employeeId];
-  scheduleSave();
+  removeEmptyBreakContainers(key);
+  if (shouldSave) scheduleSave();
 }
 
 export function getBreaks(employeeId, dateValue) {
   return state.breaks[dateValue]?.[employeeId] ?? [];
 }
 
-export function setBreaksForDate(dateValue, breaksByEmployee) {
-  state.breaks[dateValue] = breaksByEmployee;
-  scheduleSave();
+export function setBreaksForDate(dateValue, breaksByEmployee, options = {}) {
+  if (breaksByEmployee && Object.keys(breaksByEmployee).length > 0) state.breaks[dateValue] = breaksByEmployee;
+  else delete state.breaks[dateValue];
+  if (options.save !== false) scheduleSave();
 }
 
 export function employeeSummary(employeeId) {
-  const numberOfDays = getDaysInMonth(state.selectedMonth);
-  const employee = state.employees.find((item) => item.id === employeeId);
-  let workDays = 0;
-  let paidMinutes = 0;
-  let overtimeMinutes = 0;
-  for (let day = 1; day <= numberOfDays; day += 1) {
-    const shiftType = getShiftType(getShift(employeeId, day));
-    const minutes = paidMinutesForShift(shiftType);
-    if (minutes > 0) workDays += 1;
-    paidMinutes += minutes;
-    overtimeMinutes += overtimeMinutesForShift(shiftType);
-  }
-  const fixedOvertimeMinutes = nonNegativeMinutes(employee?.fixedOvertimeMinutes);
-  return {
-    workDays,
-    hours: paidMinutes / 60,
-    overtimeHours: overtimeMinutes / 60,
-    fixedOvertimeHours: fixedOvertimeMinutes / 60,
-    overtimeRemainingHours: (fixedOvertimeMinutes - overtimeMinutes) / 60,
-    overtimeExceededHours: Math.max(0, overtimeMinutes - fixedOvertimeMinutes) / 60
+  const overview = buildMonthOverview({
+    monthValue: state.selectedMonth,
+    employees: state.employees,
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts
+  });
+  return overview.employeeRows.find((row) => row.employee.id === employeeId)?.summary ?? {
+    workDays: 0,
+    hours: 0,
+    overtimeHours: 0,
+    fixedOvertimeHours: 0,
+    overtimeRemainingHours: 0,
+    overtimeExceededHours: 0
   };
 }
 
 export function daySummary(day) {
-  let workers = 0;
-  let paidMinutes = 0;
-  let overtimeMinutes = 0;
-  for (const employee of state.employees) {
-    const shiftType = getShiftType(getShift(employee.id, day));
-    if (shiftType?.isWork) workers += 1;
-    paidMinutes += paidMinutesForShift(shiftType);
-    overtimeMinutes += overtimeMinutesForShift(shiftType);
-  }
-  return { workers, hours: paidMinutes / 60, overtimeHours: overtimeMinutes / 60 };
-}
-
-export function monthDisplayName(monthValue) {
-  const [year, month] = monthValue.split("-").map(Number);
-  return `${year}年${month}月`;
-}
-
-export function dateDisplayName(dateValue) {
-  const [year, month, day] = dateValue.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  const weekday = ["日", "月", "火", "水", "木", "金", "土"][date.getDay()];
-  return `${year}年${month}月${day}日（${weekday}）`;
+  const overview = buildMonthOverview({
+    monthValue: state.selectedMonth,
+    employees: state.employees,
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts
+  });
+  const summary = overview.daySummaries[day - 1];
+  return summary
+    ? { workers: summary.workers, hours: summary.paidMinutes / 60, overtimeHours: summary.overtimeMinutes / 60 }
+    : { workers: 0, hours: 0, overtimeHours: 0 };
 }
 
 export function scheduleSave() {
   state.updatedAt = new Date().toISOString();
+  syncActiveWorkspace();
+  changeRevision += 1;
   statusHandler("未保存の変更があります", false);
   globalThis.clearTimeout(saveTimer);
-  saveTimer = globalThis.setTimeout(saveNow, 350);
+  saveTimer = globalThis.setTimeout(() => {
+    void saveNow().catch(() => {});
+  }, 350);
+}
+
+async function persistCurrentRevision() {
+  const revision = changeRevision;
+  try {
+    await saveState(applicationEnvelope());
+    if (revision === changeRevision) {
+      const savedTime = new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      statusHandler(`${savedTime} に端末内へ保存`, false);
+    } else {
+      saveQueued = true;
+    }
+  } catch (error) {
+    console.error(error);
+    statusHandler(`保存失敗: ${error.message}`, true);
+    throw error;
+  }
 }
 
 export async function saveNow() {
   globalThis.clearTimeout(saveTimer);
-  try {
-    await saveState(applicationEnvelope());
-    const savedTime = new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    statusHandler(`${savedTime} に端末内へ保存`, false);
-  } catch (error) {
-    console.error(error);
-    statusHandler(`保存失敗: ${error.message}`, true);
+  if (saveInFlight) {
+    saveQueued = true;
+    return saveInFlight;
   }
+
+  saveInFlight = persistCurrentRevision().finally(async () => {
+    saveInFlight = null;
+    if (saveQueued) {
+      saveQueued = false;
+      await saveNow();
+    }
+  });
+  return saveInFlight;
 }
 
 export async function loadSavedState() {
@@ -454,8 +343,8 @@ export async function loadSavedState() {
     workspaceState.workspaces = [workspace];
     workspaceState.activeWorkspaceId = workspace.id;
     workspaceState.settings = { lastBackupAt: null };
-    applyWorkspace(workspace);
-    await saveState(applicationEnvelope());
+    applyWorkspaceToState(state, workspace);
+    await persistApplicationStateNow();
     return false;
   }
 
@@ -471,7 +360,7 @@ export async function loadSavedState() {
     });
     loadApplicationEnvelope(migrated);
     workspaceState.migratedLegacyState = true;
-    await saveState(applicationEnvelope());
+    await persistApplicationStateNow();
   }
   return true;
 }

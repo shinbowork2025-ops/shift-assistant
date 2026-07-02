@@ -1,11 +1,5 @@
-import {
-  state,
-  getDaysInMonth,
-  getDayInfo,
-  getShift,
-  employeeSummary,
-  daySummary
-} from "./model.js";
+import { state } from "./model.js";
+import { buildMonthOverview } from "./month-overview.js";
 import {
   weekendClass,
   createHeaderCell,
@@ -26,23 +20,27 @@ export function renderMonthTable(elements) {
     return;
   }
 
-  const numberOfDays = getDaysInMonth(state.selectedMonth);
+  const overview = buildMonthOverview({
+    monthValue: state.selectedMonth,
+    employees: state.employees,
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts
+  });
   const table = document.createElement("table");
   table.className = "schedule-table";
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
   headerRow.append(createHeaderCell("従業員", "employee-column"));
 
-  for (let day = 1; day <= numberOfDays; day += 1) {
-    const dayInfo = getDayInfo(state.selectedMonth, day);
+  for (const dayInfo of overview.days) {
     const cell = document.createElement("th");
     cell.className = weekendClass(dayInfo.weekday);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "day-view-button";
-    button.dataset.day = String(day);
-    button.textContent = `${day} ${dayInfo.label}`;
-    button.title = `${day}日の時間帯チャートを開く`;
+    button.dataset.day = String(dayInfo.day);
+    button.textContent = `${dayInfo.day} ${dayInfo.label}`;
+    button.title = `${dayInfo.day}日の時間帯チャートを開く`;
     cell.append(button);
     headerRow.append(cell);
   }
@@ -54,7 +52,7 @@ export function renderMonthTable(elements) {
   table.append(thead);
 
   const tbody = document.createElement("tbody");
-  for (const employee of state.employees) {
+  for (const { employee, cells, summary } of overview.employeeRows) {
     const row = document.createElement("tr");
     const employeeCell = document.createElement("th");
     employeeCell.scope = "row";
@@ -64,7 +62,7 @@ export function renderMonthTable(elements) {
     employeeButton.className = "employee-button";
     employeeButton.dataset.employeeId = employee.id;
     employeeButton.append(document.createTextNode(employee.name));
-    const fixedOvertimeLabel = `固定残業${formatHours((employee.fixedOvertimeMinutes ?? 0) / 60)}`;
+    const fixedOvertimeLabel = `固定残業${formatHours(summary.fixedOvertimeHours)}`;
     const details = [employee.code, employee.department, fixedOvertimeLabel].filter(Boolean).join(" / ");
     const code = document.createElement("span");
     code.className = "employee-code";
@@ -73,17 +71,16 @@ export function renderMonthTable(elements) {
     employeeCell.append(employeeButton);
     row.append(employeeCell);
 
-    for (let day = 1; day <= numberOfDays; day += 1) {
-      const dayInfo = getDayInfo(state.selectedMonth, day);
+    cells.forEach((cellData, index) => {
+      const dayInfo = overview.days[index];
       const cell = document.createElement("td");
       cell.className = [weekendClass(dayInfo.weekday), "paint-cell"].filter(Boolean).join(" ");
       cell.dataset.employeeId = employee.id;
-      cell.dataset.day = String(day);
-      cell.append(createShiftSelect(employee, day, getShift(employee.id, day)));
+      cell.dataset.day = String(dayInfo.day);
+      cell.append(createShiftSelect(employee, dayInfo.day, cellData.code));
       row.append(cell);
-    }
+    });
 
-    const summary = employeeSummary(employee.id);
     const remainingText = summary.overtimeRemainingHours >= 0
       ? formatHours(summary.overtimeRemainingHours)
       : `超過${formatHours(Math.abs(summary.overtimeRemainingHours))}`;
@@ -101,18 +98,16 @@ export function renderMonthTable(elements) {
   const tfoot = document.createElement("tfoot");
   const workerRow = document.createElement("tr");
   workerRow.append(createHeaderCell("出勤人数", "employee-column"));
-  for (let day = 1; day <= numberOfDays; day += 1) {
-    const dayInfo = getDayInfo(state.selectedMonth, day);
-    workerRow.append(createDataCell(`${daySummary(day).workers}人`, weekendClass(dayInfo.weekday)));
+  for (const summary of overview.daySummaries) {
+    workerRow.append(createDataCell(`${summary.workers}人`, weekendClass(summary.weekday)));
   }
   for (let index = 0; index < 4; index += 1) workerRow.append(createDataCell("", "summary-column"));
   tfoot.append(workerRow);
 
   const overtimeRow = document.createElement("tr");
   overtimeRow.append(createHeaderCell("残業見込", "employee-column"));
-  for (let day = 1; day <= numberOfDays; day += 1) {
-    const dayInfo = getDayInfo(state.selectedMonth, day);
-    overtimeRow.append(createDataCell(formatHours(daySummary(day).overtimeHours), weekendClass(dayInfo.weekday)));
+  for (const summary of overview.daySummaries) {
+    overtimeRow.append(createDataCell(formatHours(summary.overtimeMinutes / 60), weekendClass(summary.weekday)));
   }
   for (let index = 0; index < 4; index += 1) overtimeRow.append(createDataCell("", "summary-column"));
   tfoot.append(overtimeRow);

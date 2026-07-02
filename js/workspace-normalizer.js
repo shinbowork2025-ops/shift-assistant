@@ -1,0 +1,116 @@
+import { currentMonthValue, getDaysInMonth, isDateValue, isMonthValue, isValidTime } from "./date-time.js";
+import { createId } from "./ids.js";
+import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
+import { nonNegativeMinutes } from "./shift-metrics.js";
+import { createBlankWorkspace } from "./workspace-schema.js";
+
+const VALID_VIEWS = new Set(["month", "day", "print"]);
+
+export function normalizeEmployees(candidate) {
+  return (Array.isArray(candidate) ? candidate : [])
+    .filter((employee) => employee && typeof employee.id === "string" && typeof employee.name === "string")
+    .map((employee, index) => ({
+      id: employee.id,
+      name: employee.name.trim().slice(0, 40),
+      code: typeof employee.code === "string" ? employee.code.trim().slice(0, 20) : "",
+      department: typeof employee.department === "string" ? employee.department.trim().slice(0, 30) : "",
+      order: Number.isFinite(Number(employee.order)) ? Number(employee.order) : index + 1,
+      fixedOvertimeMinutes: nonNegativeMinutes(employee.fixedOvertimeMinutes)
+    }))
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja"));
+}
+
+export function normalizeShiftType(shift, index) {
+  const start = isValidTime(shift.start) ? shift.start : "";
+  const end = isValidTime(shift.end) ? shift.end : "";
+  const isWork = Boolean(shift.isWork ?? (start && end));
+  return {
+    code: shift.code.trim().slice(0, 30) || `shift-${index + 1}`,
+    name: shift.name.trim().slice(0, 40),
+    shortLabel: String(shift.shortLabel || shift.name).trim().slice(0, 4),
+    start: isWork ? start : "",
+    end: isWork ? end : "",
+    isWork,
+    paidMinutes: Number.isFinite(Number(shift.paidMinutes)) ? Math.max(0, Number(shift.paidMinutes)) : undefined,
+    overtimeMinutes: nonNegativeMinutes(shift.overtimeMinutes)
+  };
+}
+
+export function normalizeShiftTypes(candidate) {
+  const source = Array.isArray(candidate) && candidate.length ? candidate : DEFAULT_SHIFT_TYPES;
+  const result = source
+    .filter((shift) => shift && typeof shift.code === "string" && typeof shift.name === "string")
+    .map((shift, index) => normalizeShiftType(shift, index));
+  return result.length ? result : structuredClone(DEFAULT_SHIFT_TYPES);
+}
+
+export function normalizeWorkspace(candidate, index = 0) {
+  if (!candidate || typeof candidate !== "object") throw new Error("シフト表の形式が正しくありません。");
+  const selectedMonth = isMonthValue(candidate.selectedMonth ?? candidate.targetMonth)
+    ? (candidate.selectedMonth ?? candidate.targetMonth)
+    : currentMonthValue();
+  let selectedDate = isDateValue(candidate.selectedDate)
+    ? candidate.selectedDate
+    : `${selectedMonth}-01`;
+  if (!selectedDate.startsWith(selectedMonth)) selectedDate = `${selectedMonth}-01`;
+  const now = new Date().toISOString();
+
+  return {
+    id: typeof candidate.id === "string" && candidate.id ? candidate.id : createId(`workspace-${index + 1}`),
+    name: String(candidate.name || "無題のシフト表").trim().slice(0, 60) || "無題のシフト表",
+    targetMonth: selectedMonth,
+    selectedMonth,
+    selectedDate,
+    currentView: VALID_VIEWS.has(candidate.currentView) ? candidate.currentView : "month",
+    employees: normalizeEmployees(candidate.employees),
+    shiftTypes: normalizeShiftTypes(candidate.shiftTypes),
+    shifts: candidate.shifts && typeof candidate.shifts === "object" ? structuredClone(candidate.shifts) : {},
+    breaks: candidate.breaks && typeof candidate.breaks === "object" ? structuredClone(candidate.breaks) : {},
+    createdAt: candidate.createdAt ?? candidate.updatedAt ?? now,
+    updatedAt: candidate.updatedAt ?? now
+  };
+}
+
+export function createInitialWorkspace(name = "無題のシフト表", targetMonth = currentMonthValue()) {
+  const now = new Date().toISOString();
+  return normalizeWorkspace(createBlankWorkspace({
+    id: createId("workspace"),
+    name,
+    targetMonth,
+    now,
+    shiftTypes: DEFAULT_SHIFT_TYPES
+  }));
+}
+
+export function applyWorkspaceToState(targetState, workspace) {
+  targetState.schemaVersion = 3;
+  targetState.selectedMonth = workspace.selectedMonth;
+  targetState.selectedDate = workspace.selectedDate;
+  targetState.currentView = VALID_VIEWS.has(workspace.currentView) ? workspace.currentView : "month";
+  targetState.employees = structuredClone(workspace.employees);
+  targetState.shiftTypes = structuredClone(workspace.shiftTypes);
+  targetState.shifts = structuredClone(workspace.shifts);
+  targetState.breaks = structuredClone(workspace.breaks);
+  targetState.updatedAt = workspace.updatedAt;
+}
+
+export function syncWorkspaceFromState(workspace, sourceState) {
+  if (!workspace) return null;
+  workspace.targetMonth = sourceState.selectedMonth;
+  workspace.selectedMonth = sourceState.selectedMonth;
+  workspace.selectedDate = sourceState.selectedDate;
+  workspace.currentView = VALID_VIEWS.has(sourceState.currentView) ? sourceState.currentView : "month";
+  workspace.employees = sourceState.employees;
+  workspace.shiftTypes = sourceState.shiftTypes;
+  workspace.shifts = sourceState.shifts;
+  workspace.breaks = sourceState.breaks;
+  workspace.updatedAt = sourceState.updatedAt ?? workspace.updatedAt;
+  return workspace;
+}
+
+export function updateWorkspaceMonth(targetState, targetMonth) {
+  const month = isMonthValue(targetMonth) ? targetMonth : targetState.selectedMonth;
+  const day = Math.min(Number(targetState.selectedDate.slice(-2)) || 1, getDaysInMonth(month));
+  targetState.selectedMonth = month;
+  targetState.selectedDate = `${month}-${String(day).padStart(2, "0")}`;
+}

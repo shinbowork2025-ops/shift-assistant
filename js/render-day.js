@@ -1,13 +1,5 @@
-import {
-  state,
-  getShift,
-  getShiftType,
-  getBreaks,
-  dayFromDate,
-  timeToMinutes
-} from "./model.js";
-import { availableWorkersAt } from "./breaks.js";
-import { validateBreaks } from "./break-rules.js";
+import { state } from "./model.js";
+import { buildDailyOverview } from "./daily-overview.js";
 import {
   shiftToneClass,
   createHeaderCell,
@@ -15,56 +7,29 @@ import {
   createShiftSelect
 } from "./render-common.js";
 
-const SLOT_MINUTES = 15;
-
-function timelineRange(day) {
-  const starts = [];
-  const ends = [];
-  for (const employee of state.employees) {
-    const shiftType = getShiftType(getShift(employee.id, day));
-    if (!shiftType?.isWork) continue;
-    starts.push(timeToMinutes(shiftType.start));
-    ends.push(timeToMinutes(shiftType.end));
-  }
-  const start = starts.length ? Math.max(0, Math.floor(Math.min(...starts) / 60) * 60) : 8 * 60;
-  const end = ends.length ? Math.min(24 * 60, Math.ceil(Math.max(...ends) / 60) * 60) : 22 * 60;
-  return { start, end: Math.max(start + 60, end) };
-}
-
-function buildSlots(start, end) {
-  const slots = [];
-  for (let minute = start; minute < end; minute += SLOT_MINUTES) slots.push(minute);
-  return slots;
-}
-
-function slotStatus(employeeId, day, slotStart) {
-  const shiftType = getShiftType(getShift(employeeId, day));
-  if (!shiftType?.isWork) return { className: "timeline-off", title: "" };
-  const shiftStart = timeToMinutes(shiftType.start);
-  const shiftEnd = timeToMinutes(shiftType.end);
-  if (slotStart < shiftStart || slotStart >= shiftEnd) return { className: "timeline-off", title: "" };
-
-  const breakItem = getBreaks(employeeId, state.selectedDate).find((item) => {
-    const breakStart = timeToMinutes(item.start);
-    const breakEnd = timeToMinutes(item.end);
-    return slotStart >= breakStart && slotStart < breakEnd;
-  });
-  if (breakItem) {
-    const className = breakItem.type === "lunch" ? "timeline-break timeline-lunch" : "timeline-break timeline-small-break";
-    return { className, title: `${breakItem.label} ${breakItem.start}〜${breakItem.end}` };
-  }
-  return { className: `timeline-work ${shiftToneClass(shiftType.code)}`, title: `${shiftType.name} ${shiftType.start}〜${shiftType.end}` };
-}
-
 function validationMessage(validation) {
   const summary = `実働${validation.work}分 / 休憩${validation.actual}分 / 必要${validation.required}分`;
   return [summary, ...validation.issues].join("\n");
 }
 
+function timelineClass(cell) {
+  if (cell.kind === "work") return `timeline-work ${shiftToneClass(cell.shiftCode)}`;
+  if (cell.kind === "break") {
+    return cell.breakType === "lunch"
+      ? "timeline-break timeline-lunch"
+      : "timeline-break timeline-small-break";
+  }
+  return "timeline-off";
+}
+
 export function renderDailyTable(elements) {
-  const day = dayFromDate(state.selectedDate);
-  const { start, end } = timelineRange(day);
-  const slots = buildSlots(start, end);
+  const overview = buildDailyOverview({
+    dateValue: state.selectedDate,
+    employees: state.employees,
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts,
+    breaks: state.breaks
+  });
   const table = document.createElement("table");
   table.className = "daily-chart-table";
 
@@ -72,7 +37,7 @@ export function renderDailyTable(elements) {
   const headerRow = document.createElement("tr");
   headerRow.append(createHeaderCell("従業員", "daily-employee-column"));
   headerRow.append(createHeaderCell("シフト", "daily-select-column"));
-  for (const slot of slots) {
+  for (const slot of overview.slots) {
     const cell = createHeaderCell(slot % 60 === 0 ? `${String(Math.floor(slot / 60)).padStart(2, "0")}:00` : "", "timeline-header-cell");
     if (slot % 60 === 0) cell.classList.add("hour-start");
     headerRow.append(cell);
@@ -81,10 +46,8 @@ export function renderDailyTable(elements) {
   table.append(thead);
 
   const tbody = document.createElement("tbody");
-  for (const employee of state.employees) {
-    const shiftType = getShiftType(getShift(employee.id, day));
-    const employeeBreaks = getBreaks(employee.id, state.selectedDate);
-    const validation = validateBreaks(shiftType, employeeBreaks);
+  for (const rowData of overview.rows) {
+    const { employee, shiftCode, validation, cells } = rowData;
     const row = document.createElement("tr");
     if (!validation.ok) row.classList.add("break-invalid-row");
 
@@ -105,18 +68,18 @@ export function renderDailyTable(elements) {
     const selectCell = document.createElement("td");
     selectCell.className = "daily-select-column";
     if (!validation.ok) selectCell.title = validationMessage(validation);
-    selectCell.append(createShiftSelect(employee, day, getShift(employee.id, day), true));
+    selectCell.append(createShiftSelect(employee, overview.day, shiftCode, true));
     row.append(selectCell);
 
-    for (const slot of slots) {
-      const status = slotStatus(employee.id, day, slot);
+    cells.forEach((cellData, index) => {
+      const slot = overview.slots[index];
       const cell = document.createElement("td");
-      cell.className = `timeline-cell ${status.className}`;
-      if (!validation.ok && status.className.includes("timeline-work")) cell.classList.add("timeline-break-invalid");
+      cell.className = `timeline-cell ${timelineClass(cellData)}`;
+      if (!validation.ok && cellData.kind === "work") cell.classList.add("timeline-break-invalid");
       if (slot % 60 === 0) cell.classList.add("hour-start");
-      if (status.title) cell.title = status.title;
+      if (cellData.title) cell.title = cellData.title;
       row.append(cell);
-    }
+    });
     tbody.append(row);
   }
   table.append(tbody);
@@ -125,14 +88,14 @@ export function renderDailyTable(elements) {
   const coverageRow = document.createElement("tr");
   coverageRow.append(createHeaderCell("実配置人数", "daily-employee-column"));
   coverageRow.append(createDataCell("休憩除外", "daily-select-column"));
-  for (const slot of slots) {
-    const count = availableWorkersAt(state.selectedDate, slot);
+  overview.coverage.forEach((count, index) => {
+    const slot = overview.slots[index];
     const className = count === 0 ? "coverage-zero" : count === 1 ? "coverage-low" : "coverage-ok";
     const cell = createDataCell(String(count), `coverage-cell ${className}`);
     if (slot % 60 === 0) cell.classList.add("hour-start");
     cell.title = `${Math.floor(slot / 60)}:${String(slot % 60).padStart(2, "0")} 実配置${count}人`;
     coverageRow.append(cell);
-  }
+  });
   tfoot.append(coverageRow);
   table.append(tfoot);
 

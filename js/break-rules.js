@@ -1,15 +1,10 @@
+import { timeToMinutes } from "./date-time.js";
+
 const MINUTES_PER_DAY = 24 * 60;
 
 function normalizeMinute(value) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.round(number) : null;
-}
-
-function parseTime(value) {
-  if (typeof value !== "string" || !/^\d{1,2}:\d{2}$/.test(value.trim())) return null;
-  const [hours, minutes] = value.trim().split(":").map(Number);
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
-  return hours * 60 + minutes;
 }
 
 export function requiredBreakMinutes(workMinutes) {
@@ -101,8 +96,8 @@ export function validateBreaks(shiftType, breaks = []) {
     return { ok: true, span: 0, work: 0, required: 0, actual: 0, shortage: 0, issues: [] };
   }
 
-  const shiftStart = parseTime(shiftType.start);
-  const shiftEnd = parseTime(shiftType.end);
+  const shiftStart = timeToMinutes(shiftType.start);
+  const shiftEnd = timeToMinutes(shiftType.end);
   if (shiftStart === null || shiftEnd === null || shiftEnd <= shiftStart || shiftEnd > MINUTES_PER_DAY) {
     return {
       ok: false,
@@ -118,8 +113,8 @@ export function validateBreaks(shiftType, breaks = []) {
   const issues = [];
   const intervals = [];
   for (const breakItem of Array.isArray(breaks) ? breaks : []) {
-    const start = parseTime(breakItem?.start);
-    const end = parseTime(breakItem?.end);
+    const start = timeToMinutes(breakItem?.start);
+    const end = timeToMinutes(breakItem?.end);
     if (start === null || end === null || end <= start) {
       issues.push("開始・終了時刻が不正な休憩があります。");
       continue;
@@ -127,7 +122,9 @@ export function validateBreaks(shiftType, breaks = []) {
     if (start <= shiftStart || end >= shiftEnd) {
       issues.push("休憩は勤務時間の途中に配置してください。");
     }
-    intervals.push({ start: Math.max(start, shiftStart), end: Math.min(end, shiftEnd) });
+    const clippedStart = Math.max(start, shiftStart);
+    const clippedEnd = Math.min(end, shiftEnd);
+    if (clippedEnd > clippedStart) intervals.push({ start: clippedStart, end: clippedEnd });
   }
 
   const sorted = [...intervals].sort((a, b) => a.start - b.start || a.end - b.end);
@@ -139,9 +136,7 @@ export function validateBreaks(shiftType, breaks = []) {
   }
 
   const totals = validateBreakTotals(shiftEnd - shiftStart, mergedBreakMinutes(intervals));
-  if (!totals.ok) {
-    issues.push(`休憩が${totals.shortage}分不足しています。`);
-  }
+  if (!totals.ok) issues.push(`休憩が${totals.shortage}分不足しています。`);
 
   return {
     ...totals,

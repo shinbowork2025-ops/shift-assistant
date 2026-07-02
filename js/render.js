@@ -44,7 +44,7 @@ function renderWorkspaceControls(elements) {
   elements.deleteWorkspaceButton.disabled = workspaces.length <= 1;
 }
 
-export function render(elements) {
+export function renderShell(elements) {
   renderWorkspaceControls(elements);
   elements.monthInput.value = state.selectedMonth;
   elements.dateInput.value = state.selectedDate;
@@ -60,10 +60,25 @@ export function render(elements) {
   elements.monthControls.hidden = state.currentView !== "month";
   elements.dayControls.hidden = state.currentView !== "day";
   elements.legend.hidden = state.currentView === "print";
+}
+
+export function renderActiveView(elements) {
+  if (state.currentView === "day") {
+    renderLegend(elements);
+    renderDailyTable(elements);
+    return;
+  }
+  if (state.currentView === "print") {
+    renderPrintPreview(elements);
+    return;
+  }
 
   renderLegend(elements);
   renderMonthTable(elements);
   syncPaintInput();
-  renderDailyTable(elements);
-  renderPrintPreview(elements);
+}
+
+export function render(elements) {
+  renderShell(elements);
+  renderActiveView(elements);
 }

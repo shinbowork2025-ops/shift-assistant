@@ -1,5 +1,6 @@
 import { state, getActiveWorkspace, scheduleSave } from "./model.js";
 import { createHistoryStack } from "./history-stack.js";
+import { createHistoryPatch, applyHistoryPatch } from "./history-patch.js";
 
 const HISTORY_LIMIT = 50;
 const stacks = new Map();
@@ -15,7 +16,7 @@ function stackFor(workspaceId = activeWorkspaceId()) {
   return stacks.get(workspaceId);
 }
 
-function snapshotActiveWorkspace() {
+function currentWorkspaceDocument() {
   const workspace = getActiveWorkspace();
   if (!workspace) return null;
   return {
@@ -23,15 +24,16 @@ function snapshotActiveWorkspace() {
     name: workspace.name,
     selectedMonth: state.selectedMonth,
     selectedDate: state.selectedDate,
-    employees: structuredClone(state.employees),
-    shiftTypes: structuredClone(state.shiftTypes),
-    shifts: structuredClone(state.shifts),
-    breaks: structuredClone(state.breaks)
+    employees: state.employees,
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts,
+    breaks: state.breaks
   };
 }
 
-function snapshotsEqual(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
+function snapshotActiveWorkspace() {
+  const current = currentWorkspaceDocument();
+  return current ? structuredClone(current) : null;
 }
 
 function applySnapshot(snapshot) {
@@ -59,10 +61,21 @@ function notify() {
 }
 
 function recordSnapshots(label, before, after) {
-  if (!before || !after || after.workspaceId !== before.workspaceId || snapshotsEqual(before, after)) return false;
-  stackFor(before.workspaceId)?.record({ label, before, after });
+  if (!before || !after || after.workspaceId !== before.workspaceId) return false;
+  const patch = createHistoryPatch(before, after);
+  if (!patch.length) return false;
+  stackFor(before.workspaceId)?.record({ label, workspaceId: before.workspaceId, patch });
   notify();
   return true;
+}
+
+function applyEntry(entry, direction) {
+  const current = currentWorkspaceDocument();
+  if (!current || current.workspaceId !== entry?.workspaceId) {
+    throw new Error("履歴の対象シフト表が現在のシフト表と一致しません。");
+  }
+  applyHistoryPatch(current, entry.patch, direction);
+  applySnapshot(current);
 }
 
 export function runWithHistory(label, operation) {
@@ -70,7 +83,7 @@ export function runWithHistory(label, operation) {
   if (!before) return operation();
 
   const finish = (result) => {
-    recordSnapshots(label, before, snapshotActiveWorkspace());
+    recordSnapshots(label, before, currentWorkspaceDocument());
     return result;
   };
 
@@ -93,8 +106,7 @@ export function beginHistoryTransaction(label) {
 export function commitHistoryTransaction(transaction) {
   if (!transaction || transaction.completed) return false;
   transaction.completed = true;
-  const after = snapshotActiveWorkspace();
-  return recordSnapshots(transaction.label, transaction.before, after);
+  return recordSnapshots(transaction.label, transaction.before, currentWorkspaceDocument());
 }
 
 export function cancelHistoryTransaction(transaction, restore = false) {
@@ -108,7 +120,7 @@ export function cancelHistoryTransaction(transaction, restore = false) {
 export function undoHistory() {
   const entry = stackFor()?.undo();
   if (!entry) return null;
-  applySnapshot(entry.before);
+  applyEntry(entry, "before");
   notify();
   return entry.label;
 }
@@ -116,7 +128,7 @@ export function undoHistory() {
 export function redoHistory() {
   const entry = stackFor()?.redo();
   if (!entry) return null;
-  applySnapshot(entry.after);
+  applyEntry(entry, "after");
   notify();
   return entry.label;
 }

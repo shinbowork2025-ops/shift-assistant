@@ -83,3 +83,16 @@ test("始業直後・終業直前の休憩を不正として検出する", () =>
   assert.equal(result.ok, false);
   assert.ok(result.issues.some((issue) => issue.includes("途中")));
 });
+
+test("勤務時間の外側だけにある休憩を休憩合計へ含めない", () => {
+  const result = validateBreaks(
+    { isWork: true, start: "09:00", end: "18:00" },
+    [{ type: "small", start: "08:00", end: "08:30" }]
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.actual, 0);
+  assert.equal(result.work, 540);
+  assert.equal(result.required, 60);
+  assert.equal(result.shortage, 60);
+  assert.ok(result.issues.some((issue) => issue.includes("途中")));
+});

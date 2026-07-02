@@ -1,23 +1,24 @@
 import {
   state,
   dayFromDate,
-  getShift,
-  getShiftType,
   shiftDurationMinutes,
   timeToMinutes,
   minutesToTime,
   setBreaksForDate
 } from "./model.js";
 import { plannedBreakTemplates } from "./break-rules.js";
+import { buildShiftTypeMap, getShiftCodeFromData } from "./month-overview.js";
 
 const SLOT_MINUTES = 15;
 
 function workingAssignments(dateValue) {
+  const monthValue = dateValue.slice(0, 7);
   const day = dayFromDate(dateValue);
+  const shiftTypesByCode = buildShiftTypeMap(state.shiftTypes);
   return state.employees
     .map((employee) => {
-      const shiftCode = getShift(employee.id, day);
-      const shiftType = getShiftType(shiftCode);
+      const shiftCode = getShiftCodeFromData(state.shifts, monthValue, employee.id, day);
+      const shiftType = shiftTypesByCode.get(shiftCode) ?? null;
       return { employee, shiftCode, shiftType };
     })
     .filter((assignment) => assignment.shiftType?.isWork)
@@ -89,7 +90,7 @@ function addExistingBreaksToLoad(breaks, breakLoad) {
   }
 }
 
-export function generateBreaksForDate(dateValue, employeeIds = null) {
+export function generateBreaksForDate(dateValue, employeeIds = null, options = {}) {
   const assignments = workingAssignments(dateValue);
   const active = activeWorkersBySlot(assignments);
   const breakLoad = new Map();
@@ -142,7 +143,7 @@ export function generateBreaksForDate(dateValue, employeeIds = null) {
     });
   }
 
-  setBreaksForDate(dateValue, result);
+  setBreaksForDate(dateValue, result, { save: options.save !== false });
   return result;
 }
 
@@ -153,10 +154,13 @@ export function ensureBreaksForDate(dateValue) {
 }
 
 export function availableWorkersAt(dateValue, slotStart) {
+  const monthValue = dateValue.slice(0, 7);
   const day = dayFromDate(dateValue);
+  const shiftTypesByCode = buildShiftTypeMap(state.shiftTypes);
   let count = 0;
   for (const employee of state.employees) {
-    const shiftType = getShiftType(getShift(employee.id, day));
+    const shiftCode = getShiftCodeFromData(state.shifts, monthValue, employee.id, day);
+    const shiftType = shiftTypesByCode.get(shiftCode) ?? null;
     if (!shiftType?.isWork) continue;
     const start = timeToMinutes(shiftType.start);
     const end = timeToMinutes(shiftType.end);
