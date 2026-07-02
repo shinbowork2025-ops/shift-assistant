@@ -87,7 +87,7 @@
       <div class="schedule-heading">
         <div>
           <h2 id="dailyTitle">時間帯チャート</h2>
-          <p class="muted">薄緑が勤務中、薄オレンジが休憩中です。下段は休憩を除いた実配置人数で、0人は赤く表示します。</p>
+          <p class="muted">薄緑が勤務中、薄オレンジが休憩中です。休憩が法定基準を満たさない行には警告を表示します。</p>
         </div>
       </div>
       <div id="dailyEmptyState" class="empty-state" hidden>
@@ -96,7 +96,7 @@
       </div>
       <div id="dailyChartContainer" class="table-container daily-chart-container" tabindex="0" aria-label="1日の勤務時間帯チャート"></div>
       <div class="break-rule-note">
-        <strong>自動休憩：</strong>8時間以上の勤務は、小休憩15分・昼休憩60分・小休憩15分をおおむね2時間間隔で配置します。4時間以上8時間未満は小休憩15分を配置します。
+        <strong>自動休憩：</strong>通常の9時間以上の勤務は、小休憩15分・昼休憩60分・小休憩15分を配置します。短い勤務は、実働6時間超で45分以上、実働8時間超で60分以上となるよう調整します。既存データは自動変更せず、警告確認後に「休憩を再配置」を使用してください。
       </div>
     </section>
 
