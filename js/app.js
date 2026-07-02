@@ -1,20 +1,24 @@
 import { state, workspaceState, loadSavedState, setStatusHandler } from "./model.js";
 import { ensureBreaksForDate } from "./breaks.js";
 import { bindEvents } from "./events.js";
+import { undoLastAction, redoLastAction } from "./actions.js";
+import { initializeHistoryUi } from "./history-ui.js";
 import { elements, setSaveStatus } from "./elements.js";
 import { render } from "./render.js";
 
-function loadPrintPageFix() {
-  if (document.querySelector('link[href="./print-page.css"]')) return;
+function loadStylesheet(href) {
+  if (document.querySelector(`link[href="${href}"]`)) return;
   const stylesheet = document.createElement("link");
   stylesheet.rel = "stylesheet";
-  stylesheet.href = "./print-page.css";
+  stylesheet.href = href;
   document.head.append(stylesheet);
 }
 
 async function initialize() {
-  loadPrintPageFix();
+  loadStylesheet("./print-page.css");
+  loadStylesheet("./history.css");
   setStatusHandler(setSaveStatus);
+  initializeHistoryUi({ onUndo: undoLastAction, onRedo: redoLastAction });
   bindEvents();
   try {
     const hadSavedState = await loadSavedState();
