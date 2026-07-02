@@ -1,17 +1,17 @@
 import { loadState, saveState } from "./db.js";
 
 export const DEFAULT_SHIFT_TYPES = Object.freeze([
-  { code: "early", name: "早番", shortLabel: "早", start: "09:00", end: "18:00", isWork: true },
-  { code: "middle", name: "中番", shortLabel: "中", start: "11:00", end: "20:00", isWork: true },
-  { code: "late", name: "遅番", shortLabel: "遅", start: "12:00", end: "21:00", isWork: true },
-  { code: "short", name: "短時間", shortLabel: "短", start: "09:00", end: "13:00", isWork: true },
-  { code: "off", name: "公休", shortLabel: "休", start: "", end: "", isWork: false, paidMinutes: 0 },
-  { code: "paid", name: "有休", shortLabel: "有", start: "", end: "", isWork: false, paidMinutes: 450 },
-  { code: "request", name: "希望休", shortLabel: "希", start: "", end: "", isWork: false, paidMinutes: 0 }
+  { code: "early", name: "早番", shortLabel: "早", start: "09:00", end: "18:00", isWork: true, overtimeMinutes: 0 },
+  { code: "middle", name: "中番", shortLabel: "中", start: "11:00", end: "20:00", isWork: true, overtimeMinutes: 0 },
+  { code: "late", name: "遅番", shortLabel: "遅", start: "12:00", end: "21:00", isWork: true, overtimeMinutes: 0 },
+  { code: "short", name: "短時間", shortLabel: "短", start: "09:00", end: "13:00", isWork: true, overtimeMinutes: 0 },
+  { code: "off", name: "公休", shortLabel: "休", start: "", end: "", isWork: false, paidMinutes: 0, overtimeMinutes: 0 },
+  { code: "paid", name: "有休", shortLabel: "有", start: "", end: "", isWork: false, paidMinutes: 450, overtimeMinutes: 0 },
+  { code: "request", name: "希望休", shortLabel: "希", start: "", end: "", isWork: false, paidMinutes: 0, overtimeMinutes: 0 }
 ]);
 
 export const state = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   selectedMonth: currentMonthValue(),
   selectedDate: currentDateValue(),
   currentView: "month",
@@ -44,13 +44,18 @@ export function createId(prefix = "item") {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function nonNegativeMinutes(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : fallback;
+}
+
 export function normalizeState(candidate) {
   if (!candidate || typeof candidate !== "object") return;
   if (!Array.isArray(candidate.employees) || typeof candidate.shifts !== "object" || !candidate.shifts) {
     throw new Error("バックアップの形式が正しくありません。");
   }
 
-  state.schemaVersion = 2;
+  state.schemaVersion = 3;
   state.selectedMonth = /^\d{4}-\d{2}$/.test(candidate.selectedMonth) ? candidate.selectedMonth : currentMonthValue();
   state.selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(candidate.selectedDate)
     ? candidate.selectedDate
@@ -64,7 +69,8 @@ export function normalizeState(candidate) {
       name: employee.name.trim().slice(0, 40),
       code: typeof employee.code === "string" ? employee.code.trim().slice(0, 20) : "",
       department: typeof employee.department === "string" ? employee.department.trim().slice(0, 30) : "",
-      order: Number.isFinite(Number(employee.order)) ? Number(employee.order) : index + 1
+      order: Number.isFinite(Number(employee.order)) ? Number(employee.order) : index + 1,
+      fixedOvertimeMinutes: nonNegativeMinutes(employee.fixedOvertimeMinutes)
     }))
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja"));
 
@@ -90,7 +96,8 @@ function normalizeShiftType(shift, index) {
     start: isWork ? start : "",
     end: isWork ? end : "",
     isWork,
-    paidMinutes: Number.isFinite(Number(shift.paidMinutes)) ? Math.max(0, Number(shift.paidMinutes)) : undefined
+    paidMinutes: Number.isFinite(Number(shift.paidMinutes)) ? Math.max(0, Number(shift.paidMinutes)) : undefined,
+    overtimeMinutes: nonNegativeMinutes(shift.overtimeMinutes)
   };
 }
 
@@ -131,6 +138,10 @@ export function paidMinutesForShift(shiftType) {
   if (Number.isFinite(Number(shiftType.paidMinutes))) return Math.max(0, Number(shiftType.paidMinutes));
   if (!shiftType.isWork) return 0;
   return Math.max(0, shiftDurationMinutes(shiftType) - expectedBreakMinutes(shiftType));
+}
+
+export function overtimeMinutesForShift(shiftType) {
+  return shiftType ? nonNegativeMinutes(shiftType.overtimeMinutes) : 0;
 }
 
 export function getShiftType(code) {
@@ -186,27 +197,41 @@ export function setBreaksForDate(dateValue, breaksByEmployee) {
 
 export function employeeSummary(employeeId) {
   const numberOfDays = getDaysInMonth(state.selectedMonth);
+  const employee = state.employees.find((item) => item.id === employeeId);
   let workDays = 0;
   let paidMinutes = 0;
+  let overtimeMinutes = 0;
 
   for (let day = 1; day <= numberOfDays; day += 1) {
     const shiftType = getShiftType(getShift(employeeId, day));
     const minutes = paidMinutesForShift(shiftType);
     if (minutes > 0) workDays += 1;
     paidMinutes += minutes;
+    overtimeMinutes += overtimeMinutesForShift(shiftType);
   }
-  return { workDays, hours: paidMinutes / 60 };
+
+  const fixedOvertimeMinutes = nonNegativeMinutes(employee?.fixedOvertimeMinutes);
+  return {
+    workDays,
+    hours: paidMinutes / 60,
+    overtimeHours: overtimeMinutes / 60,
+    fixedOvertimeHours: fixedOvertimeMinutes / 60,
+    overtimeRemainingHours: (fixedOvertimeMinutes - overtimeMinutes) / 60,
+    overtimeExceededHours: Math.max(0, overtimeMinutes - fixedOvertimeMinutes) / 60
+  };
 }
 
 export function daySummary(day) {
   let workers = 0;
   let paidMinutes = 0;
+  let overtimeMinutes = 0;
   for (const employee of state.employees) {
     const shiftType = getShiftType(getShift(employee.id, day));
     if (shiftType?.isWork) workers += 1;
     paidMinutes += paidMinutesForShift(shiftType);
+    overtimeMinutes += overtimeMinutesForShift(shiftType);
   }
-  return { workers, hours: paidMinutes / 60 };
+  return { workers, hours: paidMinutes / 60, overtimeHours: overtimeMinutes / 60 };
 }
 
 export function monthDisplayName(monthValue) {
