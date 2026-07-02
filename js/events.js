@@ -18,7 +18,7 @@ import {
   saveEmployeeFromDialog,
   deleteEmployeeFromDialog,
   autoPlaceBreaks,
-  importCsvFile,
+  importMasterFile,
   restoreBackupFile,
   clearCurrentMonth
 } from "./actions.js";
@@ -67,16 +67,16 @@ export function bindEvents() {
     if (dayButton) selectDate(`${state.selectedMonth}-${String(Number(dayButton.dataset.day)).padStart(2, "0")}`);
   });
 
-  elements.importCsvButton.addEventListener("click", () => elements.importCsvInput.click());
-  elements.importCsvInput.addEventListener("change", async () => {
+  elements.importMasterButton.addEventListener("click", () => elements.importMasterInput.click());
+  elements.importMasterInput.addEventListener("change", async () => {
     try {
-      const file = elements.importCsvInput.files?.[0];
-      if (file) await importCsvFile(file);
+      const file = elements.importMasterInput.files?.[0];
+      if (file) await importMasterFile(file);
     } catch (error) {
       console.error(error);
-      setImportStatus(`CSV読込失敗: ${error.message}`, true);
+      setImportStatus(`マスター読込失敗: ${error.message}`, true);
     } finally {
-      elements.importCsvInput.value = "";
+      elements.importMasterInput.value = "";
     }
   });
   elements.downloadSampleButton.addEventListener("click", downloadMasterCsvSample);

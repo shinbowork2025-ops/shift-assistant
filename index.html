@@ -10,6 +10,7 @@
   <title>Shift Assistant</title>
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./daily-colors.css">
+  <link rel="stylesheet" href="./overtime.css">
 </head>
 <body>
   <header class="app-header">
@@ -49,8 +50,8 @@
 
       <div class="toolbar-actions">
         <button id="addEmployeeButton" class="button primary" type="button">従業員を追加</button>
-        <button id="importCsvButton" class="button secondary" type="button">マスターCSV読込</button>
-        <input id="importCsvInput" type="file" accept="text/csv,.csv" hidden>
+        <button id="importMasterButton" class="button secondary" type="button">マスター読込</button>
+        <input id="importMasterInput" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
         <button id="downloadSampleButton" class="button secondary" type="button">CSV見本</button>
         <button id="exportCsvButton" class="button secondary" type="button">シフトCSV出力</button>
         <button id="backupButton" class="button secondary" type="button">JSONバックアップ</button>
@@ -61,7 +62,7 @@
 
     <section class="status-panel panel" aria-label="保存と読込の状態">
       <p id="saveStatus" class="save-status" role="status">保存準備中</p>
-      <p id="importStatus" class="import-status" role="status">CSVから従業員とシフト定義をまとめて登録できます。</p>
+      <p id="importStatus" class="import-status" role="status">CSVまたはExcel（.xlsx）から従業員・シフト・残業設定を登録できます。</p>
     </section>
 
     <section id="legend" class="legend panel" aria-label="登録済みシフト"></section>
@@ -77,7 +78,7 @@
 
       <div id="emptyState" class="empty-state" hidden>
         <h3>従業員が登録されていません</h3>
-        <p>手入力または「マスターCSV読込」から従業員を登録してください。</p>
+        <p>手入力または「マスター読込」から従業員を登録してください。</p>
       </div>
       <div id="tableContainer" class="table-container" tabindex="0" aria-label="月間シフト表"></div>
     </section>
@@ -100,8 +101,9 @@
     </section>
 
     <section class="panel notes-panel">
-      <h2>CSVの基本形式</h2>
-      <p><code>種別,コード,名称,開始時刻,終了時刻,所属,表示順,略称</code>の見出しで、従業員行とシフト行をまとめて読み込めます。「CSV見本」から雛形を取得できます。</p>
+      <h2>CSV・Excelの基本形式</h2>
+      <p><code>種別,コード,名称,開始時刻,終了時刻,所属,表示順,略称,固定残業時間,シフト残業時間</code>の見出しで、従業員行とシフト行をまとめて読み込めます。</p>
+      <p>Excelは<code>.xlsx</code>の先頭シートを読み込みます。古い<code>.xls</code>形式は未対応です。「CSV見本」をExcelで開いて編集し、<code>.xlsx</code>で保存しても読み込めます。</p>
       <p class="muted">このツールは編成案の作成用です。正式な登録と確定は社内システムで行ってください。</p>
     </section>
   </main>
@@ -124,6 +126,10 @@
       <label>
         <span>所属（任意）</span>
         <input id="employeeDepartmentInput" type="text" maxlength="30" autocomplete="off" placeholder="例：園芸">
+      </label>
+      <label>
+        <span>月の固定残業時間</span>
+        <input id="employeeFixedOvertimeInput" type="number" min="0" step="0.25" value="0" inputmode="decimal">
       </label>
       <div class="dialog-actions">
         <button id="deleteEmployeeButton" class="button danger-ghost" type="button" hidden>削除</button>

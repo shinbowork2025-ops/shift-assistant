@@ -8,7 +8,8 @@ import {
   getDaysInMonth
 } from "./model.js";
 import { generateBreaksForDate, ensureBreaksForDate } from "./breaks.js";
-import { importMasterCsvText, formatImportSummary } from "./csv.js";
+import { importMasterCsvText, importMasterRows, formatImportSummary } from "./csv.js";
+import { readFirstWorksheetRows } from "./xlsx-lite.js";
 import { restoreJson } from "./files.js";
 import { render } from "./render.js";
 import {
@@ -68,14 +69,23 @@ export function saveEmployeeFromDialog() {
   const name = elements.employeeNameInput.value.trim();
   const code = elements.employeeCodeInput.value.trim();
   const department = elements.employeeDepartmentInput.value.trim();
-  if (!name) return;
+  const fixedOvertimeHours = Number(elements.employeeFixedOvertimeInput.value || 0);
+  if (!name || !Number.isFinite(fixedOvertimeHours) || fixedOvertimeHours < 0) return;
+  const fixedOvertimeMinutes = Math.round(fixedOvertimeHours * 60);
 
   const employeeId = elements.employeeIdInput.value;
   if (employeeId) {
     const employee = state.employees.find((item) => item.id === employeeId);
-    if (employee) Object.assign(employee, { name, code, department });
+    if (employee) Object.assign(employee, { name, code, department, fixedOvertimeMinutes });
   } else {
-    state.employees.push({ id: createId("employee"), name, code, department, order: state.employees.length + 1 });
+    state.employees.push({
+      id: createId("employee"),
+      name,
+      code,
+      department,
+      fixedOvertimeMinutes,
+      order: state.employees.length + 1
+    });
   }
   closeEmployeeDialog();
   generateBreaksForDate(state.selectedDate);
@@ -104,12 +114,26 @@ export function autoPlaceBreaks() {
   setSaveStatus("休憩を再配置しました");
 }
 
-export async function importCsvFile(file) {
-  const summary = importMasterCsvText(await file.text());
+export async function importMasterFile(file) {
+  const lowerName = file.name.toLowerCase();
+  let summary;
+  let sourceLabel;
+
+  if (lowerName.endsWith(".xlsx")) {
+    const workbook = await readFirstWorksheetRows(file);
+    summary = importMasterRows(workbook.rows);
+    sourceLabel = `Excel「${workbook.sheetName}」`;
+  } else if (lowerName.endsWith(".csv") || file.type.includes("csv") || file.type.startsWith("text/")) {
+    summary = importMasterCsvText(await file.text());
+    sourceLabel = "CSV";
+  } else {
+    throw new Error("対応形式はCSVまたは.xlsxです。古い.xls形式には対応していません。");
+  }
+
   state.breaks = {};
   ensureBreaksForDate(state.selectedDate);
   refresh();
-  setImportStatus(formatImportSummary(summary), summary.errors.length > 0);
+  setImportStatus(formatImportSummary(summary, sourceLabel), summary.errors.length > 0);
   if (summary.errors.length) console.warn(summary.errors.join("\n"));
 }
 

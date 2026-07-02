@@ -1,6 +1,6 @@
 import { state, createId, isValidTime, scheduleSave } from "./model.js";
 
-function parseCsv(text) {
+export function parseCsv(text) {
   const rows = [];
   let row = [];
   let cell = "";
@@ -23,7 +23,7 @@ function parseCsv(text) {
     } else if ((character === "\n" || character === "\r") && !inQuotes) {
       if (character === "\r" && next === "\n") index += 1;
       row.push(cell);
-      if (row.some((value) => value.trim() !== "")) rows.push(row);
+      if (row.some((value) => String(value ?? "").trim() !== "")) rows.push(row);
       row = [];
       cell = "";
     } else {
@@ -32,7 +32,7 @@ function parseCsv(text) {
   }
 
   row.push(cell);
-  if (row.some((value) => value.trim() !== "")) rows.push(row);
+  if (row.some((value) => String(value ?? "").trim() !== "")) rows.push(row);
   return rows;
 }
 
@@ -62,6 +62,27 @@ function inferRowType(typeValue, hasEmployeeHeader, hasShiftHeader) {
   return "";
 }
 
+function durationToMinutes(hoursValue, minutesValue, label, line, errors) {
+  const minutesText = String(minutesValue ?? "").trim();
+  const hoursText = String(hoursValue ?? "").trim();
+  if (!minutesText && !hoursText) return null;
+
+  if (minutesText) {
+    const minutes = Number(minutesText);
+    if (Number.isFinite(minutes) && minutes >= 0) return Math.round(minutes);
+    errors.push(`${line}行目: ${label}（分）が数値ではありません。`);
+    return null;
+  }
+
+  const clockMatch = hoursText.match(/^(\d+):([0-5]\d)$/);
+  if (clockMatch) return Number(clockMatch[1]) * 60 + Number(clockMatch[2]);
+
+  const hours = Number(hoursText);
+  if (Number.isFinite(hours) && hours >= 0) return Math.round(hours * 60);
+  errors.push(`${line}行目: ${label}は20、1.5、01:30などの形式で入力してください。`);
+  return null;
+}
+
 function importEmployee(record, summary) {
   if (!record.name) {
     summary.errors.push(`${record.line}行目: 従業員名がありません。`);
@@ -77,6 +98,7 @@ function importEmployee(record, summary) {
     existing.code = record.code || existing.code;
     existing.department = record.department;
     existing.order = record.order || existing.order;
+    if (record.fixedOvertimeMinutes !== null) existing.fixedOvertimeMinutes = record.fixedOvertimeMinutes;
     summary.updatedEmployees += 1;
     return;
   }
@@ -86,7 +108,8 @@ function importEmployee(record, summary) {
     name: record.name,
     code: record.code,
     department: record.department,
-    order: record.order || state.employees.length + 1
+    order: record.order || state.employees.length + 1,
+    fixedOvertimeMinutes: record.fixedOvertimeMinutes ?? 0
   });
   summary.addedEmployees += 1;
 }
@@ -112,7 +135,8 @@ function importShift(record, summary) {
     start: hasTimes ? record.start : "",
     end: hasTimes ? record.end : "",
     isWork: hasTimes,
-    paidMinutes: record.paidMinutes === "" ? existing?.paidMinutes : Math.max(0, Number(record.paidMinutes))
+    paidMinutes: record.paidMinutes === "" ? existing?.paidMinutes : Math.max(0, Number(record.paidMinutes)),
+    overtimeMinutes: record.overtimeMinutes ?? existing?.overtimeMinutes ?? 0
   };
 
   if (existing) {
@@ -124,9 +148,8 @@ function importShift(record, summary) {
   }
 }
 
-export function importMasterCsvText(text) {
-  const rows = parseCsv(text);
-  if (rows.length < 2) throw new Error("CSVに見出し行とデータ行が必要です。");
+export function importMasterRows(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) throw new Error("見出し行とデータ行が必要です。");
 
   const headers = rows[0];
   const columns = {
@@ -140,11 +163,15 @@ export function importMasterCsvText(text) {
     start: findColumn(headers, ["開始時刻", "開始", "start", "startTime"]),
     end: findColumn(headers, ["終了時刻", "終了", "end", "endTime"]),
     shortLabel: findColumn(headers, ["略称", "短縮名", "shortLabel"]),
-    paidMinutes: findColumn(headers, ["実働分", "勤務分", "paidMinutes"])
+    paidMinutes: findColumn(headers, ["実働分", "勤務分", "paidMinutes"]),
+    fixedOvertimeHours: findColumn(headers, ["固定残業時間", "みなし残業時間", "fixedOvertimeHours"]),
+    fixedOvertimeMinutes: findColumn(headers, ["固定残業分", "固定残業時間分", "fixedOvertimeMinutes"]),
+    overtimeHours: findColumn(headers, ["残業時間", "シフト残業時間", "overtimeHours"]),
+    overtimeMinutes: findColumn(headers, ["残業分", "シフト残業分", "overtimeMinutes"])
   };
 
-  const hasEmployeeHeader = columns.employeeName >= 0;
-  const hasShiftHeader = columns.shiftName >= 0 || columns.start >= 0 || columns.end >= 0;
+  const hasEmployeeHeader = columns.employeeName >= 0 || columns.fixedOvertimeHours >= 0 || columns.fixedOvertimeMinutes >= 0;
+  const hasShiftHeader = columns.shiftName >= 0 || columns.start >= 0 || columns.end >= 0 || columns.overtimeHours >= 0 || columns.overtimeMinutes >= 0;
   if (columns.type < 0 && !hasEmployeeHeader && !hasShiftHeader) {
     throw new Error("従業員名、シフト名、開始時刻などの対応する見出しが見つかりません。");
   }
@@ -158,28 +185,45 @@ export function importMasterCsvText(text) {
   };
 
   rows.slice(1).forEach((row, index) => {
+    const line = index + 2;
     const type = inferRowType(valueAt(row, columns.type), hasEmployeeHeader, hasShiftHeader);
     const commonName = valueAt(row, columns.commonName);
     if (type === "employee") {
+      const fixedOvertimeMinutes = durationToMinutes(
+        valueAt(row, columns.fixedOvertimeHours),
+        valueAt(row, columns.fixedOvertimeMinutes),
+        "固定残業時間",
+        line,
+        summary.errors
+      );
       importEmployee({
-        line: index + 2,
+        line,
         code: valueAt(row, columns.code),
         name: valueAt(row, columns.employeeName) || commonName,
         department: valueAt(row, columns.department),
-        order: Number(valueAt(row, columns.order)) || 0
+        order: Number(valueAt(row, columns.order)) || 0,
+        fixedOvertimeMinutes
       }, summary);
     } else if (type === "shift") {
+      const overtimeMinutes = durationToMinutes(
+        valueAt(row, columns.overtimeHours),
+        valueAt(row, columns.overtimeMinutes),
+        "シフトの残業時間",
+        line,
+        summary.errors
+      );
       importShift({
-        line: index + 2,
+        line,
         code: valueAt(row, columns.code),
         name: valueAt(row, columns.shiftName) || commonName,
         start: valueAt(row, columns.start),
         end: valueAt(row, columns.end),
         shortLabel: valueAt(row, columns.shortLabel),
-        paidMinutes: valueAt(row, columns.paidMinutes)
+        paidMinutes: valueAt(row, columns.paidMinutes),
+        overtimeMinutes
       }, summary);
     } else {
-      summary.errors.push(`${index + 2}行目: 種別を判定できません。`);
+      summary.errors.push(`${line}行目: 種別を判定できません。`);
     }
   });
 
@@ -188,13 +232,18 @@ export function importMasterCsvText(text) {
   return summary;
 }
 
-export function formatImportSummary(summary) {
+export function importMasterCsvText(text) {
+  return importMasterRows(parseCsv(text));
+}
+
+export function formatImportSummary(summary, sourceLabel = "") {
   const parts = [
+    sourceLabel,
     `従業員 追加${summary.addedEmployees}名・更新${summary.updatedEmployees}名`,
     `シフト 追加${summary.addedShifts}件・更新${summary.updatedShifts}件`
-  ];
+  ].filter(Boolean);
   if (summary.errors.length) parts.push(`読込不可${summary.errors.length}行`);
   return parts.join(" / ");
 }
 
-export const SAMPLE_MASTER_CSV = `種別,コード,名称,開始時刻,終了時刻,所属,表示順,略称\r\n従業員,E001,田中太郎,,,園芸,1,\r\n従業員,E002,佐藤花子,,,資材,2,\r\nシフト,S01,早番,09:00,18:00,,,早\r\nシフト,S02,遅番,12:00,21:00,,,遅\r\nシフト,OFF,公休,,,,,休\r\n`;
+export const SAMPLE_MASTER_CSV = `種別,コード,名称,開始時刻,終了時刻,所属,表示順,略称,固定残業時間,シフト残業時間\r\n従業員,E001,田中太郎,,,園芸,1,,20,\r\n従業員,E002,佐藤花子,,,資材,2,,10,\r\nシフト,S01,早番,09:00,18:00,,,早,,1\r\nシフト,S02,遅番,12:00,21:00,,,遅,,0.5\r\nシフト,OFF,公休,,,,,休,,0\r\n`;

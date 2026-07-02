@@ -48,6 +48,8 @@ export function renderMonthTable(elements) {
   }
   headerRow.append(createHeaderCell("勤務日", "summary-column"));
   headerRow.append(createHeaderCell("実働", "summary-column"));
+  headerRow.append(createHeaderCell("残業見込", "summary-column"));
+  headerRow.append(createHeaderCell("固定残業残", "summary-column"));
   thead.append(headerRow);
   table.append(thead);
 
@@ -62,13 +64,12 @@ export function renderMonthTable(elements) {
     employeeButton.className = "employee-button";
     employeeButton.dataset.employeeId = employee.id;
     employeeButton.append(document.createTextNode(employee.name));
-    const details = [employee.code, employee.department].filter(Boolean).join(" / ");
-    if (details) {
-      const code = document.createElement("span");
-      code.className = "employee-code";
-      code.textContent = details;
-      employeeButton.append(code);
-    }
+    const fixedOvertimeLabel = `固定残業${formatHours((employee.fixedOvertimeMinutes ?? 0) / 60)}`;
+    const details = [employee.code, employee.department, fixedOvertimeLabel].filter(Boolean).join(" / ");
+    const code = document.createElement("span");
+    code.className = "employee-code";
+    code.textContent = details;
+    employeeButton.append(code);
     employeeCell.append(employeeButton);
     row.append(employeeCell);
 
@@ -81,8 +82,16 @@ export function renderMonthTable(elements) {
     }
 
     const summary = employeeSummary(employee.id);
+    const remainingText = summary.overtimeRemainingHours >= 0
+      ? formatHours(summary.overtimeRemainingHours)
+      : `超過${formatHours(Math.abs(summary.overtimeRemainingHours))}`;
+    const remainingClass = summary.overtimeRemainingHours < 0
+      ? "summary-column overtime-over"
+      : "summary-column";
     row.append(createDataCell(`${summary.workDays}日`, "summary-column"));
     row.append(createDataCell(formatHours(summary.hours), "summary-column"));
+    row.append(createDataCell(formatHours(summary.overtimeHours), "summary-column"));
+    row.append(createDataCell(remainingText, remainingClass));
     tbody.append(row);
   }
   table.append(tbody);
@@ -94,9 +103,18 @@ export function renderMonthTable(elements) {
     const dayInfo = getDayInfo(state.selectedMonth, day);
     workerRow.append(createDataCell(`${daySummary(day).workers}人`, weekendClass(dayInfo.weekday)));
   }
-  workerRow.append(createDataCell("", "summary-column"));
-  workerRow.append(createDataCell("", "summary-column"));
+  for (let index = 0; index < 4; index += 1) workerRow.append(createDataCell("", "summary-column"));
   tfoot.append(workerRow);
+
+  const overtimeRow = document.createElement("tr");
+  overtimeRow.append(createHeaderCell("残業見込", "employee-column"));
+  for (let day = 1; day <= numberOfDays; day += 1) {
+    const dayInfo = getDayInfo(state.selectedMonth, day);
+    overtimeRow.append(createDataCell(formatHours(daySummary(day).overtimeHours), weekendClass(dayInfo.weekday)));
+  }
+  for (let index = 0; index < 4; index += 1) overtimeRow.append(createDataCell("", "summary-column"));
+  tfoot.append(overtimeRow);
+
   table.append(tfoot);
   elements.tableContainer.replaceChildren(table);
 }
