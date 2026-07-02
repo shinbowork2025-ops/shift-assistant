@@ -138,6 +138,11 @@ export function getApplicationBackup() {
   });
 }
 
+async function persistApplicationStateNow() {
+  changeRevision += 1;
+  await saveNow();
+}
+
 export async function restoreApplicationState(candidate) {
   if (isWorkspaceEnvelope(candidate)) {
     loadApplicationEnvelope(candidate);
@@ -151,7 +156,7 @@ export async function restoreApplicationState(candidate) {
     }));
     workspaceState.migratedLegacyState = true;
   }
-  await saveState(applicationEnvelope());
+  await persistApplicationStateNow();
 }
 
 export async function switchWorkspace(workspaceId) {
@@ -161,7 +166,7 @@ export async function switchWorkspace(workspaceId) {
   if (!workspace) throw new Error("選択したシフト表が見つかりません。");
   workspaceState.activeWorkspaceId = workspace.id;
   applyWorkspaceToState(state, workspace);
-  await saveState(applicationEnvelope());
+  await persistApplicationStateNow();
 }
 
 export function createWorkspace(name, targetMonth) {
@@ -205,7 +210,7 @@ export async function deleteActiveWorkspace() {
   workspaceState.workspaces = workspaceState.workspaces.filter((workspace) => workspace.id !== activeId);
   workspaceState.activeWorkspaceId = workspaceState.workspaces[0].id;
   applyWorkspaceToState(state, workspaceState.workspaces[0]);
-  await saveState(applicationEnvelope());
+  await persistApplicationStateNow();
 }
 
 export function getShiftType(code) {
@@ -291,7 +296,9 @@ export function scheduleSave() {
   changeRevision += 1;
   statusHandler("未保存の変更があります", false);
   globalThis.clearTimeout(saveTimer);
-  saveTimer = globalThis.setTimeout(() => { void saveNow(); }, 350);
+  saveTimer = globalThis.setTimeout(() => {
+    void saveNow().catch(() => {});
+  }, 350);
 }
 
 async function persistCurrentRevision() {
@@ -307,6 +314,7 @@ async function persistCurrentRevision() {
   } catch (error) {
     console.error(error);
     statusHandler(`保存失敗: ${error.message}`, true);
+    throw error;
   }
 }
 
@@ -336,7 +344,7 @@ export async function loadSavedState() {
     workspaceState.activeWorkspaceId = workspace.id;
     workspaceState.settings = { lastBackupAt: null };
     applyWorkspaceToState(state, workspace);
-    await saveState(applicationEnvelope());
+    await persistApplicationStateNow();
     return false;
   }
 
@@ -352,7 +360,7 @@ export async function loadSavedState() {
     });
     loadApplicationEnvelope(migrated);
     workspaceState.migratedLegacyState = true;
-    await saveState(applicationEnvelope());
+    await persistApplicationStateNow();
   }
   return true;
 }
