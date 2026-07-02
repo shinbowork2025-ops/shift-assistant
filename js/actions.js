@@ -5,23 +5,87 @@ import {
   scheduleSave,
   monthDisplayName,
   dateKey,
-  getDaysInMonth
+  getDaysInMonth,
+  getActiveWorkspace,
+  switchWorkspace,
+  createWorkspace,
+  updateActiveWorkspace,
+  duplicateActiveWorkspace,
+  deleteActiveWorkspace
 } from "./model.js";
 import { generateBreaksForDate, ensureBreaksForDate } from "./breaks.js";
 import { importMasterCsvText, importMasterRows, formatImportSummary } from "./csv.js";
 import { readFirstWorksheetRows } from "./xlsx-lite.js";
 import { restoreJson } from "./files.js";
 import { render } from "./render.js";
+import { renderPrintPreview } from "./render-print.js";
 import {
   elements,
   setSaveStatus,
   setImportStatus,
+  closeWorkspaceDialog,
   closeEmployeeDialog,
   confirmAction
 } from "./elements.js";
 
 export function refresh() {
   render(elements);
+}
+
+export function refreshPrintPreview() {
+  renderPrintPreview(elements);
+}
+
+export function printCurrentWorkspace() {
+  renderPrintPreview(elements, new Date());
+  globalThis.requestAnimationFrame(() => globalThis.print());
+}
+
+export async function changeWorkspace(workspaceId) {
+  await switchWorkspace(workspaceId);
+  ensureBreaksForDate(state.selectedDate);
+  refresh();
+  setSaveStatus(`「${getActiveWorkspace()?.name ?? "シフト表"}」を開きました`);
+}
+
+export function saveWorkspaceFromDialog() {
+  const mode = elements.workspaceModeInput.value;
+  const name = elements.workspaceNameInput.value.trim();
+  const targetMonth = elements.workspaceMonthInput.value;
+  if (!name || !/^\d{4}-\d{2}$/.test(targetMonth)) return;
+
+  if (mode === "edit") updateActiveWorkspace(name, targetMonth);
+  else createWorkspace(name, targetMonth);
+
+  closeWorkspaceDialog();
+  refresh();
+  setSaveStatus(mode === "edit" ? "シフト表の設定を更新しました" : "新しいシフト表を作成しました");
+}
+
+export function duplicateCurrentWorkspace() {
+  const duplicate = duplicateActiveWorkspace();
+  refresh();
+  setSaveStatus(`「${duplicate.name}」を作成しました`);
+}
+
+export async function deleteCurrentWorkspace() {
+  const workspace = getActiveWorkspace();
+  if (!workspace) return;
+  const confirmed = await confirmAction(
+    "シフト表を削除",
+    `「${workspace.name}」を削除します。従業員、シフト、休憩データもすべて削除されます。`,
+    "削除"
+  );
+  if (!confirmed) return;
+
+  try {
+    await deleteActiveWorkspace();
+    ensureBreaksForDate(state.selectedDate);
+    refresh();
+    setSaveStatus("シフト表を削除しました");
+  } catch (error) {
+    setSaveStatus(error.message, true);
+  }
 }
 
 export function selectDate(dateValue, switchToDay = true) {
@@ -130,8 +194,6 @@ export async function importMasterFile(file) {
     throw new Error("対応形式はCSVまたは.xlsxです。古い.xls形式には対応していません。");
   }
 
-  // マスター更新だけでは既存の休憩時刻を書き換えない。
-  // 時刻変更で不整合が出た場合は1日チャートに警告し、ユーザーが再配置する。
   ensureBreaksForDate(state.selectedDate);
   refresh();
   setImportStatus(formatImportSummary(summary, sourceLabel), summary.errors.length > 0);
@@ -142,7 +204,7 @@ export async function restoreBackupFile(file) {
   await restoreJson(file);
   ensureBreaksForDate(state.selectedDate);
   refresh();
-  setSaveStatus("バックアップを復元しました");
+  setSaveStatus("全シフト表のバックアップを復元しました");
 }
 
 export async function clearCurrentMonth() {

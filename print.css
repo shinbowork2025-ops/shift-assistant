@@ -1,0 +1,386 @@
+@page {
+  size: A4 landscape;
+  margin: 8mm;
+}
+
+.print-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.print-toolbar h2 {
+  margin-bottom: 4px;
+}
+
+.print-toolbar p {
+  margin-bottom: 0;
+}
+
+.print-actions {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+#printModeSelect {
+  min-width: 220px;
+  padding: 8px 10px;
+}
+
+.print-guidance {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--primary);
+  background: #edf6fd;
+  line-height: 1.65;
+}
+
+.print-guidance strong:not(:first-child) {
+  margin-left: 16px;
+}
+
+.print-preview-container {
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #dfe4e8;
+}
+
+.print-document {
+  box-sizing: border-box;
+  width: 281mm;
+  min-height: 194mm;
+  margin: 0 auto;
+  padding: 7mm;
+  color: #111;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}
+
+.print-document-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10mm;
+  margin-bottom: 4mm;
+  padding-bottom: 2mm;
+  border-bottom: .5mm solid #111;
+}
+
+.print-document-header h1 {
+  margin: 0 0 1mm;
+  color: #111;
+  font-size: 16pt;
+  line-height: 1.15;
+}
+
+.print-eyebrow,
+.print-month-label {
+  margin: 0;
+}
+
+.print-eyebrow {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: .12em;
+}
+
+.print-month-label {
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+.print-metadata {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: .5mm 2mm;
+  margin: 0;
+  font-size: 7pt;
+  white-space: nowrap;
+}
+
+.print-metadata dt {
+  font-weight: 700;
+}
+
+.print-metadata dd {
+  margin: 0;
+}
+
+.print-month-table,
+.print-transfer-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #111;
+  background: #fff;
+}
+
+.print-month-table {
+  table-layout: fixed;
+  font-size: 5.8pt;
+}
+
+.print-month-table th,
+.print-month-table td {
+  height: 6.5mm;
+  padding: .4mm .25mm;
+  overflow: hidden;
+  border: .25mm solid #555;
+  text-align: center;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.print-month-table thead th {
+  height: 8mm;
+  background: #eee;
+  font-weight: 800;
+}
+
+.print-month-employee-col {
+  width: 32mm;
+}
+
+.print-month-summary-col {
+  width: 11mm;
+}
+
+.print-month-hours-col,
+.print-month-overtime-col {
+  width: 13mm;
+}
+
+.print-employee-header,
+.print-employee-cell {
+  text-align: left !important;
+}
+
+.print-employee-cell strong,
+.print-employee-cell small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.print-employee-cell strong {
+  font-size: 6.5pt;
+}
+
+.print-employee-cell small {
+  margin-top: .5mm;
+  color: #333;
+  font-size: 5pt;
+}
+
+.print-day-header span,
+.print-day-header small {
+  display: block;
+}
+
+.print-day-header span {
+  font-size: 6.5pt;
+}
+
+.print-day-header small {
+  margin-top: .3mm;
+  font-size: 5pt;
+}
+
+.print-saturday {
+  background: #e8f1fa !important;
+}
+
+.print-sunday {
+  background: #fae8e8 !important;
+}
+
+.print-shift-cell {
+  font-weight: 800;
+}
+
+.print-summary-cell,
+.print-summary-header {
+  font-weight: 800;
+  background: #f3f3f3;
+}
+
+.print-legend {
+  margin-top: 3mm;
+  font-size: 6pt;
+}
+
+.print-legend h2 {
+  margin: 0 0 1mm;
+  font-size: 7pt;
+}
+
+.print-legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1mm 4mm;
+}
+
+.print-transfer-table {
+  table-layout: fixed;
+  font-size: 7.2pt;
+}
+
+.print-transfer-table th,
+.print-transfer-table td {
+  padding: 1.2mm 1.4mm;
+  border: .25mm solid #555;
+  vertical-align: top;
+}
+
+.print-transfer-table thead th {
+  background: #e8e8e8;
+  text-align: center;
+}
+
+.print-transfer-table th:nth-child(1) { width: 18mm; }
+.print-transfer-table th:nth-child(2) { width: 33mm; }
+.print-transfer-table th:nth-child(3) { width: 22mm; }
+.print-transfer-table th:nth-child(4) { width: 27mm; }
+.print-transfer-table th:nth-child(5) { width: 68mm; }
+.print-transfer-table th:nth-child(6) { width: 15mm; }
+.print-transfer-table th:nth-child(7) { width: 15mm; }
+.print-transfer-table th:nth-child(8) { width: 15mm; }
+.print-transfer-table th:nth-child(9) { width: 17mm; }
+
+.print-transfer-date {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.print-transfer-employee {
+  font-weight: 700;
+}
+
+.print-transfer-breaks {
+  line-height: 1.35;
+}
+
+.print-warning-row td,
+.print-warning-row th {
+  background: #fff0f0;
+}
+
+.print-status-ok,
+.print-status-warning {
+  text-align: center;
+  font-weight: 800;
+}
+
+.print-status-warning {
+  color: #9b1c16;
+}
+
+.print-empty-message {
+  padding: 12mm !important;
+  text-align: center;
+}
+
+.print-footnote {
+  margin: 2mm 0 0;
+  font-size: 6.5pt;
+}
+
+@media (max-width: 900px) {
+  .print-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .print-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media print {
+  html,
+  body {
+    width: 297mm;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    color: #000;
+    background: #fff;
+  }
+
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .app-header,
+  .workspace-panel,
+  .view-switch,
+  .toolbar,
+  .status-panel,
+  .legend,
+  #monthPanel,
+  #dailyPanel,
+  .notes-panel,
+  .print-toolbar,
+  .print-guidance {
+    display: none !important;
+  }
+
+  .app-main,
+  #printPanel {
+    display: block !important;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  .print-preview-container {
+    overflow: visible;
+    padding: 0;
+    border: 0;
+    background: #fff;
+  }
+
+  .print-document {
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .print-document-header {
+    margin-bottom: 3mm;
+  }
+
+  .print-month-table thead,
+  .print-transfer-table thead {
+    display: table-header-group;
+  }
+
+  .print-month-table tr,
+  .print-transfer-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-transfer-date-group {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-legend,
+  .print-footnote {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
