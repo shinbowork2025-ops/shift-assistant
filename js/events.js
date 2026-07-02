@@ -2,6 +2,8 @@ import { state, scheduleSave } from "./model.js";
 import { exportCsv, backupJson, downloadMasterCsvSample } from "./files.js";
 import {
   elements,
+  openWorkspaceDialog,
+  closeWorkspaceDialog,
   openEmployeeDialog,
   closeEmployeeDialog,
   resolveConfirmation,
@@ -10,6 +12,10 @@ import {
 } from "./elements.js";
 import {
   refresh,
+  changeWorkspace,
+  saveWorkspaceFromDialog,
+  duplicateCurrentWorkspace,
+  deleteCurrentWorkspace,
   selectDate,
   shiftMonth,
   shiftDay,
@@ -24,6 +30,26 @@ import {
 } from "./actions.js";
 
 export function bindEvents() {
+  elements.workspaceSelect.addEventListener("change", async () => {
+    try {
+      await changeWorkspace(elements.workspaceSelect.value);
+    } catch (error) {
+      console.error(error);
+      setSaveStatus(`シフト表の切替失敗: ${error.message}`, true);
+      refresh();
+    }
+  });
+  elements.newWorkspaceButton.addEventListener("click", () => openWorkspaceDialog("new"));
+  elements.editWorkspaceButton.addEventListener("click", () => openWorkspaceDialog("edit"));
+  elements.duplicateWorkspaceButton.addEventListener("click", duplicateCurrentWorkspace);
+  elements.deleteWorkspaceButton.addEventListener("click", deleteCurrentWorkspace);
+  elements.closeWorkspaceDialogButton.addEventListener("click", closeWorkspaceDialog);
+  elements.cancelWorkspaceButton.addEventListener("click", closeWorkspaceDialog);
+  elements.workspaceForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveWorkspaceFromDialog();
+  });
+
   elements.previousMonthButton.addEventListener("click", () => shiftMonth(-1));
   elements.nextMonthButton.addEventListener("click", () => shiftMonth(1));
   elements.previousDayButton.addEventListener("click", () => shiftDay(-1));
