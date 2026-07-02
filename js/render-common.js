@@ -1,5 +1,8 @@
 import { state } from "./model.js";
 
+let shiftSelectTemplate = null;
+let shiftSelectSignature = "";
+
 export function weekendClass(weekday) {
   if (weekday === 0) return "weekend-sunday";
   if (weekday === 6) return "weekend-saturday";
@@ -41,30 +44,51 @@ function shiftDisplayText(shiftType) {
   return `${shiftType.name} ${shiftType.start}〜${shiftType.end}${overtime}`;
 }
 
+function currentShiftSelectSignature() {
+  return JSON.stringify(state.shiftTypes.map((shiftType) => [
+    shiftType.code,
+    shiftType.name,
+    shiftType.start,
+    shiftType.end,
+    shiftType.isWork,
+    shiftType.overtimeMinutes
+  ]));
+}
+
+export function prepareShiftSelectTemplate() {
+  const signature = currentShiftSelectSignature();
+  if (shiftSelectTemplate && signature === shiftSelectSignature) return;
+
+  const template = document.createElement("select");
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = "未入力";
+  template.append(emptyOption);
+  for (const shiftType of state.shiftTypes) {
+    const option = document.createElement("option");
+    option.value = shiftType.code;
+    option.textContent = shiftDisplayText(shiftType);
+    template.append(option);
+  }
+  shiftSelectTemplate = template;
+  shiftSelectSignature = signature;
+}
+
 export function createShiftSelect(employee, day, currentCode, compact = false) {
-  const select = document.createElement("select");
+  if (!shiftSelectTemplate) prepareShiftSelectTemplate();
+  const select = shiftSelectTemplate.cloneNode(true);
   select.className = `shift-select ${shiftToneClass(currentCode)}`;
   if (compact) select.classList.add("daily-shift-select");
   select.dataset.shift = currentCode;
   select.dataset.employeeId = employee.id;
   select.dataset.day = String(day);
   select.setAttribute("aria-label", `${employee.name} ${day}日 勤務区分`);
-
-  const emptyOption = document.createElement("option");
-  emptyOption.value = "";
-  emptyOption.textContent = "未入力";
-  select.append(emptyOption);
-  for (const shiftType of state.shiftTypes) {
-    const option = document.createElement("option");
-    option.value = shiftType.code;
-    option.textContent = shiftDisplayText(shiftType);
-    select.append(option);
-  }
   select.value = currentCode;
   return select;
 }
 
 export function renderLegend(elements) {
+  prepareShiftSelectTemplate();
   const fragment = document.createDocumentFragment();
   state.shiftTypes.forEach((shiftType, index) => {
     const item = document.createElement("div");
