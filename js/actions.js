@@ -18,6 +18,7 @@ import { importMasterCsvText, importMasterRows, formatImportSummary } from "./cs
 import { readFirstWorksheetRows } from "./xlsx-lite.js";
 import { restoreJson } from "./files.js";
 import { render } from "./render.js";
+import { renderPrintPreview } from "./render-print.js";
 import {
   elements,
   setSaveStatus,
@@ -29,6 +30,15 @@ import {
 
 export function refresh() {
   render(elements);
+}
+
+export function refreshPrintPreview() {
+  renderPrintPreview(elements);
+}
+
+export function printCurrentWorkspace() {
+  renderPrintPreview(elements, new Date());
+  globalThis.requestAnimationFrame(() => globalThis.print());
 }
 
 export async function changeWorkspace(workspaceId) {

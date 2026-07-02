@@ -1,0 +1,6 @@
+@media print {
+  html,
+  body {
+    width: 100% !important;
+  }
+}

@@ -4,7 +4,16 @@ import { bindEvents } from "./events.js";
 import { elements, setSaveStatus } from "./elements.js";
 import { render } from "./render.js";
 
+function loadPrintPageFix() {
+  if (document.querySelector('link[href="./print-page.css"]')) return;
+  const stylesheet = document.createElement("link");
+  stylesheet.rel = "stylesheet";
+  stylesheet.href = "./print-page.css";
+  document.head.append(stylesheet);
+}
+
 async function initialize() {
+  loadPrintPageFix();
   setStatusHandler(setSaveStatus);
   bindEvents();
   try {

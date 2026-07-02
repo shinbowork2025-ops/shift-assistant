@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="./daily-colors.css">
   <link rel="stylesheet" href="./overtime.css">
   <link rel="stylesheet" href="./workspace.css">
+  <link rel="stylesheet" href="./print.css">
 </head>
 <body>
   <header class="app-header">
@@ -43,6 +44,7 @@
     <section class="view-switch panel" aria-label="表示切替">
       <button id="monthViewButton" class="view-button active" type="button">月間編成</button>
       <button id="dayViewButton" class="view-button" type="button">1日チャート</button>
+      <button id="printViewButton" class="view-button" type="button">印刷・転記</button>
     </section>
 
     <section class="toolbar panel" aria-label="操作">
@@ -115,6 +117,30 @@
       <div class="break-rule-note">
         <strong>自動休憩：</strong>通常の9時間以上の勤務は、小休憩15分・昼休憩60分・小休憩15分を配置します。短い勤務は、実働6時間超で45分以上、実働8時間超で60分以上となるよう調整します。既存データは自動変更せず、警告確認後に「休憩を再配置」を使用してください。
       </div>
+    </section>
+
+    <section id="printPanel" class="panel print-panel" hidden>
+      <div class="print-toolbar">
+        <div>
+          <h2 id="printTitle">印刷・転記</h2>
+          <p class="muted">用紙はA4横で固定し、人数が多い場合は縦方向に複数ページへ分割します。</p>
+        </div>
+        <div class="print-actions">
+          <label>
+            <span>印刷内容</span>
+            <select id="printModeSelect">
+              <option value="monthly">月間シフト一覧</option>
+              <option value="transfer">社内システム転記一覧</option>
+            </select>
+          </label>
+          <button id="printButton" class="button primary" type="button">印刷画面を開く</button>
+        </div>
+      </div>
+      <div class="print-guidance">
+        <strong>月間一覧：</strong>略称で1か月を俯瞰します。
+        <strong>転記一覧：</strong>日付順に勤務時間・休憩時刻・実働・残業を確認します。
+      </div>
+      <div id="printPreviewContainer" class="print-preview-container" aria-live="polite"></div>
     </section>
 
     <section class="panel notes-panel">
