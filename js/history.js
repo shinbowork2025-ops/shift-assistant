@@ -1,0 +1,127 @@
+import { state, getActiveWorkspace, scheduleSave } from "./model.js";
+import { createHistoryStack } from "./history-stack.js";
+
+const HISTORY_LIMIT = 50;
+const stacks = new Map();
+const listeners = new Set();
+
+function activeWorkspaceId() {
+  return getActiveWorkspace()?.id ?? "";
+}
+
+function stackFor(workspaceId = activeWorkspaceId()) {
+  if (!workspaceId) return null;
+  if (!stacks.has(workspaceId)) stacks.set(workspaceId, createHistoryStack(HISTORY_LIMIT));
+  return stacks.get(workspaceId);
+}
+
+function snapshotActiveWorkspace() {
+  const workspace = getActiveWorkspace();
+  if (!workspace) return null;
+  return {
+    workspaceId: workspace.id,
+    name: workspace.name,
+    selectedMonth: state.selectedMonth,
+    selectedDate: state.selectedDate,
+    employees: structuredClone(state.employees),
+    shiftTypes: structuredClone(state.shiftTypes),
+    shifts: structuredClone(state.shifts),
+    breaks: structuredClone(state.breaks)
+  };
+}
+
+function snapshotsEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function applySnapshot(snapshot) {
+  const workspace = getActiveWorkspace();
+  if (!workspace || workspace.id !== snapshot?.workspaceId) {
+    throw new Error("履歴の対象シフト表が現在のシフト表と一致しません。");
+  }
+
+  workspace.name = snapshot.name;
+  workspace.targetMonth = snapshot.selectedMonth;
+  workspace.selectedMonth = snapshot.selectedMonth;
+  workspace.selectedDate = snapshot.selectedDate;
+  state.selectedMonth = snapshot.selectedMonth;
+  state.selectedDate = snapshot.selectedDate;
+  state.employees = structuredClone(snapshot.employees);
+  state.shiftTypes = structuredClone(snapshot.shiftTypes);
+  state.shifts = structuredClone(snapshot.shifts);
+  state.breaks = structuredClone(snapshot.breaks);
+  scheduleSave();
+}
+
+function notify() {
+  const status = getHistoryStatus();
+  for (const listener of listeners) listener(status);
+}
+
+export function runWithHistory(label, operation) {
+  const before = snapshotActiveWorkspace();
+  if (!before) return operation();
+
+  const finish = (result) => {
+    const after = snapshotActiveWorkspace();
+    if (after && after.workspaceId === before.workspaceId && !snapshotsEqual(before, after)) {
+      stackFor(before.workspaceId)?.record({ label, before, after });
+      notify();
+    }
+    return result;
+  };
+
+  try {
+    const result = operation();
+    if (result && typeof result.then === "function") {
+      return result.then(finish);
+    }
+    return finish(result);
+  } catch (error) {
+    throw error;
+  }
+}
+
+export function undoHistory() {
+  const entry = stackFor()?.undo();
+  if (!entry) return null;
+  applySnapshot(entry.before);
+  notify();
+  return entry.label;
+}
+
+export function redoHistory() {
+  const entry = stackFor()?.redo();
+  if (!entry) return null;
+  applySnapshot(entry.after);
+  notify();
+  return entry.label;
+}
+
+export function getHistoryStatus() {
+  return stackFor()?.status() ?? {
+    canUndo: false,
+    canRedo: false,
+    undoLabel: "",
+    redoLabel: "",
+    undoCount: 0,
+    redoCount: 0,
+    limit: HISTORY_LIMIT
+  };
+}
+
+export function subscribeHistory(listener) {
+  listeners.add(listener);
+  listener(getHistoryStatus());
+  return () => listeners.delete(listener);
+}
+
+export function refreshHistoryStatus() {
+  notify();
+}
+
+export function clearHistory(workspaceId = null) {
+  if (workspaceId) stacks.delete(workspaceId);
+  else stacks.clear();
+  notify();
+}

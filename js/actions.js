@@ -20,6 +20,13 @@ import { restoreJson } from "./files.js";
 import { render } from "./render.js";
 import { renderPrintPreview } from "./render-print.js";
 import {
+  runWithHistory,
+  undoHistory,
+  redoHistory,
+  refreshHistoryStatus,
+  clearHistory
+} from "./history.js";
+import {
   elements,
   setSaveStatus,
   setImportStatus,
@@ -41,9 +48,26 @@ export function printCurrentWorkspace() {
   globalThis.requestAnimationFrame(() => globalThis.print());
 }
 
+export function undoLastAction() {
+  const label = undoHistory();
+  if (!label) return;
+  ensureBreaksForDate(state.selectedDate);
+  refresh();
+  setSaveStatus(`「${label}」を元に戻しました`);
+}
+
+export function redoLastAction() {
+  const label = redoHistory();
+  if (!label) return;
+  ensureBreaksForDate(state.selectedDate);
+  refresh();
+  setSaveStatus(`「${label}」をやり直しました`);
+}
+
 export async function changeWorkspace(workspaceId) {
   await switchWorkspace(workspaceId);
   ensureBreaksForDate(state.selectedDate);
+  refreshHistoryStatus();
   refresh();
   setSaveStatus(`「${getActiveWorkspace()?.name ?? "シフト表"}」を開きました`);
 }
@@ -54,8 +78,12 @@ export function saveWorkspaceFromDialog() {
   const targetMonth = elements.workspaceMonthInput.value;
   if (!name || !/^\d{4}-\d{2}$/.test(targetMonth)) return;
 
-  if (mode === "edit") updateActiveWorkspace(name, targetMonth);
-  else createWorkspace(name, targetMonth);
+  if (mode === "edit") {
+    runWithHistory("シフト表の名称・対象月を変更", () => updateActiveWorkspace(name, targetMonth));
+  } else {
+    createWorkspace(name, targetMonth);
+    refreshHistoryStatus();
+  }
 
   closeWorkspaceDialog();
   refresh();
@@ -64,6 +92,7 @@ export function saveWorkspaceFromDialog() {
 
 export function duplicateCurrentWorkspace() {
   const duplicate = duplicateActiveWorkspace();
+  refreshHistoryStatus();
   refresh();
   setSaveStatus(`「${duplicate.name}」を作成しました`);
 }
@@ -79,7 +108,9 @@ export async function deleteCurrentWorkspace() {
   if (!confirmed) return;
 
   try {
+    const deletedWorkspaceId = workspace.id;
     await deleteActiveWorkspace();
+    clearHistory(deletedWorkspaceId);
     ensureBreaksForDate(state.selectedDate);
     refresh();
     setSaveStatus("シフト表を削除しました");
@@ -123,9 +154,14 @@ export function changeView(view) {
 export function handleShiftChange(select) {
   const day = Number(select.dataset.day);
   const employeeId = select.dataset.employeeId;
+  const employeeName = state.employees.find((employee) => employee.id === employeeId)?.name ?? "従業員";
   const changedDate = dateKey(state.selectedMonth, day);
-  setShift(employeeId, day, select.value);
-  generateBreaksForDate(changedDate, [employeeId]);
+
+  runWithHistory(`${employeeName}・${day}日のシフト変更`, () => {
+    setShift(employeeId, day, select.value);
+    generateBreaksForDate(changedDate, [employeeId]);
+  });
+
   if (state.currentView === "day") state.selectedDate = changedDate;
   refresh();
 }
@@ -137,24 +173,28 @@ export function saveEmployeeFromDialog() {
   const fixedOvertimeHours = Number(elements.employeeFixedOvertimeInput.value || 0);
   if (!name || !Number.isFinite(fixedOvertimeHours) || fixedOvertimeHours < 0) return;
   const fixedOvertimeMinutes = Math.round(fixedOvertimeHours * 60);
-
   const employeeId = elements.employeeIdInput.value;
-  if (employeeId) {
-    const employee = state.employees.find((item) => item.id === employeeId);
-    if (employee) Object.assign(employee, { name, code, department, fixedOvertimeMinutes });
-  } else {
-    state.employees.push({
-      id: createId("employee"),
-      name,
-      code,
-      department,
-      fixedOvertimeMinutes,
-      order: state.employees.length + 1
-    });
-  }
+  const label = employeeId ? "従業員情報を編集" : "従業員を追加";
+
+  runWithHistory(label, () => {
+    if (employeeId) {
+      const employee = state.employees.find((item) => item.id === employeeId);
+      if (employee) Object.assign(employee, { name, code, department, fixedOvertimeMinutes });
+    } else {
+      state.employees.push({
+        id: createId("employee"),
+        name,
+        code,
+        department,
+        fixedOvertimeMinutes,
+        order: state.employees.length + 1
+      });
+    }
+    scheduleSave();
+  });
+
   closeEmployeeDialog();
   refresh();
-  scheduleSave();
 }
 
 export async function deleteEmployeeFromDialog() {
@@ -165,15 +205,17 @@ export async function deleteEmployeeFromDialog() {
   const confirmed = await confirmAction("従業員を削除", `${employee.name}さんと、その人の全月のシフト案を削除します。`, "削除");
   if (!confirmed) return;
 
-  state.employees = state.employees.filter((item) => item.id !== employeeId);
-  for (const month of Object.values(state.shifts)) delete month[employeeId];
-  for (const dayBreaks of Object.values(state.breaks)) delete dayBreaks[employeeId];
+  runWithHistory(`${employee.name}さんを削除`, () => {
+    state.employees = state.employees.filter((item) => item.id !== employeeId);
+    for (const month of Object.values(state.shifts)) delete month[employeeId];
+    for (const dayBreaks of Object.values(state.breaks)) delete dayBreaks[employeeId];
+    scheduleSave();
+  });
   refresh();
-  scheduleSave();
 }
 
 export function autoPlaceBreaks() {
-  generateBreaksForDate(state.selectedDate);
+  runWithHistory("当日の休憩を再配置", () => generateBreaksForDate(state.selectedDate));
   refresh();
   setSaveStatus("休憩を再配置しました");
 }
@@ -185,10 +227,11 @@ export async function importMasterFile(file) {
 
   if (lowerName.endsWith(".xlsx")) {
     const workbook = await readFirstWorksheetRows(file);
-    summary = importMasterRows(workbook.rows);
+    summary = runWithHistory("Excelマスターを読み込み", () => importMasterRows(workbook.rows));
     sourceLabel = `Excel「${workbook.sheetName}」`;
   } else if (lowerName.endsWith(".csv") || file.type.includes("csv") || file.type.startsWith("text/")) {
-    summary = importMasterCsvText(await file.text());
+    const text = await file.text();
+    summary = runWithHistory("CSVマスターを読み込み", () => importMasterCsvText(text));
     sourceLabel = "CSV";
   } else {
     throw new Error("対応形式はCSVまたは.xlsxです。古い.xls形式には対応していません。");
@@ -202,18 +245,22 @@ export async function importMasterFile(file) {
 
 export async function restoreBackupFile(file) {
   await restoreJson(file);
+  clearHistory();
   ensureBreaksForDate(state.selectedDate);
   refresh();
-  setSaveStatus("全シフト表のバックアップを復元しました");
+  setSaveStatus("全シフト表のバックアップを復元しました。操作履歴は初期化しました");
 }
 
 export async function clearCurrentMonth() {
   const confirmed = await confirmAction("月間シフトをクリア", `${monthDisplayName(state.selectedMonth)}の入力済みシフト案と休憩をすべて削除します。`, "クリア");
   if (!confirmed) return;
-  delete state.shifts[state.selectedMonth];
-  for (const dateValue of Object.keys(state.breaks)) {
-    if (dateValue.startsWith(state.selectedMonth)) delete state.breaks[dateValue];
-  }
+
+  runWithHistory(`${monthDisplayName(state.selectedMonth)}をクリア`, () => {
+    delete state.shifts[state.selectedMonth];
+    for (const dateValue of Object.keys(state.breaks)) {
+      if (dateValue.startsWith(state.selectedMonth)) delete state.breaks[dateValue];
+    }
+    scheduleSave();
+  });
   refresh();
-  scheduleSave();
 }
