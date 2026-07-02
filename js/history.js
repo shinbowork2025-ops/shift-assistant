@@ -16,7 +16,7 @@ function stackFor(workspaceId = activeWorkspaceId()) {
   return stacks.get(workspaceId);
 }
 
-function snapshotActiveWorkspace() {
+function currentWorkspaceDocument() {
   const workspace = getActiveWorkspace();
   if (!workspace) return null;
   return {
@@ -24,11 +24,16 @@ function snapshotActiveWorkspace() {
     name: workspace.name,
     selectedMonth: state.selectedMonth,
     selectedDate: state.selectedDate,
-    employees: structuredClone(state.employees),
-    shiftTypes: structuredClone(state.shiftTypes),
-    shifts: structuredClone(state.shifts),
-    breaks: structuredClone(state.breaks)
+    employees: state.employees,
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts,
+    breaks: state.breaks
   };
+}
+
+function snapshotActiveWorkspace() {
+  const current = currentWorkspaceDocument();
+  return current ? structuredClone(current) : null;
 }
 
 function applySnapshot(snapshot) {
@@ -65,7 +70,7 @@ function recordSnapshots(label, before, after) {
 }
 
 function applyEntry(entry, direction) {
-  const current = snapshotActiveWorkspace();
+  const current = currentWorkspaceDocument();
   if (!current || current.workspaceId !== entry?.workspaceId) {
     throw new Error("履歴の対象シフト表が現在のシフト表と一致しません。");
   }
@@ -78,7 +83,7 @@ export function runWithHistory(label, operation) {
   if (!before) return operation();
 
   const finish = (result) => {
-    recordSnapshots(label, before, snapshotActiveWorkspace());
+    recordSnapshots(label, before, currentWorkspaceDocument());
     return result;
   };
 
@@ -101,7 +106,7 @@ export function beginHistoryTransaction(label) {
 export function commitHistoryTransaction(transaction) {
   if (!transaction || transaction.completed) return false;
   transaction.completed = true;
-  return recordSnapshots(transaction.label, transaction.before, snapshotActiveWorkspace());
+  return recordSnapshots(transaction.label, transaction.before, currentWorkspaceDocument());
 }
 
 export function cancelHistoryTransaction(transaction, restore = false) {
