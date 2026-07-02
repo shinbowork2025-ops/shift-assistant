@@ -1,13 +1,54 @@
-import { state, monthDisplayName, dateDisplayName } from "./model.js";
+import {
+  state,
+  monthDisplayName,
+  dateDisplayName,
+  getWorkspaceList,
+  getActiveWorkspace
+} from "./model.js";
 import { renderLegend } from "./render-common.js";
 import { renderMonthTable } from "./render-month.js";
 import { renderDailyTable } from "./render-day.js";
 
+function formatUpdatedAt(value) {
+  if (!value) return "更新日時なし";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "更新日時なし";
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function renderWorkspaceControls(elements) {
+  const workspaces = getWorkspaceList();
+  const activeWorkspace = getActiveWorkspace();
+  const fragment = document.createDocumentFragment();
+
+  for (const workspace of workspaces) {
+    const option = document.createElement("option");
+    option.value = workspace.id;
+    option.textContent = `${workspace.name}｜${monthDisplayName(workspace.targetMonth)}｜更新 ${formatUpdatedAt(workspace.updatedAt)}`;
+    fragment.append(option);
+  }
+
+  elements.workspaceSelect.replaceChildren(fragment);
+  elements.workspaceSelect.value = activeWorkspace?.id ?? "";
+  elements.workspaceUpdatedAt.textContent = activeWorkspace
+    ? `${activeWorkspace.name}・${monthDisplayName(state.selectedMonth)}・最終更新 ${formatUpdatedAt(activeWorkspace.updatedAt)}`
+    : "シフト表がありません";
+  elements.deleteWorkspaceButton.disabled = workspaces.length <= 1;
+}
+
 export function render(elements) {
+  renderWorkspaceControls(elements);
   elements.monthInput.value = state.selectedMonth;
   elements.dateInput.value = state.selectedDate;
-  elements.scheduleTitle.textContent = `${monthDisplayName(state.selectedMonth)} シフト表`;
-  elements.dailyTitle.textContent = `${dateDisplayName(state.selectedDate)} 時間帯チャート`;
+  const workspaceName = getActiveWorkspace()?.name ?? "シフト表";
+  elements.scheduleTitle.textContent = `${workspaceName}｜${monthDisplayName(state.selectedMonth)}`;
+  elements.dailyTitle.textContent = `${workspaceName}｜${dateDisplayName(state.selectedDate)} 時間帯チャート`;
   elements.monthViewButton.classList.toggle("active", state.currentView === "month");
   elements.dayViewButton.classList.toggle("active", state.currentView === "day");
   elements.monthPanel.hidden = state.currentView !== "month";
