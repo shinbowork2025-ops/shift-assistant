@@ -122,7 +122,9 @@ export function validateBreaks(shiftType, breaks = []) {
     if (start <= shiftStart || end >= shiftEnd) {
       issues.push("休憩は勤務時間の途中に配置してください。");
     }
-    intervals.push({ start: Math.max(start, shiftStart), end: Math.min(end, shiftEnd) });
+    const clippedStart = Math.max(start, shiftStart);
+    const clippedEnd = Math.min(end, shiftEnd);
+    if (clippedEnd > clippedStart) intervals.push({ start: clippedStart, end: clippedEnd });
   }
 
   const sorted = [...intervals].sort((a, b) => a.start - b.start || a.end - b.end);
