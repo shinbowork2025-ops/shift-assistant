@@ -8,6 +8,7 @@ import {
 import { renderLegend } from "./render-common.js";
 import { renderMonthTable } from "./render-month.js";
 import { renderDailyTable } from "./render-day.js";
+import { renderPrintPreview } from "./render-print.js";
 
 function formatUpdatedAt(value) {
   if (!value) return "更新日時なし";
@@ -51,12 +52,16 @@ export function render(elements) {
   elements.dailyTitle.textContent = `${workspaceName}｜${dateDisplayName(state.selectedDate)} 時間帯チャート`;
   elements.monthViewButton.classList.toggle("active", state.currentView === "month");
   elements.dayViewButton.classList.toggle("active", state.currentView === "day");
+  elements.printViewButton.classList.toggle("active", state.currentView === "print");
   elements.monthPanel.hidden = state.currentView !== "month";
   elements.dailyPanel.hidden = state.currentView !== "day";
+  elements.printPanel.hidden = state.currentView !== "print";
   elements.monthControls.hidden = state.currentView !== "month";
   elements.dayControls.hidden = state.currentView !== "day";
+  elements.legend.hidden = state.currentView === "print";
 
   renderLegend(elements);
   renderMonthTable(elements);
   renderDailyTable(elements);
+  renderPrintPreview(elements);
 }
