@@ -7,6 +7,7 @@ import {
   timeToMinutes
 } from "./model.js";
 import { availableWorkersAt } from "./breaks.js";
+import { validateBreaks } from "./break-rules.js";
 import {
   shiftToneClass,
   createHeaderCell,
@@ -55,6 +56,11 @@ function slotStatus(employeeId, day, slotStart) {
   return { className: `timeline-work ${shiftToneClass(shiftType.code)}`, title: `${shiftType.name} ${shiftType.start}〜${shiftType.end}` };
 }
 
+function validationMessage(validation) {
+  const summary = `実働${validation.work}分 / 休憩${validation.actual}分 / 必要${validation.required}分`;
+  return [summary, ...validation.issues].join("\n");
+}
+
 export function renderDailyTable(elements) {
   const day = dayFromDate(state.selectedDate);
   const { start, end } = timelineRange(day);
@@ -76,15 +82,29 @@ export function renderDailyTable(elements) {
 
   const tbody = document.createElement("tbody");
   for (const employee of state.employees) {
+    const shiftType = getShiftType(getShift(employee.id, day));
+    const employeeBreaks = getBreaks(employee.id, state.selectedDate);
+    const validation = validateBreaks(shiftType, employeeBreaks);
     const row = document.createElement("tr");
+    if (!validation.ok) row.classList.add("break-invalid-row");
+
     const nameCell = document.createElement("th");
     nameCell.scope = "row";
     nameCell.className = "daily-employee-column";
-    nameCell.textContent = employee.name;
+    nameCell.append(document.createTextNode(employee.name));
+    if (!validation.ok) {
+      const warning = document.createElement("span");
+      warning.className = "break-warning";
+      warning.textContent = "⚠ 休憩確認";
+      warning.title = validationMessage(validation);
+      warning.setAttribute("aria-label", `休憩確認: ${validationMessage(validation)}`);
+      nameCell.append(warning);
+    }
     row.append(nameCell);
 
     const selectCell = document.createElement("td");
     selectCell.className = "daily-select-column";
+    if (!validation.ok) selectCell.title = validationMessage(validation);
     selectCell.append(createShiftSelect(employee, day, getShift(employee.id, day), true));
     row.append(selectCell);
 
@@ -92,6 +112,7 @@ export function renderDailyTable(elements) {
       const status = slotStatus(employee.id, day, slot);
       const cell = document.createElement("td");
       cell.className = `timeline-cell ${status.className}`;
+      if (!validation.ok && status.className.includes("timeline-work")) cell.classList.add("timeline-break-invalid");
       if (slot % 60 === 0) cell.classList.add("hour-start");
       if (status.title) cell.title = status.title;
       row.append(cell);

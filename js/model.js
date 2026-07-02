@@ -1,4 +1,5 @@
 import { loadState, saveState } from "./db.js";
+import { plannedBreakMinutes } from "./break-rules.js";
 
 export const DEFAULT_SHIFT_TYPES = Object.freeze([
   { code: "early", name: "早番", shortLabel: "早", start: "09:00", end: "18:00", isWork: true, overtimeMinutes: 0 },
@@ -127,10 +128,7 @@ export function shiftDurationMinutes(shiftType) {
 }
 
 export function expectedBreakMinutes(shiftType) {
-  const duration = shiftDurationMinutes(shiftType);
-  if (duration >= 480) return 90;
-  if (duration >= 240) return 15;
-  return 0;
+  return plannedBreakMinutes(shiftDurationMinutes(shiftType));
 }
 
 export function paidMinutesForShift(shiftType) {
