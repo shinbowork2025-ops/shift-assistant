@@ -9,6 +9,7 @@ import { renderLegend } from "./render-common.js";
 import { renderMonthTable } from "./render-month.js";
 import { renderDailyTable } from "./render-day.js";
 import { renderPrintPreview } from "./render-print.js";
+import { syncPaintInput } from "./paint-input.js";
 
 function formatUpdatedAt(value) {
   if (!value) return "更新日時なし";
@@ -62,6 +63,7 @@ export function render(elements) {
 
   renderLegend(elements);
   renderMonthTable(elements);
+  syncPaintInput();
   renderDailyTable(elements);
   renderPrintPreview(elements);
 }
