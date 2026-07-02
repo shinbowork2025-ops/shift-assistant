@@ -1,5 +1,6 @@
 import { state, getActiveWorkspace, scheduleSave } from "./model.js";
 import { createHistoryStack } from "./history-stack.js";
+import { createHistoryPatch, applyHistoryPatch } from "./history-patch.js";
 
 const HISTORY_LIMIT = 50;
 const stacks = new Map();
@@ -30,10 +31,6 @@ function snapshotActiveWorkspace() {
   };
 }
 
-function snapshotsEqual(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 function applySnapshot(snapshot) {
   const workspace = getActiveWorkspace();
   if (!workspace || workspace.id !== snapshot?.workspaceId) {
@@ -59,10 +56,21 @@ function notify() {
 }
 
 function recordSnapshots(label, before, after) {
-  if (!before || !after || after.workspaceId !== before.workspaceId || snapshotsEqual(before, after)) return false;
-  stackFor(before.workspaceId)?.record({ label, before, after });
+  if (!before || !after || after.workspaceId !== before.workspaceId) return false;
+  const patch = createHistoryPatch(before, after);
+  if (!patch.length) return false;
+  stackFor(before.workspaceId)?.record({ label, workspaceId: before.workspaceId, patch });
   notify();
   return true;
+}
+
+function applyEntry(entry, direction) {
+  const current = snapshotActiveWorkspace();
+  if (!current || current.workspaceId !== entry?.workspaceId) {
+    throw new Error("履歴の対象シフト表が現在のシフト表と一致しません。");
+  }
+  applyHistoryPatch(current, entry.patch, direction);
+  applySnapshot(current);
 }
 
 export function runWithHistory(label, operation) {
@@ -93,8 +101,7 @@ export function beginHistoryTransaction(label) {
 export function commitHistoryTransaction(transaction) {
   if (!transaction || transaction.completed) return false;
   transaction.completed = true;
-  const after = snapshotActiveWorkspace();
-  return recordSnapshots(transaction.label, transaction.before, after);
+  return recordSnapshots(transaction.label, transaction.before, snapshotActiveWorkspace());
 }
 
 export function cancelHistoryTransaction(transaction, restore = false) {
@@ -108,7 +115,7 @@ export function cancelHistoryTransaction(transaction, restore = false) {
 export function undoHistory() {
   const entry = stackFor()?.undo();
   if (!entry) return null;
-  applySnapshot(entry.before);
+  applyEntry(entry, "before");
   notify();
   return entry.label;
 }
@@ -116,7 +123,7 @@ export function undoHistory() {
 export function redoHistory() {
   const entry = stackFor()?.redo();
   if (!entry) return null;
-  applySnapshot(entry.after);
+  applyEntry(entry, "after");
   notify();
   return entry.label;
 }
