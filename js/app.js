@@ -1,8 +1,9 @@
 import { state, workspaceState, loadSavedState, setStatusHandler } from "./model.js";
 import { ensureBreaksForDate } from "./breaks.js";
 import { bindEvents } from "./events.js";
-import { undoLastAction, redoLastAction } from "./actions.js";
+import { refresh, undoLastAction, redoLastAction } from "./actions.js";
 import { initializeHistoryUi } from "./history-ui.js";
+import { initializePaintInput } from "./paint-input.js";
 import { elements, setSaveStatus } from "./elements.js";
 import { render } from "./render.js";
 
@@ -17,8 +18,14 @@ function loadStylesheet(href) {
 async function initialize() {
   loadStylesheet("./print-page.css");
   loadStylesheet("./history.css");
+  loadStylesheet("./paint.css");
   setStatusHandler(setSaveStatus);
   initializeHistoryUi({ onUndo: undoLastAction, onRedo: redoLastAction });
+  initializePaintInput({
+    tableContainer: elements.tableContainer,
+    onStrokeComplete: refresh,
+    setStatus: setSaveStatus
+  });
   bindEvents();
   try {
     const hadSavedState = await loadSavedState();

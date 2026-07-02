@@ -76,7 +76,9 @@ export function renderMonthTable(elements) {
     for (let day = 1; day <= numberOfDays; day += 1) {
       const dayInfo = getDayInfo(state.selectedMonth, day);
       const cell = document.createElement("td");
-      cell.className = weekendClass(dayInfo.weekday);
+      cell.className = [weekendClass(dayInfo.weekday), "paint-cell"].filter(Boolean).join(" ");
+      cell.dataset.employeeId = employee.id;
+      cell.dataset.day = String(day);
       cell.append(createShiftSelect(employee, day, getShift(employee.id, day)));
       row.append(cell);
     }

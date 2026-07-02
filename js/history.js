@@ -58,28 +58,51 @@ function notify() {
   for (const listener of listeners) listener(status);
 }
 
+function recordSnapshots(label, before, after) {
+  if (!before || !after || after.workspaceId !== before.workspaceId || snapshotsEqual(before, after)) return false;
+  stackFor(before.workspaceId)?.record({ label, before, after });
+  notify();
+  return true;
+}
+
 export function runWithHistory(label, operation) {
   const before = snapshotActiveWorkspace();
   if (!before) return operation();
 
   const finish = (result) => {
-    const after = snapshotActiveWorkspace();
-    if (after && after.workspaceId === before.workspaceId && !snapshotsEqual(before, after)) {
-      stackFor(before.workspaceId)?.record({ label, before, after });
-      notify();
-    }
+    recordSnapshots(label, before, snapshotActiveWorkspace());
     return result;
   };
 
-  try {
-    const result = operation();
-    if (result && typeof result.then === "function") {
-      return result.then(finish);
-    }
-    return finish(result);
-  } catch (error) {
-    throw error;
-  }
+  const result = operation();
+  if (result && typeof result.then === "function") return result.then(finish);
+  return finish(result);
+}
+
+export function beginHistoryTransaction(label) {
+  const before = snapshotActiveWorkspace();
+  if (!before) return null;
+  return {
+    label,
+    workspaceId: before.workspaceId,
+    before,
+    completed: false
+  };
+}
+
+export function commitHistoryTransaction(transaction) {
+  if (!transaction || transaction.completed) return false;
+  transaction.completed = true;
+  const after = snapshotActiveWorkspace();
+  return recordSnapshots(transaction.label, transaction.before, after);
+}
+
+export function cancelHistoryTransaction(transaction, restore = false) {
+  if (!transaction || transaction.completed) return false;
+  transaction.completed = true;
+  if (restore) applySnapshot(transaction.before);
+  notify();
+  return true;
 }
 
 export function undoHistory() {
