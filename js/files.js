@@ -1,13 +1,10 @@
 import {
   state,
-  getDaysInMonth,
-  getShift,
-  getShiftType,
-  employeeSummary,
   getActiveWorkspace,
   getApplicationBackup,
   restoreApplicationState
 } from "./model.js";
+import { buildMonthOverview } from "./month-overview.js";
 import { SAMPLE_MASTER_CSV } from "./csv.js";
 
 function downloadFile(fileName, content, mimeType) {
@@ -40,26 +37,27 @@ function safeFilePart(value) {
 }
 
 export function exportCsv() {
-  const numberOfDays = getDaysInMonth(state.selectedMonth);
-  const header = ["氏名", "コード"];
-  for (let day = 1; day <= numberOfDays; day += 1) header.push(`${day}日`);
+  const overview = buildMonthOverview({
+    monthValue: state.selectedMonth,
+    employees: state.employees,
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts
+  });
+  const header = ["氏名", "コード", ...overview.days.map((day) => `${day.day}日`)];
   header.push("勤務日数", "実働時間", "残業見込時間", "固定残業時間", "固定残業残時間");
 
   const rows = [header];
-  for (const employee of state.employees) {
-    const row = [employee.name, employee.code];
-    for (let day = 1; day <= numberOfDays; day += 1) {
-      row.push(getShiftType(getShift(employee.id, day))?.name ?? "");
-    }
-    const summary = employeeSummary(employee.id);
-    row.push(
+  for (const { employee, cells, summary } of overview.employeeRows) {
+    rows.push([
+      employee.name,
+      employee.code,
+      ...cells.map((cell) => cell.shiftType?.name ?? ""),
       summary.workDays,
       formatHours(summary.hours),
       formatHours(summary.overtimeHours),
       formatHours(summary.fixedOvertimeHours),
       formatHours(summary.overtimeRemainingHours)
-    );
-    rows.push(row);
+    ]);
   }
 
   const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
