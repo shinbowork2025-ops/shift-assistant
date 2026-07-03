@@ -13,6 +13,7 @@ import {
 import { generateBreaksForDate } from "../breaks.js";
 import { compareEmployeeOrder } from "../workspace-normalizer.js";
 import { readEmployeeRestForm } from "../employee-rest-form.js";
+import { readEmployeeWorkShiftForm } from "../employee-work-shift-form.js";
 import { runWithHistory } from "../history.js";
 import {
   elements,
@@ -49,6 +50,7 @@ export function saveEmployeeFromDialog() {
   if (!name || !Number.isFinite(fixedOvertimeHours) || fixedOvertimeHours < 0) return;
   const fixedOvertimeMinutes = Math.round(fixedOvertimeHours * 60);
   const restSettings = readEmployeeRestForm();
+  const workShiftSettings = readEmployeeWorkShiftForm();
   const orderValue = Number(elements.employeeOrderInput.value);
   const hasValidOrder = Number.isFinite(orderValue) && orderValue > 0;
   const employeeId = elements.employeeIdInput.value;
@@ -58,7 +60,14 @@ export function saveEmployeeFromDialog() {
     if (employeeId) {
       const employee = state.employees.find((item) => item.id === employeeId);
       if (employee) {
-        Object.assign(employee, { name, code, department, fixedOvertimeMinutes, ...restSettings });
+        Object.assign(employee, {
+          name,
+          code,
+          department,
+          fixedOvertimeMinutes,
+          ...restSettings,
+          ...workShiftSettings
+        });
         if (hasValidOrder) employee.order = orderValue;
       }
     } else {
@@ -69,6 +78,7 @@ export function saveEmployeeFromDialog() {
         department,
         fixedOvertimeMinutes,
         ...restSettings,
+        ...workShiftSettings,
         order: hasValidOrder ? orderValue : state.employees.length + 1
       });
     }
