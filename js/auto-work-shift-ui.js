@@ -150,8 +150,10 @@ function createMainControls() {
   result.className = "auto-work-result";
   result.hidden = true;
   result.setAttribute("aria-live", "polite");
+  const resultsSlot = document.querySelector("#monthResultsSlot");
   const daysOffResult = document.querySelector(".auto-days-off-result");
-  if (daysOffResult) daysOffResult.insertAdjacentElement("afterend", result);
+  if (resultsSlot) resultsSlot.append(result);
+  else if (daysOffResult) daysOffResult.insertAdjacentElement("afterend", result);
   else heading.insertAdjacentElement("afterend", result);
   openButton.addEventListener("click", openDialog);
   return { openButton, result };

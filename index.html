@@ -9,109 +9,125 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Shift Assistant</title>
   <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./daily-colors.css">
-  <link rel="stylesheet" href="./overtime.css">
-  <link rel="stylesheet" href="./workspace.css">
   <link rel="stylesheet" href="./print.css">
 </head>
 <body>
-  <header class="app-header">
-    <div>
-      <p class="eyebrow">LOCAL-ONLY SHIFT TOOL</p>
+  <header class="app-topbar">
+    <div class="topbar-brand">
       <h1>Shift Assistant</h1>
-      <p class="subtitle">社内システムへ登録する前のシフト案を、端末内だけで作成・確認します。</p>
+      <span class="privacy-badge" title="入力データを外部へ送信しません">端末内保存</span>
     </div>
-    <span class="privacy-badge" title="入力データを外部へ送信しません">端末内保存</span>
+    <p id="saveStatus" class="save-status" role="status">保存準備中</p>
   </header>
 
   <main class="app-main">
     <section class="workspace-panel panel" aria-label="シフト表の選択">
       <div class="workspace-selector">
         <label for="workspaceSelect">
-          <span>編集中のシフト表</span>
+          <span>いま開いているシフト表</span>
           <select id="workspaceSelect" aria-describedby="workspaceUpdatedAt"></select>
         </label>
         <p id="workspaceUpdatedAt" class="workspace-meta">シフト表を読み込み中</p>
       </div>
       <div class="workspace-actions">
-        <button id="newWorkspaceButton" class="button primary" type="button">新規</button>
-        <button id="editWorkspaceButton" class="button secondary" type="button">名称・対象月</button>
-        <button id="duplicateWorkspaceButton" class="button secondary" type="button">複製</button>
+        <button id="newWorkspaceButton" class="button primary" type="button">新しい表</button>
+        <button id="editWorkspaceButton" class="button secondary" type="button">名前・対象月</button>
+        <button id="duplicateWorkspaceButton" class="button secondary" type="button">コピー</button>
         <button id="deleteWorkspaceButton" class="button danger-ghost" type="button">削除</button>
       </div>
     </section>
 
-    <section class="view-switch panel" aria-label="表示切替">
-      <button id="monthViewButton" class="view-button active" type="button">月間編成</button>
-      <button id="dayViewButton" class="view-button" type="button">1日チャート</button>
-      <button id="printViewButton" class="view-button" type="button">印刷・転記</button>
-    </section>
+    <nav class="step-nav" aria-label="画面の切替">
+      <button id="monthViewButton" class="view-button active" type="button">
+        <span class="step-number" aria-hidden="true">1</span>
+        <span class="step-text"><strong>月間シフト表</strong><small>セルを選んで入力する</small></span>
+      </button>
+      <button id="dayViewButton" class="view-button" type="button">
+        <span class="step-number" aria-hidden="true">2</span>
+        <span class="step-text"><strong>1日チャート</strong><small>休憩と人数を確認する</small></span>
+      </button>
+      <button id="printViewButton" class="view-button" type="button">
+        <span class="step-number" aria-hidden="true">3</span>
+        <span class="step-text"><strong>印刷・転記</strong><small>A4横で印刷してわたす</small></span>
+      </button>
+    </nav>
 
-    <section class="toolbar panel" aria-label="操作">
-      <div id="monthControls" class="period-controls">
-        <button id="previousMonthButton" class="button secondary" type="button" aria-label="前月">←</button>
-        <label>
-          <span>表示月</span>
-          <input id="monthInput" type="month">
-        </label>
-        <button id="nextMonthButton" class="button secondary" type="button" aria-label="翌月">→</button>
-      </div>
-
-      <div id="dayControls" class="period-controls" hidden>
-        <button id="previousDayButton" class="button secondary" type="button" aria-label="前日">←</button>
-        <label>
-          <span>対象日</span>
-          <input id="dateInput" type="date">
-        </label>
-        <button id="nextDayButton" class="button secondary" type="button" aria-label="翌日">→</button>
-        <button id="autoBreakButton" class="button primary" type="button">休憩を再配置</button>
-      </div>
-
-      <div class="toolbar-actions">
-        <button id="addEmployeeButton" class="button primary" type="button">従業員を追加</button>
-        <button id="importMasterButton" class="button secondary" type="button">マスター読込</button>
-        <input id="importMasterInput" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-        <button id="downloadSampleButton" class="button secondary" type="button">Excel見本</button>
-        <button id="exportCsvButton" class="button secondary" type="button">シフトCSV出力</button>
-        <button id="backupButton" class="button secondary" type="button">全表JSONバックアップ</button>
-        <button id="restoreButton" class="button secondary" type="button">全表JSON復元</button>
-        <input id="restoreInput" type="file" accept="application/json,.json" hidden>
-      </div>
-    </section>
-
-    <section class="status-panel panel" aria-label="保存と読込の状態">
-      <p id="saveStatus" class="save-status" role="status">保存準備中</p>
-      <p id="importStatus" class="import-status" role="status">CSVまたはExcel（.xlsx）から従業員・シフト・残業設定を登録できます。</p>
-    </section>
+    <div id="historySlot"></div>
 
     <section id="legend" class="legend panel" aria-label="登録済みシフト"></section>
 
     <section id="monthPanel" class="panel schedule-panel">
       <div class="schedule-heading">
-        <div>
+        <div class="schedule-heading-text">
           <h2 id="scheduleTitle">シフト表</h2>
-          <p class="muted">日付を押すと、その日の勤務時間と自動配置された休憩を確認できます。</p>
+          <p class="muted">セルのプルダウンでシフトを選びます。日付を押すと、その日の詳細を確認できます。</p>
         </div>
-        <button id="clearMonthButton" class="button danger-ghost" type="button">この月をクリア</button>
+        <div id="monthControls" class="period-controls" aria-label="表示月の切替">
+          <button id="previousMonthButton" class="button secondary" type="button" aria-label="前月">←</button>
+          <label>
+            <span>表示月</span>
+            <input id="monthInput" type="month">
+          </label>
+          <button id="nextMonthButton" class="button secondary" type="button" aria-label="翌月">→</button>
+        </div>
+        <div class="schedule-heading-actions">
+          <button id="addEmployeeButton" class="button primary" type="button">＋ 従業員を追加</button>
+          <div class="month-generation-actions">
+            <button id="clearMonthButton" class="button danger-ghost" type="button">この月をクリア</button>
+          </div>
+        </div>
       </div>
 
+      <div id="monthToolsSlot" class="month-tools-slot"></div>
+      <div id="monthResultsSlot" class="month-results-slot"></div>
+
       <div id="emptyState" class="empty-state" hidden>
-        <h3>従業員が登録されていません</h3>
-        <p>手入力または「マスター読込」から従業員を登録してください。</p>
+        <h3>まだ従業員が登録されていません</h3>
+        <p>3つのステップでシフト表づくりを始めましょう。</p>
+        <ol class="guide-steps">
+          <li class="guide-step">
+            <strong>従業員を登録する</strong>
+            <p>1人ずつ手で追加するか、Excel・CSVからまとめて登録します。</p>
+            <div class="guide-step-actions">
+              <button id="emptyAddEmployeeButton" class="button primary" type="button">＋ 従業員を追加</button>
+              <button id="emptyImportButton" class="button secondary" type="button">Excel・CSVから登録</button>
+            </div>
+          </li>
+          <li class="guide-step">
+            <strong>迷ったら見本を使う</strong>
+            <p>見本のExcelを保存して、名前やシフトを書き換えてから読み込めます。</p>
+            <div class="guide-step-actions">
+              <button id="emptySampleButton" class="button secondary" type="button">Excel見本を保存</button>
+            </div>
+          </li>
+          <li class="guide-step">
+            <strong>セルにシフトを入れる</strong>
+            <p>表のセルを押してシフトを選ぶだけです。保存は自動で行われます。</p>
+          </li>
+        </ol>
       </div>
       <div id="tableContainer" class="table-container" tabindex="0" aria-label="月間シフト表"></div>
     </section>
 
     <section id="dailyPanel" class="panel daily-panel" hidden>
       <div class="schedule-heading">
-        <div>
+        <div class="schedule-heading-text">
           <h2 id="dailyTitle">時間帯チャート</h2>
-          <p class="muted">薄緑が勤務中、薄オレンジが休憩中です。休憩が法定基準を満たさない行には警告を表示します。</p>
+          <p class="muted">緑が勤務中、オレンジが休憩中です。休憩が足りない行には警告を表示します。</p>
+        </div>
+        <div id="dayControls" class="period-controls" aria-label="対象日の切替" hidden>
+          <button id="previousDayButton" class="button secondary" type="button" aria-label="前日">←</button>
+          <label>
+            <span>対象日</span>
+            <input id="dateInput" type="date">
+          </label>
+          <button id="nextDayButton" class="button secondary" type="button" aria-label="翌日">→</button>
+          <button id="autoBreakButton" class="button primary" type="button">休憩を再配置</button>
         </div>
       </div>
       <div id="dailyEmptyState" class="empty-state" hidden>
         <h3>従業員が登録されていません</h3>
-        <p>月間編成画面から従業員を登録してください。</p>
+        <p>「1 月間シフト表」の画面から従業員を登録してください。</p>
       </div>
       <div id="dailyChartContainer" class="table-container daily-chart-container" tabindex="0" aria-label="1日の勤務時間帯チャート"></div>
       <div class="break-rule-note">
@@ -120,8 +136,8 @@
     </section>
 
     <section id="printPanel" class="panel print-panel" hidden>
-      <div class="print-toolbar">
-        <div>
+      <div class="schedule-heading">
+        <div class="schedule-heading-text">
           <h2 id="printTitle">印刷・転記</h2>
           <p class="muted">用紙はA4横で固定し、人数が多い場合は縦方向に複数ページへ分割します。</p>
         </div>
@@ -143,14 +159,53 @@
       <div id="printPreviewContainer" class="print-preview-container" aria-live="polite"></div>
     </section>
 
-    <section class="panel notes-panel">
-      <h2>データの分離</h2>
+    <details id="dataPanel" class="panel data-panel">
+      <summary>
+        <span class="summary-title">データの読み込み・保存</span>
+        <span class="summary-note">Excel・CSVでの登録、CSV出力、バックアップ</span>
+      </summary>
+      <div class="data-cards">
+        <div class="data-card">
+          <h3>従業員・シフトの登録</h3>
+          <p>ExcelまたはCSVのマスターから、従業員とシフト区分をまとめて登録・更新します。</p>
+          <div class="data-card-actions">
+            <button id="importMasterButton" class="button primary" type="button">Excel・CSVから登録</button>
+            <button id="downloadSampleButton" class="button secondary" type="button">Excel見本を保存</button>
+          </div>
+          <p id="importStatus" class="import-status" role="status"></p>
+        </div>
+        <div class="data-card">
+          <h3>シフト案の出力</h3>
+          <p>表示中の月のシフト案を、Excelで開けるCSVとして保存します。</p>
+          <div class="data-card-actions">
+            <button id="exportCsvButton" class="button secondary" type="button">シフト表をCSVで保存</button>
+          </div>
+        </div>
+        <div class="data-card">
+          <h3>バックアップ・復元</h3>
+          <p>端末内の全シフト表を1つのファイルに保存します。ブラウザの閲覧データを消すと入力内容も消えるため、定期的に保存してください。</p>
+          <div class="data-card-actions">
+            <button id="backupButton" class="button secondary" type="button">全データをバックアップ</button>
+            <button id="restoreButton" class="button secondary" type="button">バックアップから復元</button>
+          </div>
+        </div>
+      </div>
+      <input id="importMasterInput" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+      <input id="restoreInput" type="file" accept="application/json,.json" hidden>
+    </details>
+
+    <details class="panel notes-panel">
+      <summary>
+        <span class="summary-title">ヘルプ：データの扱いと入力形式</span>
+        <span class="summary-note">共用端末の注意、CSV・Excelの形式</span>
+      </summary>
+      <h3>データの分離</h3>
       <p>シフト表ごとに従業員、シフト定義、月間シフト、休憩を分離して保存します。共用端末では、編集前に上部の名称と更新日時を確認してください。</p>
-      <h2>CSV・Excelの基本形式</h2>
+      <h3>CSV・Excelの基本形式</h3>
       <p><code>種別,コード,名称,開始時刻,終了時刻,所属,表示順,略称,固定残業時間,シフト残業時間</code>の見出しで、従業員行とシフト行をまとめて読み込めます。</p>
       <p>「Excel見本」には通常シフトと休日区分を収録しています。シート名に「休日区分」または「特殊シフト」を含む補助シートも読み込みますが、<code>Yシフト</code>などの複合入力例は説明行として自動取込しません。古い<code>.xls</code>形式は未対応です。</p>
-      <p class="muted">このツールは編成案の作成用です。正式な登録と確定は社内システムで行ってください。</p>
-    </section>
+      <p class="muted">このツールは編成案の作成用です。入力データは外部へ送信せず、端末内にだけ保存します。正式な登録と確定は社内システムで行ってください。</p>
+    </details>
   </main>
 
   <dialog id="workspaceDialog">

@@ -56,8 +56,11 @@ export function initializeHistoryUi({ onUndo, onRedo }) {
   actions.append(undoButton, redoButton, note);
   panel.append(textArea, actions);
 
-  const workspacePanel = document.querySelector(".workspace-panel");
-  workspacePanel?.insertAdjacentElement("afterend", panel);
+  // レイアウトはindex.htmlのスロットが決める。スロットがない旧構造でも動くよう
+  // ワークスペースパネル直後への挿入をフォールバックとして残す。
+  const slot = document.querySelector("#historySlot");
+  if (slot) slot.append(panel);
+  else document.querySelector(".workspace-panel")?.insertAdjacentElement("afterend", panel);
   controls = { panel, status, undoButton, redoButton };
 
   undoButton.addEventListener("click", onUndo);
