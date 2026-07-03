@@ -80,9 +80,13 @@ function createControls() {
   actions.append(lockButton, unlockButton, normalButton);
   panel.append(headingArea, actions);
 
+  // ペイントパネルと同じスロットへ後置する。スロットがない旧構造でも動くよう
+  // 従来の挿入位置をフォールバックとして残す。
+  const slot = document.querySelector("#monthToolsSlot");
   const paintPanel = document.querySelector(".paint-panel");
   const scheduleHeading = document.querySelector("#monthPanel .schedule-heading");
-  if (paintPanel) paintPanel.insertAdjacentElement("afterend", panel);
+  if (slot) slot.append(panel);
+  else if (paintPanel) paintPanel.insertAdjacentElement("afterend", panel);
   else scheduleHeading?.insertAdjacentElement("afterend", panel);
 
   lockButton.addEventListener("click", () => {

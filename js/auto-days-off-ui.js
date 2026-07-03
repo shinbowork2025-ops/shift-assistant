@@ -117,7 +117,9 @@ function createMainControls() {
   result.className = "auto-days-off-result";
   result.hidden = true;
   result.setAttribute("aria-live", "polite");
-  heading.insertAdjacentElement("afterend", result);
+  const resultsSlot = document.querySelector("#monthResultsSlot");
+  if (resultsSlot) resultsSlot.append(result);
+  else heading.insertAdjacentElement("afterend", result);
   openButton.addEventListener("click", openDialog);
   return { openButton, result };
 }

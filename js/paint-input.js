@@ -86,8 +86,11 @@ function createControls() {
   actionArea.append(toggleButton, palette);
   panel.append(headingArea, actionArea);
 
-  const scheduleHeading = document.querySelector("#monthPanel .schedule-heading");
-  scheduleHeading?.insertAdjacentElement("afterend", panel);
+  // レイアウトはindex.htmlのスロットが決める。スロットがない旧構造でも動くよう
+  // 見出し直後への挿入をフォールバックとして残す。
+  const slot = document.querySelector("#monthToolsSlot");
+  if (slot) slot.append(panel);
+  else document.querySelector("#monthPanel .schedule-heading")?.insertAdjacentElement("afterend", panel);
 
   toggleButton.addEventListener("click", () => {
     setMonthEditMode(active() ? "normal" : "shift-paint");
