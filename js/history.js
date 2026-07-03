@@ -27,7 +27,8 @@ function currentWorkspaceDocument() {
     employees: state.employees,
     shiftTypes: state.shiftTypes,
     shifts: state.shifts,
-    breaks: state.breaks
+    breaks: state.breaks,
+    shiftLocks: state.shiftLocks
   };
 }
 
@@ -52,6 +53,7 @@ function applySnapshot(snapshot) {
   state.shiftTypes = structuredClone(snapshot.shiftTypes);
   state.shifts = structuredClone(snapshot.shifts);
   state.breaks = structuredClone(snapshot.breaks);
+  state.shiftLocks = structuredClone(snapshot.shiftLocks ?? {});
   scheduleSave();
 }
 

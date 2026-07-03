@@ -2,6 +2,7 @@ import {
   state,
   getShift,
   getShiftType,
+  isShiftLocked,
   setShift,
   dateKey,
   scheduleSave
@@ -14,9 +15,13 @@ import {
   cancelHistoryTransaction
 } from "./history.js";
 import { createPaintStroke } from "./paint-stroke.js";
+import {
+  getMonthEditMode,
+  setMonthEditMode,
+  subscribeMonthEditMode
+} from "./month-edit-mode.js";
 
 const paintState = {
-  enabled: false,
   selectedShiftCode: null
 };
 
@@ -25,6 +30,10 @@ let tableContainer = null;
 let activeStroke = null;
 let onStrokeComplete = () => {};
 let setStatus = () => {};
+
+function active() {
+  return getMonthEditMode() === "shift-paint";
+}
 
 function selectedCode() {
   return paintState.selectedShiftCode ?? "";
@@ -81,13 +90,13 @@ function createControls() {
   scheduleHeading?.insertAdjacentElement("afterend", panel);
 
   toggleButton.addEventListener("click", () => {
-    setPaintEnabled(!paintState.enabled);
+    setMonthEditMode(active() ? "normal" : "shift-paint");
   });
   palette.addEventListener("click", (event) => {
     const button = event.target.closest(".paint-palette-button");
     if (!button) return;
     paintState.selectedShiftCode = button.dataset.shiftCode ?? "";
-    paintState.enabled = true;
+    setMonthEditMode("shift-paint");
     syncPaintInput();
   });
 
@@ -129,36 +138,38 @@ function renderPalette() {
 
 function updateControls() {
   if (!controls) return;
-  controls.toggleButton.textContent = paintState.enabled ? "通常入力に戻す" : "ペイントを開始";
-  controls.toggleButton.classList.toggle("primary", paintState.enabled);
-  controls.toggleButton.classList.toggle("secondary", !paintState.enabled);
-  controls.toggleButton.setAttribute("aria-pressed", String(paintState.enabled));
-  controls.status.textContent = paintState.enabled
-    ? `「${paintActionLabel()}」をクリックまたはドラッグして連続入力します。`
+  controls.toggleButton.textContent = active() ? "通常入力に戻す" : "ペイントを開始";
+  controls.toggleButton.classList.toggle("primary", active());
+  controls.toggleButton.classList.toggle("secondary", !active());
+  controls.toggleButton.setAttribute("aria-pressed", String(active()));
+  controls.status.textContent = active()
+    ? `「${paintActionLabel()}」をクリックまたはドラッグして連続入力します。ロック済みセルは変更しません。`
     : "OFF：通常のプルダウン入力です。シフトの色を選ぶとペイントを開始します。";
 }
 
 function updateTableMode() {
   if (!tableContainer) return;
-  tableContainer.classList.toggle("paint-mode", paintState.enabled);
+  const mode = getMonthEditMode();
+  tableContainer.classList.toggle("paint-mode", mode === "shift-paint");
   const employeeNames = new Map(state.employees.map((employee) => [employee.id, employee.name]));
   const shiftNames = new Map(state.shiftTypes.map((shiftType) => [shiftType.code, shiftType.name]));
   const cells = tableContainer.querySelectorAll(".paint-cell");
   cells.forEach((cell) => {
-    cell.tabIndex = paintState.enabled ? 0 : -1;
-    cell.setAttribute("role", paintState.enabled ? "button" : "cell");
+    cell.tabIndex = mode === "shift-paint" || mode === "lock-paint" ? 0 : -1;
+    if (mode === "shift-paint") cell.setAttribute("role", "button");
     const employeeName = employeeNames.get(cell.dataset.employeeId) ?? "従業員";
     const currentCode = getShift(cell.dataset.employeeId, Number(cell.dataset.day));
     const currentShift = currentCode ? shiftNames.get(currentCode) ?? currentCode : "未入力";
+    const locked = isShiftLocked(cell.dataset.employeeId, Number(cell.dataset.day));
     cell.setAttribute(
       "aria-label",
-      paintState.enabled
-        ? `${employeeName} ${cell.dataset.day}日。現在${currentShift}。${paintActionLabel()}を適用`
-        : `${employeeName} ${cell.dataset.day}日のシフト`
+      mode === "shift-paint"
+        ? `${employeeName} ${cell.dataset.day}日。現在${currentShift}。${locked ? "ロック済み" : `${paintActionLabel()}を適用`}`
+        : `${employeeName} ${cell.dataset.day}日のシフト${locked ? "、ロック済み" : ""}`
     );
   });
   tableContainer.querySelectorAll(".shift-select").forEach((select) => {
-    select.tabIndex = paintState.enabled ? -1 : 0;
+    select.tabIndex = mode === "normal" && !select.disabled ? 0 : -1;
   });
 }
 
@@ -185,13 +196,18 @@ function recordChangedCell(changesByDate, employeeId, day) {
   changesByDate.get(changedDate).add(employeeId);
 }
 
-function applyPaintToCell(cell, shiftCode, changesByDate) {
+function applyPaintToCell(cell, shiftCode, changesByDate, stats) {
   const employeeId = cell.dataset.employeeId;
   const day = Number(cell.dataset.day);
   if (!employeeId || !Number.isInteger(day)) return false;
+  if (isShiftLocked(employeeId, day)) {
+    stats.lockedSkipped += 1;
+    return false;
+  }
   if (getShift(employeeId, day) === shiftCode) return false;
 
-  setShift(employeeId, day, shiftCode, { save: false });
+  const changed = setShift(employeeId, day, shiftCode, { save: false, respectLock: true });
+  if (!changed) return false;
   recordChangedCell(changesByDate, employeeId, day);
   updateCellVisual(cell, shiftCode);
   return true;
@@ -219,18 +235,20 @@ function cellAtPointer(event) {
 }
 
 function beginStroke(event, cell) {
-  if (!paintState.enabled || activeStroke) return;
+  if (!active() || activeStroke || event.target.closest(".cell-lock-button")) return;
   if (event.pointerType === "mouse" && event.button !== 0) return;
   event.preventDefault();
 
   const shiftCode = selectedCode();
   const changesByDate = new Map();
+  const stats = { lockedSkipped: 0 };
   activeStroke = {
     pointerId: event.pointerId,
     shiftCode,
     changesByDate,
+    stats,
     transaction: beginHistoryTransaction(historyLabel(shiftCode)),
-    stroke: createPaintStroke((targetCell) => applyPaintToCell(targetCell, shiftCode, changesByDate))
+    stroke: createPaintStroke((targetCell) => applyPaintToCell(targetCell, shiftCode, changesByDate, stats))
   };
   tableContainer.classList.add("paint-stroke-active");
   document.body.classList.add("paint-dragging");
@@ -265,23 +283,26 @@ function finishStroke(event) {
     finalizePaintChanges(finished.changesByDate);
     commitHistoryTransaction(finished.transaction);
     onStrokeComplete();
-    setStatus(`${summary.changedCount}セルへ「${paintActionLabel(finished.shiftCode)}」を適用しました`);
+    const skipped = finished.stats.lockedSkipped > 0 ? `、ロック済み${finished.stats.lockedSkipped}セルは維持` : "";
+    setStatus(`${summary.changedCount}セルへ「${paintActionLabel(finished.shiftCode)}」を適用しました${skipped}`);
   } else {
     cancelHistoryTransaction(finished.transaction);
     syncPaintInput();
+    if (finished.stats.lockedSkipped > 0) setStatus(`ロック済み${finished.stats.lockedSkipped}セルは変更しませんでした`);
   }
 }
 
 function applyKeyboardPaint(event) {
-  if (!paintState.enabled || !["Enter", " "].includes(event.key)) return;
+  if (!active() || !["Enter", " "].includes(event.key)) return;
   const cell = event.target.closest(".paint-cell");
   if (!cell) return;
   event.preventDefault();
 
   const shiftCode = selectedCode();
   const changesByDate = new Map();
+  const stats = { lockedSkipped: 0 };
   const transaction = beginHistoryTransaction(historyLabel(shiftCode));
-  const changed = applyPaintToCell(cell, shiftCode, changesByDate);
+  const changed = applyPaintToCell(cell, shiftCode, changesByDate, stats);
   if (changed) {
     finalizePaintChanges(changesByDate);
     commitHistoryTransaction(transaction);
@@ -289,13 +310,8 @@ function applyKeyboardPaint(event) {
     setStatus(`1セルへ「${paintActionLabel(shiftCode)}」を適用しました`);
   } else {
     cancelHistoryTransaction(transaction);
+    if (stats.lockedSkipped > 0) setStatus("ロック済みセルは変更できません");
   }
-}
-
-function setPaintEnabled(enabled) {
-  if (activeStroke) finishStroke();
-  paintState.enabled = Boolean(enabled);
-  syncPaintInput();
 }
 
 export function initializePaintInput(options) {
@@ -314,6 +330,7 @@ export function initializePaintInput(options) {
   tableContainer.addEventListener("lostpointercapture", finishStroke);
   tableContainer.addEventListener("keydown", applyKeyboardPaint);
   globalThis.addEventListener("blur", () => finishStroke());
+  subscribeMonthEditMode(syncPaintInput);
   syncPaintInput();
 }
 
@@ -326,5 +343,5 @@ export function syncPaintInput() {
 }
 
 export function disablePaintInput() {
-  setPaintEnabled(false);
+  if (active()) setMonthEditMode("normal");
 }
