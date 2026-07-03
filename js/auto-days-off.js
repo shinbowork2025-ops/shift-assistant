@@ -1,15 +1,15 @@
 import { getDaysInMonth } from "./date-time.js";
 import { createShiftTypeMap, createInitialOffCounts } from "./days-off-planner-core.js";
 import { planEmployeeDaysOff } from "./employee-days-off-plan.js";
+import { PUBLIC_HOLIDAY_CODE } from "./shift-catalog-migration.js";
 
 const VALID_MODES = new Set(["empty-only", "replace-unlocked"]);
 
 export function findDefaultDaysOffShiftCode(shiftTypes) {
   const nonWork = (Array.isArray(shiftTypes) ? shiftTypes : []).filter((shiftType) => !shiftType.isWork);
-  const preferred = nonWork.find((shiftType) => shiftType.code === "7")
-    ?? nonWork.find((shiftType) => /公休/.test(shiftType.name))
+  const preferred = nonWork.find((shiftType) => shiftType.code === PUBLIC_HOLIDAY_CODE)
+    ?? nonWork.find((shiftType) => shiftType.name === "公休")
     ?? nonWork.find((shiftType) => /休日|休/.test(shiftType.name))
-    ?? nonWork.find((shiftType) => shiftType.code === "off")
     ?? nonWork[0];
   return preferred?.code ?? "";
 }
