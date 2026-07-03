@@ -116,8 +116,9 @@ function importEmployee(record, summary) {
 }
 
 function importShift(record, summary) {
-  if (!record.name) {
-    summary.errors.push(`${record.line}行目: シフト名がありません。`);
+  const name = record.name || record.code;
+  if (!name) {
+    summary.errors.push(`${record.line}行目: シフト名またはシフトコードがありません。`);
     return;
   }
   const hasTimes = Boolean(record.start || record.end);
@@ -126,9 +127,9 @@ function importShift(record, summary) {
     return;
   }
 
-  const code = record.code || `shift-${record.name}`;
+  const code = record.code || `shift-${name}`;
   const existing = state.shiftTypes.find((shift) => shift.code === code)
-    ?? (!record.code ? state.shiftTypes.find((shift) => shift.name === record.name) : null);
+    ?? (!record.code ? state.shiftTypes.find((shift) => shift.name === name) : null);
 
   let paidMinutes = existing?.paidMinutes;
   if (record.paidMinutes !== "") {
@@ -142,8 +143,8 @@ function importShift(record, summary) {
 
   const shiftValue = {
     code: existing?.code ?? code,
-    name: record.name,
-    shortLabel: record.shortLabel || record.name.slice(0, 2),
+    name,
+    shortLabel: record.shortLabel || record.code.slice(0, 4) || name.slice(0, 2),
     start: hasTimes ? record.start : "",
     end: hasTimes ? record.end : "",
     isWork: hasTimes,
@@ -254,6 +255,12 @@ export function formatImportSummary(summary, sourceLabel = "") {
     `従業員 追加${summary.addedEmployees}名・更新${summary.updatedEmployees}名`,
     `シフト 追加${summary.addedShifts}件・更新${summary.updatedShifts}件`
   ].filter(Boolean);
+  if (summary.filledShiftNames) {
+    parts.push(`名称空欄${summary.filledShiftNames}件はコードを使用`);
+  }
+  if (summary.ignoredSupplementRows?.length) {
+    parts.push(`複合入力の説明${summary.ignoredSupplementRows.length}行は取込対象外`);
+  }
   if (summary.errors.length) parts.push(`読込不可${summary.errors.length}行`);
   return parts.join(" / ");
 }

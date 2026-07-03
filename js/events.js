@@ -1,5 +1,5 @@
 import { state, scheduleViewStateSave } from "./model.js";
-import { exportCsv, backupJson, downloadMasterCsvSample } from "./files.js";
+import { exportCsv, backupJson, downloadMasterWorkbookSample } from "./files.js";
 import {
   elements,
   openWorkspaceDialog,
@@ -111,7 +111,14 @@ export function bindEvents() {
       elements.importMasterInput.value = "";
     }
   });
-  elements.downloadSampleButton.addEventListener("click", downloadMasterCsvSample);
+  elements.downloadSampleButton.addEventListener("click", async () => {
+    try {
+      await downloadMasterWorkbookSample();
+    } catch (error) {
+      console.error(error);
+      setImportStatus(`Excel見本の作成失敗: ${error.message}`, true);
+    }
+  });
 
   elements.exportCsvButton.addEventListener("click", exportCsv);
   elements.backupButton.addEventListener("click", backupJson);

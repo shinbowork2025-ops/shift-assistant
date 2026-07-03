@@ -19,6 +19,7 @@ async function initialize() {
   loadStylesheet("./print-page.css");
   loadStylesheet("./history.css");
   loadStylesheet("./paint.css");
+  elements.downloadSampleButton.textContent = "Excel見本";
   setStatusHandler(setSaveStatus);
   initializeHistoryUi({ onUndo: undoLastAction, onRedo: redoLastAction });
   initializePaintInput({
