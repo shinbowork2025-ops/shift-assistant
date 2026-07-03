@@ -219,7 +219,12 @@ function parseWorksheet(document, sharedStrings, styles) {
   return rows;
 }
 
-export async function readFirstWorksheetRows(file) {
+function sheetRelationshipId(sheet) {
+  return sheet.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id")
+    ?? sheet.getAttribute("r:id");
+}
+
+export async function readWorkbookRows(file) {
   const zip = readZipDirectory(await file.arrayBuffer());
   const workbookPath = "xl/workbook.xml";
   const workbookDocument = parseXml(await extractZipText(zip, workbookPath), "workbook.xml");
@@ -228,25 +233,41 @@ export async function readFirstWorksheetRows(file) {
     "workbook.xml.rels"
   );
   const relationships = relationshipMap(workbookRelationshipsDocument);
-  const firstSheet = firstXmlElement(workbookDocument, "sheet");
-  if (!firstSheet) throw new Error("Excelファイルにワークシートがありません。");
-
-  const relationshipId = firstSheet.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id")
-    ?? firstSheet.getAttribute("r:id");
-  const target = relationships.get(relationshipId);
-  if (!target) throw new Error("先頭ワークシートの参照先が見つかりません。");
-  const worksheetPath = resolveZipPath(workbookPath, target);
+  const sheetNodes = xmlElements(workbookDocument, "sheet");
+  if (!sheetNodes.length) throw new Error("Excelファイルにワークシートがありません。");
 
   const sharedStringsText = await extractZipText(zip, "xl/sharedStrings.xml", false);
   const stylesText = await extractZipText(zip, "xl/styles.xml", false);
   const sharedStrings = parseSharedStrings(sharedStringsText ? parseXml(sharedStringsText, "sharedStrings.xml") : null);
   const styles = parseStyles(stylesText ? parseXml(stylesText, "styles.xml") : null);
-  const worksheetDocument = parseXml(await extractZipText(zip, worksheetPath), worksheetPath);
-  const rows = parseWorksheet(worksheetDocument, sharedStrings, styles);
-  if (rows.length < 2) throw new Error("Excelの先頭シートに見出し行とデータ行が必要です。");
+  const worksheets = [];
 
+  for (const sheet of sheetNodes) {
+    const relationshipId = sheetRelationshipId(sheet);
+    const target = relationships.get(relationshipId);
+    if (!target) throw new Error(`${sheet.getAttribute("name") ?? "ワークシート"}の参照先が見つかりません。`);
+    const worksheetPath = resolveZipPath(workbookPath, target);
+    const worksheetDocument = parseXml(await extractZipText(zip, worksheetPath), worksheetPath);
+    worksheets.push({
+      sheetName: sheet.getAttribute("name") ?? `シート${worksheets.length + 1}`,
+      rows: parseWorksheet(worksheetDocument, sharedStrings, styles)
+    });
+  }
+
+  if (!worksheets.some((worksheet) => worksheet.rows.length >= 2)) {
+    throw new Error("Excelに見出し行とデータ行を含むシートがありません。");
+  }
+  return { worksheets };
+}
+
+export async function readFirstWorksheetRows(file) {
+  const { worksheets } = await readWorkbookRows(file);
+  const firstSheet = worksheets[0];
+  if (!firstSheet || firstSheet.rows.length < 2) {
+    throw new Error("Excelの先頭シートに見出し行とデータ行が必要です。");
+  }
   return {
-    rows,
-    sheetName: firstSheet.getAttribute("name") ?? "先頭シート"
+    rows: firstSheet.rows,
+    sheetName: firstSheet.sheetName
   };
 }
