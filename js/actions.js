@@ -23,7 +23,7 @@ export {
   deleteEmployeeFromDialog,
   autoPlaceBreaks,
   clearCurrentMonth
-} from "./actions/schedule-actions.js";
+} from "./actions/schedule-actions-v2.js";
 
 export {
   importMasterFile,

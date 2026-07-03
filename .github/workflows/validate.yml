@@ -17,5 +17,5 @@ jobs:
         uses: actions/checkout@v4
       - name: Check JavaScript syntax
         run: find js tests -name '*.js' -o -name '*.mjs' | xargs -n1 node --check
-      - name: Run break rule tests
+      - name: Run automated tests
         run: node --test tests/*.test.mjs

@@ -3,6 +3,12 @@ import { createId } from "./ids.js";
 import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
 import { nonNegativeMinutes } from "./shift-metrics.js";
 import { normalizeShiftLocks } from "./shift-locks.js";
+import {
+  normalizeFixedDaysOff,
+  normalizeRestPatternId,
+  normalizeRestPatternOffset,
+  normalizeTargetDaysOff
+} from "./rest-patterns.js";
 import { createBlankWorkspace } from "./workspace-schema.js";
 
 const VALID_VIEWS = new Set(["month", "day", "print"]);
@@ -20,7 +26,11 @@ export function normalizeEmployees(candidate) {
       code: typeof employee.code === "string" ? employee.code.trim().slice(0, 20) : "",
       department: typeof employee.department === "string" ? employee.department.trim().slice(0, 30) : "",
       order: Number.isFinite(Number(employee.order)) ? Number(employee.order) : index + 1,
-      fixedOvertimeMinutes: nonNegativeMinutes(employee.fixedOvertimeMinutes)
+      fixedOvertimeMinutes: nonNegativeMinutes(employee.fixedOvertimeMinutes),
+      restPatternId: normalizeRestPatternId(employee.restPatternId),
+      restPatternOffset: normalizeRestPatternOffset(employee.restPatternOffset),
+      targetDaysOff: normalizeTargetDaysOff(employee.targetDaysOff),
+      fixedDaysOff: normalizeFixedDaysOff(employee.fixedDaysOff)
     }))
     .sort(compareEmployeeOrder);
 }

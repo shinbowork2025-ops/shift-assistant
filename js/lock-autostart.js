@@ -1,4 +1,6 @@
 import { refresh } from "./actions.js";
+import { initializeAutoDaysOffUi } from "./auto-days-off-ui.js";
+import { initializeEmployeeRestBadges } from "./employee-rest-badges.js";
 import { elements, setSaveStatus } from "./elements.js";
 import { initializeDailyLockSync } from "./daily-lock-sync.js";
 import { initializeLockInput } from "./lock-input.js";
@@ -11,3 +13,5 @@ initializeLockInput({
 });
 initializeDailyLockSync();
 initializeMonthClearState(elements.tableContainer);
+initializeEmployeeRestBadges(elements.tableContainer);
+initializeAutoDaysOffUi({ setStatus: setSaveStatus });
