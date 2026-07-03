@@ -71,7 +71,7 @@
         <button id="addEmployeeButton" class="button primary" type="button">従業員を追加</button>
         <button id="importMasterButton" class="button secondary" type="button">マスター読込</button>
         <input id="importMasterInput" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-        <button id="downloadSampleButton" class="button secondary" type="button">CSV見本</button>
+        <button id="downloadSampleButton" class="button secondary" type="button">Excel見本</button>
         <button id="exportCsvButton" class="button secondary" type="button">シフトCSV出力</button>
         <button id="backupButton" class="button secondary" type="button">全表JSONバックアップ</button>
         <button id="restoreButton" class="button secondary" type="button">全表JSON復元</button>
@@ -148,7 +148,7 @@
       <p>シフト表ごとに従業員、シフト定義、月間シフト、休憩を分離して保存します。共用端末では、編集前に上部の名称と更新日時を確認してください。</p>
       <h2>CSV・Excelの基本形式</h2>
       <p><code>種別,コード,名称,開始時刻,終了時刻,所属,表示順,略称,固定残業時間,シフト残業時間</code>の見出しで、従業員行とシフト行をまとめて読み込めます。</p>
-      <p>Excelは<code>.xlsx</code>の先頭シートを読み込みます。古い<code>.xls</code>形式は未対応です。「CSV見本」をExcelで開いて編集し、<code>.xlsx</code>で保存しても読み込めます。</p>
+      <p>「Excel見本」には通常シフトと休日区分を収録しています。シート名に「休日区分」または「特殊シフト」を含む補助シートも読み込みますが、<code>Yシフト</code>などの複合入力例は説明行として自動取込しません。古い<code>.xls</code>形式は未対応です。</p>
       <p class="muted">このツールは編成案の作成用です。正式な登録と確定は社内システムで行ってください。</p>
     </section>
   </main>
