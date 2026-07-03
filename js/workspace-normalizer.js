@@ -9,6 +9,11 @@ import {
   normalizeRestPatternOffset,
   normalizeTargetDaysOff
 } from "./rest-patterns.js";
+import {
+  normalizeAllowedShiftCodes,
+  normalizeAvoidLateEarly,
+  normalizePreferredShiftCode
+} from "./work-shift-preferences.js";
 import { createBlankWorkspace } from "./workspace-schema.js";
 
 const VALID_VIEWS = new Set(["month", "day", "print"]);
@@ -30,7 +35,10 @@ export function normalizeEmployees(candidate) {
       restPatternId: normalizeRestPatternId(employee.restPatternId),
       restPatternOffset: normalizeRestPatternOffset(employee.restPatternOffset),
       targetDaysOff: normalizeTargetDaysOff(employee.targetDaysOff),
-      fixedDaysOff: normalizeFixedDaysOff(employee.fixedDaysOff)
+      fixedDaysOff: normalizeFixedDaysOff(employee.fixedDaysOff),
+      allowedShiftCodes: normalizeAllowedShiftCodes(employee.allowedShiftCodes),
+      preferredShiftCode: normalizePreferredShiftCode(employee.preferredShiftCode),
+      avoidLateEarly: normalizeAvoidLateEarly(employee.avoidLateEarly)
     }))
     .sort(compareEmployeeOrder);
 }
