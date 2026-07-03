@@ -1,10 +1,14 @@
 import {
   state,
   createId,
+  getShift,
+  isShiftLocked,
   setShift,
   scheduleSave,
   monthDisplayName,
-  dateKey
+  dateKey,
+  removeShiftLocksForEmployee,
+  clearShiftLocksForMonth
 } from "../model.js";
 import { generateBreaksForDate } from "../breaks.js";
 import { compareEmployeeOrder } from "../workspace-normalizer.js";
@@ -23,8 +27,14 @@ export function handleShiftChange(select) {
   const employeeName = state.employees.find((employee) => employee.id === employeeId)?.name ?? "従業員";
   const changedDate = dateKey(state.selectedMonth, day);
 
+  if (isShiftLocked(employeeId, day)) {
+    select.value = getShift(employeeId, day);
+    setSaveStatus(`${employeeName}・${day}日はロック済みです。先にロックを解除してください`, true);
+    return;
+  }
+
   runWithHistory(`${employeeName}・${day}日のシフト変更`, () => {
-    setShift(employeeId, day, select.value, { save: false });
+    setShift(employeeId, day, select.value, { save: false, respectLock: true });
     generateBreaksForDate(changedDate, [employeeId], { save: false });
     scheduleSave();
   });
@@ -75,13 +85,14 @@ export async function deleteEmployeeFromDialog() {
   const employee = state.employees.find((item) => item.id === employeeId);
   if (!employee) return;
   closeEmployeeDialog();
-  const confirmed = await confirmAction("従業員を削除", `${employee.name}さんと、その人の全月のシフト案を削除します。`, "削除");
+  const confirmed = await confirmAction("従業員を削除", `${employee.name}さんと、その人の全月のシフト案・休憩・ロックを削除します。`, "削除");
   if (!confirmed) return;
 
   runWithHistory(`${employee.name}さんを削除`, () => {
     state.employees = state.employees.filter((item) => item.id !== employeeId);
     for (const month of Object.values(state.shifts)) delete month[employeeId];
     for (const dayBreaks of Object.values(state.breaks)) delete dayBreaks[employeeId];
+    removeShiftLocksForEmployee(employeeId, { save: false });
     scheduleSave();
   });
   refresh();
@@ -94,7 +105,7 @@ export function autoPlaceBreaks() {
 }
 
 export async function clearCurrentMonth() {
-  const confirmed = await confirmAction("月間シフトをクリア", `${monthDisplayName(state.selectedMonth)}の入力済みシフト案と休憩をすべて削除します。`, "クリア");
+  const confirmed = await confirmAction("月間シフトをクリア", `${monthDisplayName(state.selectedMonth)}の入力済みシフト案・休憩・セルロックをすべて削除します。`, "クリア");
   if (!confirmed) return;
 
   runWithHistory(`${monthDisplayName(state.selectedMonth)}をクリア`, () => {
@@ -102,6 +113,7 @@ export async function clearCurrentMonth() {
     for (const dateValue of Object.keys(state.breaks)) {
       if (dateValue.startsWith(state.selectedMonth)) delete state.breaks[dateValue];
     }
+    clearShiftLocksForMonth(state.selectedMonth, { save: false });
     scheduleSave();
   });
   refresh();
