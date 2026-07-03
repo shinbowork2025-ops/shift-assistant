@@ -87,6 +87,23 @@ test("再配置モードでは未ロックの公休を別日に移動できる",
   assert.equal(plan.changes.some((item) => item.day === 3 && item.after === "7"), false);
 });
 
+test("固定休曜日はパターン休日数を増やさず優先位置として使う", () => {
+  const plan = buildDaysOffPlan({
+    monthValue: "2026-07",
+    employees: [{ ...employee("e1", 1, "5on2off", 0), restPatternOffset: 0, fixedDaysOff: [0] }],
+    shiftTypes,
+    shifts: {},
+    shiftLocks: {},
+    offShiftCode: "7",
+    mode: "empty-only"
+  });
+  const result = plan.employeeResults[0];
+  assert.equal(result.targetDaysOff, 8);
+  const selectedDays = new Set(plan.changes.filter((item) => item.after === "7").map((item) => item.day));
+  assert.equal(selectedDays.has(5), true);
+  assert.equal(selectedDays.has(12), true);
+});
+
 test("休み方未設定の従業員は変更しない", () => {
   const plan = buildDaysOffPlan({
     monthValue: "2026-07",
