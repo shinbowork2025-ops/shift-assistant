@@ -111,6 +111,12 @@ state
 
 色・角丸・余白は`styles.css`のトークンを参照し、機能CSSへ固定値を複製しないでください。
 
+`index.html`から読み込む`styles.css`と`print.css`には`?v=日付`のバージョン付きURLを使用しています。これらのCSSを変更したときは`index.html`の`?v=`を更新し、GitHub Pagesのキャッシュ（最大10分）による新HTML・旧CSSの混在を防いでください。
+
+## 起動失敗の検知
+
+`js/boot-guard.js`は従来型スクリプトとして読み込まれ、ES Modulesのアプリ本体が壊れていても単独で動作します。`app.js`が初期化完了時に`document.documentElement.dataset.appReady`を立て、一定時間たっても立たない場合は再読み込みを促すバナーを表示します。キャッシュ混在や文字化けコミットなどでモジュール解析が失敗しても、利用者が白画面のまま待ち続けない仕組みです。
+
 ## 集計
 
 ### 月間集計

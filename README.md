@@ -216,6 +216,10 @@ https://shinbowork2025-ops.github.io/shift-assistant/
 
 `main`ブランチの`/(root)`をGitHub Pagesで公開します。ビルドコマンドは不要です。
 
+### 更新の反映について
+
+GitHub Pagesは各ファイルを最大10分キャッシュします（`Cache-Control: max-age=600`）。更新直後は新旧のファイルが混在し、表示が崩れたり動かなくなったりすることがあります。この状態を検知すると画面上部に再読み込みの案内が表示されます。数分待ってから再読み込み（`Ctrl+F5`または`⌘Shift+R`のスーパーリロード）してください。
+
 ## ローカル確認
 
 ```bash

@@ -46,6 +46,9 @@ async function initialize() {
     setSaveStatus(`読込失敗: ${error.message}`, true);
   }
   render(elements);
+  // boot-guard.jsが監視する初期化完了フラグ。モジュール読込が失敗して
+  // ここへ到達しない場合、ガードが再読み込みの案内を表示する。
+  document.documentElement.dataset.appReady = "1";
 }
 
 initialize();
