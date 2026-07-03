@@ -18,4 +18,7 @@ jobs:
       - name: Check JavaScript syntax
         run: find js tests -name '*.js' -o -name '*.mjs' | xargs -n1 node --check
       - name: Run automated tests
-        run: node --test tests/*.test.mjs
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test tests/*.test.mjs 2>&1 | tail -n 220
