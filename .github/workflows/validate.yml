@@ -3,9 +3,11 @@ name: Validate static app
 on:
   pull_request:
   push:
+    branches:
+      - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   javascript-validation:
@@ -13,35 +15,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          show-progress: false
-      - name: Apply one-time label cleanup
-        if: github.event_name == 'push' && github.ref == 'refs/heads/feature/unify-default-shift-codes'
-        shell: bash
-        run: |
-          python3 tools/apply_shift_label_cleanup.py
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add README.md js/csv.js tests
-            git commit -m "docs: remove legacy shift labels from samples and tests"
-            git push origin HEAD:feature/unify-default-shift-codes
-          fi
-      - name: Inspect embedded sample workbook
-        run: python3 tools/inspect_sample_workbook.py > sample-inspection.json
-      - name: Find legacy shift references
-        shell: bash
-        run: |
-          grep -RInE '早番|中番|遅番|短時間|shortLabel: "(早|中|遅|短)"|code: "(early|middle|late|short|off)"|code === "7"|code: "7"|シフト,7,公休' \
-            --exclude-dir=.git --exclude=sample-master-workbook.js . > legacy-shift-references.txt || true
-      - name: Upload inspection artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: shift-inspection
-          path: |
-            sample-inspection.json
-            legacy-shift-references.txt
-          retention-days: 1
       - name: Check JavaScript syntax
         run: find js tests -name '*.js' -o -name '*.mjs' | xargs -n1 node --check
       - name: Run automated tests
