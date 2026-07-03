@@ -1,6 +1,5 @@
 export {
   refresh,
-  refreshActiveView,
   refreshPrintPreview,
   printCurrentWorkspace,
   undoLastAction,

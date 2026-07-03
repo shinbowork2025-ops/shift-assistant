@@ -33,7 +33,7 @@ export function renderMonthlyPrintDocument(workspace, printedAt) {
     const dayNumber = document.createElement("span");
     dayNumber.textContent = String(day.day);
     const weekday = document.createElement("small");
-    weekday.textContent = day.weekdayLabel;
+    weekday.textContent = day.label;
     cell.append(dayNumber, weekday);
     headerRow.append(cell);
   });

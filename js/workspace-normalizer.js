@@ -6,6 +6,10 @@ import { createBlankWorkspace } from "./workspace-schema.js";
 
 const VALID_VIEWS = new Set(["month", "day", "print"]);
 
+export function compareEmployeeOrder(a, b) {
+  return a.order - b.order || a.name.localeCompare(b.name, "ja");
+}
+
 export function normalizeEmployees(candidate) {
   return (Array.isArray(candidate) ? candidate : [])
     .filter((employee) => employee && typeof employee.id === "string" && typeof employee.name === "string")
@@ -17,7 +21,7 @@ export function normalizeEmployees(candidate) {
       order: Number.isFinite(Number(employee.order)) ? Number(employee.order) : index + 1,
       fixedOvertimeMinutes: nonNegativeMinutes(employee.fixedOvertimeMinutes)
     }))
-    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja"));
+    .sort(compareEmployeeOrder);
 }
 
 export function normalizeShiftType(shift, index) {

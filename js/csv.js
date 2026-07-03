@@ -1,4 +1,5 @@
 import { state, createId, isValidTime, scheduleSave } from "./model.js";
+import { compareEmployeeOrder } from "./workspace-normalizer.js";
 
 export function parseCsv(text) {
   const rows = [];
@@ -128,6 +129,17 @@ function importShift(record, summary) {
   const code = record.code || `shift-${record.name}`;
   const existing = state.shiftTypes.find((shift) => shift.code === code)
     ?? (!record.code ? state.shiftTypes.find((shift) => shift.name === record.name) : null);
+
+  let paidMinutes = existing?.paidMinutes;
+  if (record.paidMinutes !== "") {
+    const parsed = Number(record.paidMinutes);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      paidMinutes = Math.round(parsed);
+    } else {
+      summary.errors.push(`${record.line}行目: 実働分は0以上の数値で入力してください。`);
+    }
+  }
+
   const shiftValue = {
     code: existing?.code ?? code,
     name: record.name,
@@ -135,7 +147,7 @@ function importShift(record, summary) {
     start: hasTimes ? record.start : "",
     end: hasTimes ? record.end : "",
     isWork: hasTimes,
-    paidMinutes: record.paidMinutes === "" ? existing?.paidMinutes : Math.max(0, Number(record.paidMinutes)),
+    paidMinutes,
     overtimeMinutes: record.overtimeMinutes ?? existing?.overtimeMinutes ?? 0
   };
 
@@ -227,7 +239,7 @@ export function importMasterRows(rows) {
     }
   });
 
-  state.employees.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja"));
+  state.employees.sort(compareEmployeeOrder);
   scheduleSave();
   return summary;
 }

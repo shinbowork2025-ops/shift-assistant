@@ -1,4 +1,5 @@
 import { timeToMinutes } from "./date-time.js";
+import { mergedIntervalMinutes } from "./intervals.js";
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -72,25 +73,6 @@ export function validateBreakTotals(spanMinutes, actualBreakMinutes) {
   };
 }
 
-function mergedBreakMinutes(intervals) {
-  if (intervals.length === 0) return 0;
-  const sorted = [...intervals].sort((a, b) => a.start - b.start || a.end - b.end);
-  let total = 0;
-  let currentStart = sorted[0].start;
-  let currentEnd = sorted[0].end;
-
-  for (const interval of sorted.slice(1)) {
-    if (interval.start <= currentEnd) {
-      currentEnd = Math.max(currentEnd, interval.end);
-    } else {
-      total += currentEnd - currentStart;
-      currentStart = interval.start;
-      currentEnd = interval.end;
-    }
-  }
-  return total + currentEnd - currentStart;
-}
-
 export function validateBreaks(shiftType, breaks = []) {
   if (!shiftType?.isWork) {
     return { ok: true, span: 0, work: 0, required: 0, actual: 0, shortage: 0, issues: [] };
@@ -135,7 +117,7 @@ export function validateBreaks(shiftType, breaks = []) {
     }
   }
 
-  const totals = validateBreakTotals(shiftEnd - shiftStart, mergedBreakMinutes(intervals));
+  const totals = validateBreakTotals(shiftEnd - shiftStart, mergedIntervalMinutes(intervals));
   if (!totals.ok) issues.push(`休憩が${totals.shortage}分不足しています。`);
 
   return {

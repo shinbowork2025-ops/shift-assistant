@@ -1,7 +1,7 @@
-import { state, workspaceState, loadSavedState, setStatusHandler } from "./model.js";
+import { state, workspaceState, loadSavedState, setStatusHandler, flushPendingSave } from "./model.js";
 import { ensureBreaksForDate } from "./breaks.js";
 import { bindEvents } from "./events.js";
-import { refreshActiveView, undoLastAction, redoLastAction } from "./actions.js";
+import { refresh, undoLastAction, redoLastAction } from "./actions.js";
 import { initializeHistoryUi } from "./history-ui.js";
 import { initializePaintInput } from "./paint-input.js";
 import { elements, setSaveStatus } from "./elements.js";
@@ -23,10 +23,17 @@ async function initialize() {
   initializeHistoryUi({ onUndo: undoLastAction, onRedo: redoLastAction });
   initializePaintInput({
     tableContainer: elements.tableContainer,
-    onStrokeComplete: refreshActiveView,
+    onStrokeComplete: refresh,
     setStatus: setSaveStatus
   });
   bindEvents();
+  // デバウンス待ちの変更をタブ切替・クローズ時に取りこぼさない。
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") void flushPendingSave().catch(() => {});
+  });
+  globalThis.addEventListener("pagehide", () => {
+    void flushPendingSave().catch(() => {});
+  });
   try {
     const hadSavedState = await loadSavedState();
     ensureBreaksForDate(state.selectedDate);
