@@ -1,4 +1,4 @@
-import { state } from "./model.js";
+import { state, isShiftLocked } from "./model.js";
 import { buildMonthOverview } from "./month-overview.js";
 import {
   weekendClass,
@@ -7,6 +7,19 @@ import {
   formatHours,
   createShiftSelect
 } from "./render-common.js";
+
+function createCellLockButton(employee, day, locked) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "cell-lock-button";
+  button.dataset.employeeId = employee.id;
+  button.dataset.day = String(day);
+  button.setAttribute("aria-pressed", String(locked));
+  button.setAttribute("aria-label", `${employee.name} ${day}日のシフトを${locked ? "ロック解除" : "ロック"}`);
+  button.title = locked ? "ロック解除" : "このセルをロック";
+  button.textContent = locked ? "■" : "□";
+  return button;
+}
 
 export function renderMonthTable(elements) {
   const hasEmployees = state.employees.length > 0;
@@ -73,11 +86,16 @@ export function renderMonthTable(elements) {
 
     cells.forEach((cellData, index) => {
       const dayInfo = overview.days[index];
+      const locked = isShiftLocked(employee.id, dayInfo.day);
       const cell = document.createElement("td");
-      cell.className = [weekendClass(dayInfo.weekday), "paint-cell"].filter(Boolean).join(" ");
+      cell.className = [weekendClass(dayInfo.weekday), "paint-cell", "shift-lock-cell", locked ? "shift-cell-locked" : ""].filter(Boolean).join(" ");
       cell.dataset.employeeId = employee.id;
       cell.dataset.day = String(dayInfo.day);
-      cell.append(createShiftSelect(employee, dayInfo.day, cellData.code));
+      cell.dataset.locked = String(locked);
+      const select = createShiftSelect(employee, dayInfo.day, cellData.code);
+      select.disabled = locked;
+      select.setAttribute("aria-disabled", String(locked));
+      cell.append(select, createCellLockButton(employee, dayInfo.day, locked));
       row.append(cell);
     });
 
