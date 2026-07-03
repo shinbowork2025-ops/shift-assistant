@@ -31,7 +31,7 @@ import {
   clearCurrentMonth
 } from "./actions.js";
 
-export function bindEvents() {
+function bindWorkspaceEvents() {
   elements.workspaceSelect.addEventListener("change", async () => {
     try {
       await changeWorkspace(elements.workspaceSelect.value);
@@ -51,6 +51,12 @@ export function bindEvents() {
     event.preventDefault();
     saveWorkspaceFromDialog();
   });
+}
+
+function bindNavigationEvents() {
+  elements.monthViewButton.addEventListener("click", () => changeView("month"));
+  elements.dayViewButton.addEventListener("click", () => changeView("day"));
+  elements.printViewButton.addEventListener("click", () => changeView("print"));
 
   elements.previousMonthButton.addEventListener("click", () => shiftMonth(-1));
   elements.nextMonthButton.addEventListener("click", () => shiftMonth(1));
@@ -67,24 +73,9 @@ export function bindEvents() {
   elements.dateInput.addEventListener("change", () => {
     if (elements.dateInput.value) selectDate(elements.dateInput.value);
   });
+}
 
-  elements.monthViewButton.addEventListener("click", () => changeView("month"));
-  elements.dayViewButton.addEventListener("click", () => changeView("day"));
-  elements.printViewButton.addEventListener("click", () => changeView("print"));
-  elements.printModeSelect.addEventListener("change", refreshPrintPreview);
-  elements.printButton.addEventListener("click", printCurrentWorkspace);
-  globalThis.addEventListener("beforeprint", refreshPrintPreview);
-  elements.autoBreakButton.addEventListener("click", autoPlaceBreaks);
-
-  elements.addEmployeeButton.addEventListener("click", () => openEmployeeDialog());
-  elements.closeEmployeeDialogButton.addEventListener("click", closeEmployeeDialog);
-  elements.cancelEmployeeButton.addEventListener("click", closeEmployeeDialog);
-  elements.employeeForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    saveEmployeeFromDialog();
-  });
-  elements.deleteEmployeeButton.addEventListener("click", deleteEmployeeFromDialog);
-
+function bindScheduleEvents() {
   for (const container of [elements.tableContainer, elements.dailyChartContainer]) {
     container.addEventListener("change", (event) => {
       const select = event.target.closest(".shift-select");
@@ -99,6 +90,37 @@ export function bindEvents() {
     if (dayButton) selectDate(`${state.selectedMonth}-${String(Number(dayButton.dataset.day)).padStart(2, "0")}`);
   });
 
+  elements.autoBreakButton.addEventListener("click", autoPlaceBreaks);
+  elements.clearMonthButton.addEventListener("click", clearCurrentMonth);
+}
+
+function bindEmployeeDialogEvents() {
+  elements.addEmployeeButton.addEventListener("click", () => openEmployeeDialog());
+  elements.closeEmployeeDialogButton.addEventListener("click", closeEmployeeDialog);
+  elements.cancelEmployeeButton.addEventListener("click", closeEmployeeDialog);
+  elements.employeeForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveEmployeeFromDialog();
+  });
+  elements.deleteEmployeeButton.addEventListener("click", deleteEmployeeFromDialog);
+}
+
+function bindPrintEvents() {
+  elements.printModeSelect.addEventListener("change", refreshPrintPreview);
+  elements.printButton.addEventListener("click", printCurrentWorkspace);
+  globalThis.addEventListener("beforeprint", refreshPrintPreview);
+}
+
+async function downloadSampleWorkbook() {
+  try {
+    await downloadMasterWorkbookSample();
+  } catch (error) {
+    console.error(error);
+    setImportStatus(`Excel見本の作成失敗: ${error.message}`, true);
+  }
+}
+
+function bindDataEvents() {
   elements.importMasterButton.addEventListener("click", () => elements.importMasterInput.click());
   elements.importMasterInput.addEventListener("change", async () => {
     try {
@@ -111,14 +133,7 @@ export function bindEvents() {
       elements.importMasterInput.value = "";
     }
   });
-  elements.downloadSampleButton.addEventListener("click", async () => {
-    try {
-      await downloadMasterWorkbookSample();
-    } catch (error) {
-      console.error(error);
-      setImportStatus(`Excel見本の作成失敗: ${error.message}`, true);
-    }
-  });
+  elements.downloadSampleButton.addEventListener("click", downloadSampleWorkbook);
 
   elements.exportCsvButton.addEventListener("click", exportCsv);
   elements.backupButton.addEventListener("click", backupJson);
@@ -134,8 +149,23 @@ export function bindEvents() {
       elements.restoreInput.value = "";
     }
   });
+}
 
-  elements.clearMonthButton.addEventListener("click", clearCurrentMonth);
+// 空状態のガイドから、既存の登録・読込操作へ誘導する。
+// 読込系はデータ管理パネルを開いてから実行し、結果の状態表示が見えるようにする。
+function bindGuideEvents() {
+  elements.emptyAddEmployeeButton.addEventListener("click", () => openEmployeeDialog());
+  elements.emptyImportButton.addEventListener("click", () => {
+    elements.dataPanel.open = true;
+    elements.importMasterInput.click();
+  });
+  elements.emptySampleButton.addEventListener("click", () => {
+    elements.dataPanel.open = true;
+    void downloadSampleWorkbook();
+  });
+}
+
+function bindConfirmDialogEvents() {
   elements.confirmCancelButton.addEventListener("click", (event) => {
     event.preventDefault();
     resolveConfirmation(false);
@@ -148,4 +178,15 @@ export function bindEvents() {
     event.preventDefault();
     resolveConfirmation(false);
   });
+}
+
+export function bindEvents() {
+  bindWorkspaceEvents();
+  bindNavigationEvents();
+  bindScheduleEvents();
+  bindEmployeeDialogEvents();
+  bindPrintEvents();
+  bindDataEvents();
+  bindGuideEvents();
+  bindConfirmDialogEvents();
 }
