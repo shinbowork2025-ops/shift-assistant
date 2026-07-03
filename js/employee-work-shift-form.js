@@ -56,7 +56,7 @@ function renderPreferredOptions(employee) {
   const fragment = document.createDocumentFragment();
   const automatic = document.createElement("option");
   automatic.value = "";
-  automatic.textContent = "自動（旦存傾向と配置バランスを優先）";
+  automatic.textContent = "自動（既存傾向と配置バランスを優先）";
   fragment.append(automatic);
   for (const shiftType of shifts) {
     const option = document.createElement("option");
@@ -86,7 +86,7 @@ function syncPreferredAvailability() {
     controls.preferred.value = "";
   }
   controls.selectedCount.textContent = controls.shiftInputs.length
-    ? `${checked.size}/${controls.shiftInputs.length}章馞を見叼
+    ? `${checked.size}/${controls.shiftInputs.length}種類を許可`
     : "勤務シフトがありません";
 }
 
@@ -99,7 +99,7 @@ export function initializeEmployeeWorkShiftForm() {
   const section = document.createElement("fieldset");
   section.className = "employee-work-shift-settings";
   const legend = document.createElement("legend");
-  legend.textContent = "勧務シフトの自動割当設定";
+  legend.textContent = "勤務シフトの自動割当設定";
 
   const preferred = document.createElement("select");
   preferred.id = "employeePreferredShiftInput";
@@ -121,20 +121,18 @@ export function initializeEmployeeWorkShiftForm() {
   const shiftList = document.createElement("div");
   shiftList.className = "work-shift-check-list";
   shiftList.setAttribute("role", "group");
-  shiftList.setAttribute("aria-label", "使用可能な勧務シフト");
+  shiftList.setAttribute("aria-label", "使用可能な勤務シフト");
 
   const avoidLabel = document.createElement("label");
   avoidLabel.className = "inline-check-label";
   const avoidLateEarly = document.createElement("input");
   avoidLateEarly.type = "checkbox";
   avoidLateEarly.id = "employeeAvoidLateEarlyInput";
-  avoidLabel.append(avoidLateEarly, document.createTextNode("遅番の翌日に早番を割り当てない（務務間隔11時間を目安）");
+  avoidLabel.append(avoidLateEarly, document.createTextNode("遅番の翌日に早番を割り当てない（勤務間隔11時間を目安）"));
 
   const note = document.createElement("p");
   note.className = "rest-pattern-description";
-  note.textContent = "使用可能な務務シフトは最低1章馞必要です。八章馞を見召する状態の保存上『制�nなし』ににります。優先シフトは固定ではく、必要な晒�⿎����C���ώ
-�
-K���j��c強く優先します。";
+  note.textContent = "使用可能な勤務シフトは最低1種類必要です。全て許可した状態は保存上「制限なし」として扱います。優先シフトは固定ではなく、必要な時間帯とのバランスを見ながら強く優先します。";
 
   section.append(
     legend,
