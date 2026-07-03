@@ -5,6 +5,12 @@ import {
   applyWorkspaceToState,
   syncWorkspaceFromState
 } from "../js/workspace-normalizer.js";
+import {
+  isShiftLockedInData,
+  setShiftLockInData,
+  clearMonthShiftLocks,
+  removeEmployeeShiftLocks
+} from "../js/shift-locks.js";
 
 test("印刷ビューを含むワークスペース状態を維持する", () => {
   const workspace = normalizeWorkspace({
@@ -98,4 +104,20 @@ test("不正なロック値と対象月外の日付を正規化で除外する",
   assert.deepEqual(workspace.shiftLocks, {
     "2026-07": { e1: { "2026-07-01": true } }
   });
+});
+
+test("ロックデータをセル・従業員・月単位で整理する", () => {
+  const locks = {};
+  setShiftLockInData(locks, "2026-07", "e1", "2026-07-01", true);
+  setShiftLockInData(locks, "2026-07", "e1", "2026-07-02", true);
+  setShiftLockInData(locks, "2026-07", "e2", "2026-07-03", true);
+  setShiftLockInData(locks, "2026-08", "e1", "2026-08-01", true);
+  assert.equal(isShiftLockedInData(locks, "2026-07", "e1", "2026-07-01"), true);
+
+  setShiftLockInData(locks, "2026-07", "e1", "2026-07-01", false);
+  assert.equal(isShiftLockedInData(locks, "2026-07", "e1", "2026-07-01"), false);
+  assert.equal(removeEmployeeShiftLocks(locks, "e1"), 2);
+  assert.deepEqual(locks, { "2026-07": { e2: { "2026-07-03": true } } });
+  assert.equal(clearMonthShiftLocks(locks, "2026-07"), 1);
+  assert.deepEqual(locks, {});
 });
