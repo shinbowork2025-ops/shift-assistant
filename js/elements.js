@@ -1,4 +1,5 @@
 import { state, getActiveWorkspace, currentMonthValue } from "./model.js";
+import { initializeEmployeeRestForm, populateEmployeeRestForm } from "./employee-rest-form.js";
 
 const elementIds = [
   "workspaceSelect", "workspaceUpdatedAt", "newWorkspaceButton", "editWorkspaceButton",
@@ -49,6 +50,7 @@ export function closeWorkspaceDialog() {
 
 export function openEmployeeDialog(employeeId = "") {
   const employee = state.employees.find((item) => item.id === employeeId);
+  initializeEmployeeRestForm();
   elements.employeeForm.reset();
   elements.employeeIdInput.value = employee?.id ?? "";
   elements.employeeNameInput.value = employee?.name ?? "";
@@ -56,6 +58,7 @@ export function openEmployeeDialog(employeeId = "") {
   elements.employeeDepartmentInput.value = employee?.department ?? "";
   elements.employeeOrderInput.value = employee ? String(employee.order ?? "") : String(state.employees.length + 1);
   elements.employeeFixedOvertimeInput.value = employee ? String((employee.fixedOvertimeMinutes ?? 0) / 60) : "0";
+  populateEmployeeRestForm(employee);
   elements.employeeDialogTitle.textContent = employee ? "従業員を編集" : "従業員を追加";
   elements.deleteEmployeeButton.hidden = !employee;
   elements.employeeDialog.showModal();
