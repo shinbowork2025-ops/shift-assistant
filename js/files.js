@@ -21,7 +21,11 @@ function downloadFile(fileName, content, mimeType) {
 
 function csvCell(value) {
   const text = String(value ?? "");
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  // Excelで式として解釈されうる先頭文字を無害化する。
+  // 「-2」のような負数（固定残業残など）は式ではないため対象外。
+  const needsFormulaGuard = /^[=@\t\r]/.test(text) || /^[+-](?![\d.])/.test(text);
+  const guarded = needsFormulaGuard ? `'${text}` : text;
+  return /[",\r\n]/.test(guarded) ? `"${guarded.replaceAll('"', '""')}"` : guarded;
 }
 
 function formatHours(hours) {
