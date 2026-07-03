@@ -55,7 +55,7 @@ export function planEmployeeDaysOff(options) {
     fixedWeekdays
   );
   const requestedTarget = normalizeTargetDaysOff(employee.targetDaysOff);
-  const targetDaysOff = Math.max(requestedTarget || preferredDays.size, fixedDays.size);
+  const targetDaysOff = Math.max(requestedTarget || patternDays.size, fixedDays.size);
   const warnings = [];
   if (requestedTarget > 0 && requestedTarget < fixedDays.size) {
     warnings.push(`月間公休日数${requestedTarget}日より固定休曜日${fixedDays.size}日の方が多いため、固定休を優先します。`);
