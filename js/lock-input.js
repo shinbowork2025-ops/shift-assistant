@@ -26,6 +26,7 @@ let tableContainer = null;
 let activeStroke = null;
 let onStrokeComplete = () => {};
 let setStatus = () => {};
+let initialized = false;
 
 function active() {
   return getMonthEditMode() === "lock-paint";
@@ -37,6 +38,14 @@ function actionLabel(locked = lockState.targetLocked) {
 
 function historyLabel(locked = lockState.targetLocked) {
   return `セル${actionLabel(locked)}`;
+}
+
+function loadStylesheet() {
+  if (document.querySelector('link[href="./lock.css"]')) return;
+  const stylesheet = document.createElement("link");
+  stylesheet.rel = "stylesheet";
+  stylesheet.href = "./lock.css";
+  document.head.append(stylesheet);
 }
 
 function createControls() {
@@ -237,6 +246,9 @@ function applyKeyboardLock(event) {
 }
 
 export function initializeLockInput(options) {
+  if (initialized) return;
+  initialized = true;
+  loadStylesheet();
   tableContainer = options.tableContainer;
   onStrokeComplete = options.onStrokeComplete ?? onStrokeComplete;
   setStatus = options.setStatus ?? setStatus;
@@ -260,6 +272,7 @@ export function initializeLockInput(options) {
   tableContainer.addEventListener("keydown", applyKeyboardLock);
   globalThis.addEventListener("blur", () => finishStroke());
   subscribeMonthEditMode(syncLockInput);
+  new MutationObserver(syncLockInput).observe(tableContainer, { childList: true });
   syncLockInput();
 }
 
