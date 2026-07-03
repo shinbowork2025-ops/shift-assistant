@@ -28,9 +28,14 @@ function workingAssignments(dateValue) {
     });
 }
 
+// スロットキーは常に15分グリッドへ整列させる。開始時刻が15分境界でない
+// シフトや休憩でも、混雑度マップのキーが候補スロットと一致するようにする。
 function slotRange(start, duration) {
+  const end = start + duration;
   const slots = [];
-  for (let minute = start; minute < start + duration; minute += SLOT_MINUTES) slots.push(minute);
+  for (let minute = Math.floor(start / SLOT_MINUTES) * SLOT_MINUTES; minute < end; minute += SLOT_MINUTES) {
+    slots.push(minute);
+  }
   return slots;
 }
 
@@ -39,7 +44,7 @@ function activeWorkersBySlot(assignments) {
   for (const { shiftType } of assignments) {
     const start = timeToMinutes(shiftType.start);
     const end = timeToMinutes(shiftType.end);
-    for (let minute = start; minute < end; minute += SLOT_MINUTES) {
+    for (const minute of slotRange(start, end - start)) {
       active.set(minute, (active.get(minute) ?? 0) + 1);
     }
   }
