@@ -65,7 +65,7 @@ test("ロック済みセルと既存シフトを空欄限定モードで維持�
   assert.equal(plan.employeeResults[0].actualDaysOff, 2);
 });
 
-test("再配置モードでは未ロックの公休を移動できる", () => {
+test("再配置モードでは未ロックの公休を別日に移動できる", () => {
   const plan = buildDaysOffPlan({
     monthValue: "2026-07",
     employees: [{ ...employee("e1", 1, "2on1off", 1), restPatternOffset: 0 }],
@@ -83,7 +83,8 @@ test("再配置モードでは未ロックの公休を移動できる", () => {
     mode: "replace-unlocked"
   });
   assert.ok(plan.changes.some((item) => item.day === 1 && item.after === ""));
-  assert.ok(plan.changes.some((item) => item.day === 3 && item.after === "7"));
+  assert.ok(plan.changes.some((item) => item.day !== 1 && item.after === "7"));
+  assert.equal(plan.changes.some((item) => item.day === 3 && item.after === "7"), false);
 });
 
 test("休み方未設定の従業員は変更しない", () => {
