@@ -121,3 +121,34 @@ test("ロックデータをセル・従業員・月単位で整理する", () =>
   assert.equal(clearMonthShiftLocks(locks, "2026-07"), 1);
   assert.deepEqual(locks, {});
 });
+
+test("既存従業員は手動扱い、新設定は正規化して保持する", () => {
+  const workspace = normalizeWorkspace({
+    id: "w1",
+    name: "園芸",
+    selectedMonth: "2026-07",
+    selectedDate: "2026-07-01",
+    shiftTypes: [],
+    shifts: {},
+    breaks: {},
+    employees: [
+      { id: "e1", name: "旧データ" },
+      {
+        id: "e2",
+        name: "設定済み",
+        restPatternId: "3on1off",
+        restPatternOffset: 2,
+        targetDaysOff: 9,
+        fixedDaysOff: [1, 4, 4, 9]
+      }
+    ]
+  });
+  assert.equal(workspace.employees[0].restPatternId, "none");
+  assert.equal(workspace.employees[0].restPatternOffset, -1);
+  assert.equal(workspace.employees[0].targetDaysOff, 0);
+  assert.deepEqual(workspace.employees[0].fixedDaysOff, []);
+  assert.equal(workspace.employees[1].restPatternId, "3on1off");
+  assert.equal(workspace.employees[1].restPatternOffset, 2);
+  assert.equal(workspace.employees[1].targetDaysOff, 9);
+  assert.deepEqual(workspace.employees[1].fixedDaysOff, [1, 4]);
+});
