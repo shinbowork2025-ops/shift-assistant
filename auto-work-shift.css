@@ -1,0 +1,190 @@
+.employee-work-shift-settings {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.employee-work-shift-settings > legend {
+  padding: 0 6px;
+  font-weight: 800;
+}
+
+.employee-work-shift-settings > label {
+  display: grid;
+  gap: 5px;
+}
+
+.work-shift-toolbar,
+.auto-work-candidate-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.button.compact {
+  min-height: 32px;
+  padding: 5px 9px;
+  font-size: .8rem;
+}
+
+.work-shift-count,
+.auto-work-candidate-toolbar span {
+  color: var(--text-muted);
+  font-size: .8rem;
+}
+
+.work-shift-check-list,
+.auto-work-candidate-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px;
+  max-height: 210px;
+  overflow: auto;
+  border: 1px solid #d7dde4;
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--surface, #fff);
+}
+
+.work-shift-check,
+.auto-work-candidate-list label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: .8rem;
+}
+
+.work-shift-check:hover,
+.auto-work-candidate-list label:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #1f2937;
+}
+
+.work-shift-check span,
+.auto-work-candidate-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-check-label {
+  display: flex !important;
+  align-items: flex-start;
+  grid-template-columns: auto 1fr;
+  gap: 7px !important;
+  font-size: .85rem;
+  line-height: 1.5;
+}
+
+.auto-work-shift-dialog {
+  width: min(820px, calc(100vw - 24px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.auto-work-shift-dialog form {
+  display: grid;
+  gap: 14px;
+}
+
+.auto-work-shift-dialog > form > label {
+  display: grid;
+  gap: 5px;
+}
+
+.auto-work-candidates {
+  display: grid;
+  gap: 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.auto-work-candidates legend {
+  padding: 0 6px;
+  font-weight: 800;
+}
+
+.auto-work-note {
+  margin: 0;
+  border-left: 4px solid #2563eb;
+  padding: 9px 11px;
+  background: #eff6ff;
+  color: #1e3a5f;
+  font-size: .85rem;
+  line-height: 1.6;
+}
+
+.auto-work-preview {
+  min-height: 90px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fbff;
+  color: #1f2937;
+}
+
+.auto-work-preview p,
+.auto-work-result p {
+  margin: 5px 0 10px;
+}
+
+.auto-work-employee-list,
+.auto-work-preview details ul,
+.auto-work-result details ul {
+  margin: 8px 0 0;
+  padding-left: 1.3rem;
+}
+
+.auto-work-employee-list {
+  columns: 2;
+  column-gap: 24px;
+}
+
+.auto-work-employee-list li {
+  break-inside: avoid;
+  margin-bottom: 4px;
+}
+
+.auto-work-employee-list li.warning {
+  font-weight: 700;
+}
+
+.auto-work-result {
+  margin: 0 0 14px;
+  border: 1px solid #93c5fd;
+  border-left: 5px solid #2563eb;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #eff6ff;
+  color: #1f2937;
+}
+
+.employee-work-badge {
+  display: block;
+  margin-top: 2px;
+  color: #1d4ed8;
+  font-size: .7rem;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .auto-work-employee-list {
+    columns: 1;
+  }
+}
+
+@media print {
+  .auto-work-result {
+    display: none !important;
+  }
+}
