@@ -1,7 +1,8 @@
 import { state } from "../model.js";
 import { ensureBreaksForDate } from "../breaks.js";
-import { importMasterCsvText, importMasterRows, formatImportSummary } from "../csv.js";
+import { parseCsv, importMasterRows, formatImportSummary } from "../csv.js";
 import { prepareMasterWorkbookRows } from "../master-workbook.js";
+import { canonicalizeMasterShiftRows } from "../master-shift-code-normalizer.js";
 import { restoreJson } from "../files.js";
 import { runWithHistory, clearHistory } from "../history.js";
 import { setSaveStatus, setImportStatus } from "../elements.js";
@@ -16,13 +17,15 @@ export async function importMasterFile(file) {
     const { readWorkbookRows } = await import("../xlsx-lite.js");
     const workbook = await readWorkbookRows(file);
     const prepared = prepareMasterWorkbookRows(workbook.worksheets);
-    summary = runWithHistory("Excelマスターを読み込み", () => importMasterRows(prepared.rows));
+    const canonicalRows = canonicalizeMasterShiftRows(prepared.rows);
+    summary = runWithHistory("Excelマスターを読み込み", () => importMasterRows(canonicalRows));
     summary.ignoredSupplementRows = prepared.ignoredSupplementRows;
     summary.filledShiftNames = prepared.filledShiftNames;
     sourceLabel = `Excel「${prepared.usedSheetNames.join("＋")}」`;
   } else if (lowerName.endsWith(".csv") || file.type.includes("csv") || file.type.startsWith("text/")) {
     const text = await file.text();
-    summary = runWithHistory("CSVマスターを読み込み", () => importMasterCsvText(text));
+    const canonicalRows = canonicalizeMasterShiftRows(parseCsv(text));
+    summary = runWithHistory("CSVマスターを読み込み", () => importMasterRows(canonicalRows));
     sourceLabel = "CSV";
   } else {
     throw new Error("対応形式はCSVまたは.xlsxです。古い.xls形式には対応していません。");

@@ -1,4 +1,11 @@
-import { state, workspaceState, loadSavedState, setStatusHandler, flushPendingSave } from "./model.js";
+import {
+  state,
+  workspaceState,
+  loadSavedState,
+  setStatusHandler,
+  flushPendingSave,
+  scheduleSave
+} from "./model.js";
 import { ensureBreaksForDate } from "./breaks.js";
 import { bindEvents } from "./events.js";
 import { refresh, undoLastAction, redoLastAction } from "./actions.js";
@@ -6,6 +13,7 @@ import { initializeHistoryUi } from "./history-ui.js";
 import { initializePaintInput } from "./paint-input.js";
 import { elements, setSaveStatus } from "./elements.js";
 import { render } from "./render.js";
+import { consumeWorkspaceMigrationFlag } from "./workspace-normalizer.js";
 
 function loadStylesheet(href) {
   if (document.querySelector(`link[href="${href}"]`)) return;
@@ -35,8 +43,12 @@ async function initialize() {
   });
   try {
     const hadSavedState = await loadSavedState();
+    const shiftCatalogMigrated = consumeWorkspaceMigrationFlag();
     ensureBreaksForDate(state.selectedDate);
-    if (workspaceState.migratedLegacyState) {
+    if (shiftCatalogMigrated) {
+      scheduleSave();
+      setSaveStatus("旧シフト区分を整理し、公休を「休」へ統一しました");
+    } else if (workspaceState.migratedLegacyState) {
       setSaveStatus("既存データを「無題のシフト表」へ移行しました");
     } else {
       setSaveStatus(hadSavedState ? "保存データを読み込みました" : "新しいシフト表を開始しました");

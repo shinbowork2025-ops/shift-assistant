@@ -7,12 +7,12 @@ const employees = [
   { id: "e2", name: "佐藤", order: 2 }
 ];
 const shiftTypes = [
-  { code: "early", name: "早番", start: "09:00", end: "18:00", isWork: true }
+  { code: "01", name: "01", start: "09:00", end: "18:00", isWork: true }
 ];
 const shifts = {
   "2026-07": {
-    e1: { "2026-07-02": "early" },
-    e2: { "2026-07-02": "early" }
+    e1: { "2026-07-02": "01" },
+    e2: { "2026-07-02": "01" }
   }
 };
 const breaks = {
@@ -68,9 +68,9 @@ test("雇用区分ごとの実配置人数を集計する", () => {
     shiftTypes,
     shifts: {
       "2026-07": {
-        e1: { "2026-07-02": "early" },
-        e2: { "2026-07-02": "early" },
-        e3: { "2026-07-02": "early" }
+        e1: { "2026-07-02": "01" },
+        e2: { "2026-07-02": "01" },
+        e3: { "2026-07-02": "01" }
       }
     },
     breaks: {

@@ -128,7 +128,7 @@ export function initializeEmployeeWorkShiftForm() {
   const avoidLateEarly = document.createElement("input");
   avoidLateEarly.type = "checkbox";
   avoidLateEarly.id = "employeeAvoidLateEarlyInput";
-  avoidLabel.append(avoidLateEarly, document.createTextNode("遅番の翌日に早番を割り当てない（勤務間隔11時間を目安）"));
+  avoidLabel.append(avoidLateEarly, document.createTextNode("終了が遅い勤務の翌日に開始が早い勤務を割り当てない（勤務間隔11時間を目安）"));
 
   const note = document.createElement("p");
   note.className = "rest-pattern-description";

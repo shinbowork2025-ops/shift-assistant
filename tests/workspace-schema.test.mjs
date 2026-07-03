@@ -9,7 +9,7 @@ import {
 } from "../js/workspace-schema.js";
 
 const shiftTypes = [
-  { code: "early", name: "早番", start: "09:00", end: "18:00", isWork: true }
+  { code: "01", name: "01", start: "09:00", end: "18:00", isWork: true }
 ];
 
 test("既存の単一シフト表を無題のワークスペースへ移行する", () => {
@@ -18,7 +18,7 @@ test("既存の単一シフト表を無題のワークスペースへ移行す�
     selectedDate: "2026-07-15",
     employees: [{ id: "e1", name: "田中" }],
     shiftTypes,
-    shifts: { "2026-07": { e1: { "2026-07-15": "early" } } },
+    shifts: { "2026-07": { e1: { "2026-07-15": "01" } } },
     breaks: { "2026-07-15": { e1: [{ start: "12:00", end: "13:00" }] } },
     updatedAt: "2026-07-01T00:00:00.000Z"
   };
@@ -36,7 +36,7 @@ test("既存の単一シフト表を無題のワークスペースへ移行す�
   assert.equal(migrated.workspaces.length, 1);
   assert.equal(migrated.workspaces[0].name, "無題のシフト表");
   assert.equal(migrated.workspaces[0].employees[0].name, "田中");
-  assert.equal(migrated.workspaces[0].shifts["2026-07"].e1["2026-07-15"], "early");
+  assert.equal(migrated.workspaces[0].shifts["2026-07"].e1["2026-07-15"], "01");
   assert.equal(migrated.workspaces[0].breaks["2026-07-15"].e1[0].start, "12:00");
 });
 

@@ -2,6 +2,7 @@ import { currentMonthValue, getDaysInMonth, isDateValue, isMonthValue, isValidTi
 import { createId } from "./ids.js";
 import { normalizeEmploymentType } from "./employment-types.js";
 import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
+import { migrateShiftCatalog } from "./shift-catalog-migration.js";
 import { nonNegativeMinutes } from "./shift-metrics.js";
 import { normalizeShiftLocks } from "./shift-locks.js";
 import {
@@ -18,6 +19,13 @@ import {
 import { createBlankWorkspace } from "./workspace-schema.js";
 
 const VALID_VIEWS = new Set(["month", "day", "print"]);
+let workspaceMigrationPending = false;
+
+export function consumeWorkspaceMigrationFlag() {
+  const migrated = workspaceMigrationPending;
+  workspaceMigrationPending = false;
+  return migrated;
+}
 
 export function compareEmployeeOrder(a, b) {
   return a.order - b.order || a.name.localeCompare(b.name, "ja");
@@ -80,6 +88,16 @@ export function normalizeWorkspace(candidate, index = 0) {
   if (!selectedDate.startsWith(selectedMonth)) selectedDate = `${selectedMonth}-01`;
   const now = new Date().toISOString();
 
+  const migration = migrateShiftCatalog({
+    employees: normalizeEmployees(candidate.employees),
+    shiftTypes: normalizeShiftTypes(candidate.shiftTypes),
+    shifts: candidate.shifts && typeof candidate.shifts === "object" ? structuredClone(candidate.shifts) : {},
+    breaks: candidate.breaks && typeof candidate.breaks === "object" ? structuredClone(candidate.breaks) : {},
+    shiftLocks: normalizeShiftLocks(candidate.shiftLocks),
+    defaultShiftTypes: DEFAULT_SHIFT_TYPES
+  });
+  if (migration.migrated) workspaceMigrationPending = true;
+
   return {
     id: typeof candidate.id === "string" && candidate.id ? candidate.id : createId(`workspace-${index + 1}`),
     name: String(candidate.name || "無題のシフト表").trim().slice(0, 60) || "無題のシフト表",
@@ -87,11 +105,11 @@ export function normalizeWorkspace(candidate, index = 0) {
     selectedMonth,
     selectedDate,
     currentView: VALID_VIEWS.has(candidate.currentView) ? candidate.currentView : "month",
-    employees: normalizeEmployees(candidate.employees),
-    shiftTypes: normalizeShiftTypes(candidate.shiftTypes),
-    shifts: candidate.shifts && typeof candidate.shifts === "object" ? structuredClone(candidate.shifts) : {},
-    breaks: candidate.breaks && typeof candidate.breaks === "object" ? structuredClone(candidate.breaks) : {},
-    shiftLocks: normalizeShiftLocks(candidate.shiftLocks),
+    employees: migration.employees,
+    shiftTypes: migration.shiftTypes,
+    shifts: migration.shifts,
+    breaks: migration.breaks,
+    shiftLocks: migration.shiftLocks,
     createdAt: candidate.createdAt ?? candidate.updatedAt ?? now,
     updatedAt: candidate.updatedAt ?? now
   };
