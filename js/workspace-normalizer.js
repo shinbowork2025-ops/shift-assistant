@@ -2,6 +2,7 @@ import { currentMonthValue, getDaysInMonth, isDateValue, isMonthValue, isValidTi
 import { createId } from "./ids.js";
 import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
 import { nonNegativeMinutes } from "./shift-metrics.js";
+import { normalizeShiftLocks } from "./shift-locks.js";
 import { createBlankWorkspace } from "./workspace-schema.js";
 
 const VALID_VIEWS = new Set(["month", "day", "print"]);
@@ -70,6 +71,7 @@ export function normalizeWorkspace(candidate, index = 0) {
     shiftTypes: normalizeShiftTypes(candidate.shiftTypes),
     shifts: candidate.shifts && typeof candidate.shifts === "object" ? structuredClone(candidate.shifts) : {},
     breaks: candidate.breaks && typeof candidate.breaks === "object" ? structuredClone(candidate.breaks) : {},
+    shiftLocks: normalizeShiftLocks(candidate.shiftLocks),
     createdAt: candidate.createdAt ?? candidate.updatedAt ?? now,
     updatedAt: candidate.updatedAt ?? now
   };
@@ -87,7 +89,7 @@ export function createInitialWorkspace(name = "無題のシフト表", targetMon
 }
 
 export function applyWorkspaceToState(targetState, workspace) {
-  targetState.schemaVersion = 3;
+  targetState.schemaVersion = 4;
   targetState.selectedMonth = workspace.selectedMonth;
   targetState.selectedDate = workspace.selectedDate;
   targetState.currentView = VALID_VIEWS.has(workspace.currentView) ? workspace.currentView : "month";
@@ -95,6 +97,7 @@ export function applyWorkspaceToState(targetState, workspace) {
   targetState.shiftTypes = structuredClone(workspace.shiftTypes);
   targetState.shifts = structuredClone(workspace.shifts);
   targetState.breaks = structuredClone(workspace.breaks);
+  targetState.shiftLocks = structuredClone(workspace.shiftLocks);
   targetState.updatedAt = workspace.updatedAt;
 }
 
@@ -108,6 +111,7 @@ export function syncWorkspaceFromState(workspace, sourceState) {
   workspace.shiftTypes = sourceState.shiftTypes;
   workspace.shifts = sourceState.shifts;
   workspace.breaks = sourceState.breaks;
+  workspace.shiftLocks = sourceState.shiftLocks;
   workspace.updatedAt = sourceState.updatedAt ?? workspace.updatedAt;
   return workspace;
 }
