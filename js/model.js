@@ -29,6 +29,12 @@ import { buildMonthOverview } from "./month-overview.js";
 import { createId } from "./ids.js";
 import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
 import {
+  isShiftLockedInData,
+  setShiftLockInData,
+  clearMonthShiftLocks,
+  removeEmployeeShiftLocks
+} from "./shift-locks.js";
+import {
   normalizeWorkspace,
   createInitialWorkspace,
   applyWorkspaceToState,
@@ -58,7 +64,7 @@ export {
 };
 
 export const state = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   selectedMonth: currentMonthValue(),
   selectedDate: currentDateValue(),
   currentView: "month",
@@ -66,6 +72,7 @@ export const state = {
   shiftTypes: structuredClone(DEFAULT_SHIFT_TYPES),
   shifts: {},
   breaks: {},
+  shiftLocks: {},
   updatedAt: null
 };
 
@@ -222,6 +229,30 @@ export function getShift(employeeId, day) {
   return state.shifts[state.selectedMonth]?.[employeeId]?.[dateKey(state.selectedMonth, day)] ?? "";
 }
 
+export function isShiftLocked(employeeId, day, monthValue = state.selectedMonth) {
+  return isShiftLockedInData(state.shiftLocks, monthValue, employeeId, dateKey(monthValue, day));
+}
+
+export function setShiftLock(employeeId, day, locked, options = {}) {
+  const monthValue = options.monthValue ?? state.selectedMonth;
+  const dateValue = dateKey(monthValue, day);
+  setShiftLockInData(state.shiftLocks, monthValue, employeeId, dateValue, Boolean(locked));
+  if (options.save !== false) scheduleSave();
+  return Boolean(locked);
+}
+
+export function clearShiftLocksForMonth(monthValue = state.selectedMonth, options = {}) {
+  const count = clearMonthShiftLocks(state.shiftLocks, monthValue);
+  if (count > 0 && options.save !== false) scheduleSave();
+  return count;
+}
+
+export function removeShiftLocksForEmployee(employeeId, options = {}) {
+  const count = removeEmployeeShiftLocks(state.shiftLocks, employeeId);
+  if (count > 0 && options.save !== false) scheduleSave();
+  return count;
+}
+
 function removeEmptyShiftContainers(monthValue, employeeId) {
   const employeeShifts = state.shifts[monthValue]?.[employeeId];
   if (employeeShifts && Object.keys(employeeShifts).length === 0) delete state.shifts[monthValue][employeeId];
@@ -233,8 +264,9 @@ function removeEmptyBreakContainers(dateValue) {
 }
 
 export function setShift(employeeId, day, shiftCode, options = {}) {
+  if (options.respectLock && isShiftLocked(employeeId, day, options.monthValue ?? state.selectedMonth)) return false;
   const shouldSave = options.save !== false;
-  const monthValue = state.selectedMonth;
+  const monthValue = options.monthValue ?? state.selectedMonth;
   const key = dateKey(monthValue, day);
 
   if (shiftCode) {
@@ -249,6 +281,7 @@ export function setShift(employeeId, day, shiftCode, options = {}) {
   delete state.breaks[key]?.[employeeId];
   removeEmptyBreakContainers(key);
   if (shouldSave) scheduleSave();
+  return true;
 }
 
 export function getBreaks(employeeId, dateValue) {
