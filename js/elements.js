@@ -12,7 +12,8 @@ const elementIds = [
   "printTitle", "printModeSelect", "printButton", "printPreviewContainer", "printPanel",
   "saveStatus", "importStatus", "emptyState", "dailyEmptyState", "tableContainer", "dailyChartContainer",
   "legend", "monthPanel", "dailyPanel", "employeeDialog", "employeeForm", "employeeDialogTitle",
-  "employeeIdInput", "employeeNameInput", "employeeCodeInput", "employeeDepartmentInput", "employeeFixedOvertimeInput",
+  "employeeIdInput", "employeeNameInput", "employeeCodeInput", "employeeDepartmentInput", "employeeOrderInput",
+  "employeeFixedOvertimeInput",
   "closeEmployeeDialogButton", "cancelEmployeeButton", "deleteEmployeeButton", "confirmDialog",
   "confirmTitle", "confirmMessage", "confirmCancelButton", "confirmOkButton"
 ];
@@ -53,6 +54,7 @@ export function openEmployeeDialog(employeeId = "") {
   elements.employeeNameInput.value = employee?.name ?? "";
   elements.employeeCodeInput.value = employee?.code ?? "";
   elements.employeeDepartmentInput.value = employee?.department ?? "";
+  elements.employeeOrderInput.value = employee ? String(employee.order ?? "") : String(state.employees.length + 1);
   elements.employeeFixedOvertimeInput.value = employee ? String((employee.fixedOvertimeMinutes ?? 0) / 60) : "0";
   elements.employeeDialogTitle.textContent = employee ? "従業員を編集" : "従業員を追加";
   elements.deleteEmployeeButton.hidden = !employee;

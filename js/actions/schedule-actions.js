@@ -7,6 +7,7 @@ import {
   dateKey
 } from "../model.js";
 import { generateBreaksForDate } from "../breaks.js";
+import { compareEmployeeOrder } from "../workspace-normalizer.js";
 import { runWithHistory } from "../history.js";
 import {
   elements,
@@ -14,7 +15,7 @@ import {
   closeEmployeeDialog,
   confirmAction
 } from "../elements.js";
-import { refresh, refreshActiveView } from "./view-actions.js";
+import { refresh } from "./view-actions.js";
 
 export function handleShiftChange(select) {
   const day = Number(select.dataset.day);
@@ -29,7 +30,7 @@ export function handleShiftChange(select) {
   });
 
   if (state.currentView === "day") state.selectedDate = changedDate;
-  refreshActiveView();
+  refresh();
 }
 
 export function saveEmployeeFromDialog() {
@@ -39,13 +40,18 @@ export function saveEmployeeFromDialog() {
   const fixedOvertimeHours = Number(elements.employeeFixedOvertimeInput.value || 0);
   if (!name || !Number.isFinite(fixedOvertimeHours) || fixedOvertimeHours < 0) return;
   const fixedOvertimeMinutes = Math.round(fixedOvertimeHours * 60);
+  const orderValue = Number(elements.employeeOrderInput.value);
+  const hasValidOrder = Number.isFinite(orderValue) && orderValue > 0;
   const employeeId = elements.employeeIdInput.value;
   const label = employeeId ? "従業員情報を編集" : "従業員を追加";
 
   runWithHistory(label, () => {
     if (employeeId) {
       const employee = state.employees.find((item) => item.id === employeeId);
-      if (employee) Object.assign(employee, { name, code, department, fixedOvertimeMinutes });
+      if (employee) {
+        Object.assign(employee, { name, code, department, fixedOvertimeMinutes });
+        if (hasValidOrder) employee.order = orderValue;
+      }
     } else {
       state.employees.push({
         id: createId("employee"),
@@ -53,9 +59,10 @@ export function saveEmployeeFromDialog() {
         code,
         department,
         fixedOvertimeMinutes,
-        order: state.employees.length + 1
+        order: hasValidOrder ? orderValue : state.employees.length + 1
       });
     }
+    state.employees.sort(compareEmployeeOrder);
     scheduleSave();
   });
 
@@ -82,7 +89,7 @@ export async function deleteEmployeeFromDialog() {
 
 export function autoPlaceBreaks() {
   runWithHistory("当日の休憩を再配置", () => generateBreaksForDate(state.selectedDate));
-  refreshActiveView();
+  refresh();
   setSaveStatus("休憩を再配置しました");
 }
 
@@ -97,5 +104,5 @@ export async function clearCurrentMonth() {
     }
     scheduleSave();
   });
-  refreshActiveView();
+  refresh();
 }
