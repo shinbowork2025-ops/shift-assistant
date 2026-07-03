@@ -24,6 +24,14 @@ function employee(id, order, settings = {}) {
   };
 }
 
+function offDaysFrom(startDay) {
+  const values = {};
+  for (let day = startDay; day <= 31; day += 1) {
+    values[`2026-07-${String(day).padStart(2, "0")}`] = "7";
+  }
+  return values;
+}
+
 test("勤務間隔を翌日開始までの分数で計算する", () => {
   assert.equal(restGapMinutes(shiftTypes[2], shiftTypes[0]), 8 * 60);
   assert.equal(hasShortRest(shiftTypes[2], shiftTypes[0]), true);
@@ -110,7 +118,7 @@ test("残業がない候補を固定残業超過前に優先する", () => {
     monthValue: "2026-07",
     employees: [employee("e1", 1, { allowedShiftCodes: ["M", "L"], fixedOvertimeMinutes: 0 })],
     shiftTypes,
-    shifts: { "2026-07": { e1: { "2026-07-02": "7" } } },
+    shifts: { "2026-07": { e1: offDaysFrom(2) } },
     shiftLocks: {},
     selectedShiftCodes: ["M", "L"],
     mode: "empty-only"
