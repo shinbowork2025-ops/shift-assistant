@@ -80,6 +80,7 @@ export const workspaceState = {
 let saveTimer = null;
 let saveInFlight = null;
 let saveQueued = false;
+let savePending = false;
 let changeRevision = 0;
 let statusHandler = () => {};
 
@@ -292,8 +293,19 @@ export function daySummary(day) {
 
 export function scheduleSave() {
   state.updatedAt = new Date().toISOString();
+  requestSave();
+}
+
+// 表示月・対象日・ビューなどの画面状態だけを保存する。
+// データ編集ではないため、切替欄に表示する更新日時は変更しない。
+export function scheduleViewStateSave() {
+  requestSave();
+}
+
+function requestSave() {
   syncActiveWorkspace();
   changeRevision += 1;
+  savePending = true;
   statusHandler("未保存の変更があります", false);
   globalThis.clearTimeout(saveTimer);
   saveTimer = globalThis.setTimeout(() => {
@@ -306,6 +318,7 @@ async function persistCurrentRevision() {
   try {
     await saveState(applicationEnvelope());
     if (revision === changeRevision) {
+      savePending = false;
       const savedTime = new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
       statusHandler(`${savedTime} に端末内へ保存`, false);
     } else {
@@ -333,6 +346,12 @@ export async function saveNow() {
     }
   });
   return saveInFlight;
+}
+
+// タブを閉じる・裏へ回る直前に、デバウンス待ちの変更を即時保存する。
+export function flushPendingSave() {
+  if (!savePending && !saveInFlight) return Promise.resolve();
+  return saveNow();
 }
 
 export async function loadSavedState() {

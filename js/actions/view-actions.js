@@ -1,4 +1,4 @@
-import { state, getDaysInMonth, dateKey, scheduleSave } from "../model.js";
+import { state, getDaysInMonth, dateKey, scheduleViewStateSave } from "../model.js";
 import { offsetDateValue, offsetMonthValue } from "../date-time.js";
 import { ensureBreaksForDate } from "../breaks.js";
 import { render } from "../render.js";
@@ -6,13 +6,9 @@ import { renderPrintPreview } from "../render-print.js";
 import { undoHistory, redoHistory } from "../history.js";
 import { elements, setSaveStatus } from "../elements.js";
 
-export function refresh() {
-  render(elements);
-}
-
 // render()は表示中ビューだけを描画する。上部の更新日時も同期するため、
 // 部分更新の呼び出し元もこの入口を使う。
-export function refreshActiveView() {
+export function refresh() {
   render(elements);
 }
 
@@ -46,7 +42,7 @@ export function selectDate(dateValue, switchToDay = true) {
   state.selectedMonth = dateValue.slice(0, 7);
   if (switchToDay) state.currentView = "day";
   ensureBreaksForDate(dateValue);
-  scheduleSave();
+  scheduleViewStateSave();
   refresh();
 }
 
@@ -55,7 +51,7 @@ export function shiftMonth(offset) {
   const currentDay = Math.min(Number(state.selectedDate.slice(-2)) || 1, getDaysInMonth(nextMonth));
   state.selectedMonth = nextMonth;
   state.selectedDate = dateKey(nextMonth, currentDay);
-  scheduleSave();
+  scheduleViewStateSave();
   refresh();
 }
 
@@ -66,6 +62,6 @@ export function shiftDay(offset) {
 export function changeView(view) {
   state.currentView = view;
   if (view === "day") ensureBreaksForDate(state.selectedDate);
-  scheduleSave();
+  scheduleViewStateSave();
   refresh();
 }

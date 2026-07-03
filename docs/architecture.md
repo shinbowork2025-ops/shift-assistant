@@ -38,6 +38,7 @@ app.js ─ 初期化
         │
         └─ 純粋計算モジュール
              ├─ date-time.js
+             ├─ intervals.js
              ├─ shift-metrics.js
              ├─ month-overview.js
              ├─ daily-overview.js
@@ -64,6 +65,8 @@ state
 `workspaceState`は、端末内に保存されている複数ワークスペースと選択中IDを持ちます。
 
 編集時は`state`を更新し、`scheduleSave()`を呼びます。`scheduleSave()`は選択中ワークスペースへ参照を同期し、短時間の連続変更をまとめてIndexedDBへ保存します。
+
+表示月・対象日・ビューの切替など、データを編集しない画面状態の保存には`scheduleViewStateSave()`を使います。こちらは切替欄に表示する更新日時（`updatedAt`）を変更しません。タブが非表示になる際は`flushPendingSave()`がデバウンス待ちの変更を即時保存します。
 
 ### 状態変更のルール
 

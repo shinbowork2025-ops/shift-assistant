@@ -1,4 +1,4 @@
-import { state, scheduleSave } from "./model.js";
+import { state, scheduleViewStateSave } from "./model.js";
 import { exportCsv, backupJson, downloadMasterCsvSample } from "./files.js";
 import {
   elements,
@@ -62,7 +62,7 @@ export function bindEvents() {
     state.selectedMonth = elements.monthInput.value;
     state.selectedDate = `${state.selectedMonth}-01`;
     refresh();
-    scheduleSave();
+    scheduleViewStateSave();
   });
   elements.dateInput.addEventListener("change", () => {
     if (elements.dateInput.value) selectDate(elements.dateInput.value);
