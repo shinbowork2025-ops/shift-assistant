@@ -7,13 +7,13 @@ const employees = [
   { id: "e2", name: "佐藤", fixedOvertimeMinutes: 0 }
 ];
 const shiftTypes = [
-  { code: "early", name: "早番", start: "09:00", end: "18:00", isWork: true, overtimeMinutes: 60 },
-  { code: "off", name: "公休", start: "", end: "", isWork: false, paidMinutes: 0, overtimeMinutes: 0 }
+  { code: "01", name: "01", start: "09:00", end: "18:00", isWork: true, overtimeMinutes: 60 },
+  { code: "休", name: "公休", start: "", end: "", isWork: false, paidMinutes: 0, overtimeMinutes: 0 }
 ];
 const shifts = {
   "2026-07": {
-    e1: { "2026-07-01": "early", "2026-07-02": "off" },
-    e2: { "2026-07-01": "early", "2026-07-02": "early" }
+    e1: { "2026-07-01": "01", "2026-07-02": "休" },
+    e2: { "2026-07-01": "01", "2026-07-02": "01" }
   }
 };
 
@@ -23,8 +23,8 @@ test("月間の従業員集計と日別集計を1回の走査で構築する", (
   assert.equal(overview.employeeRows.length, 2);
 
   const tanaka = overview.employeeRows[0];
-  assert.equal(tanaka.cells[0].code, "early");
-  assert.equal(tanaka.cells[1].code, "off");
+  assert.equal(tanaka.cells[0].code, "01");
+  assert.equal(tanaka.cells[1].code, "休");
   assert.equal(tanaka.summary.workDays, 1);
   assert.equal(tanaka.summary.paidMinutes, 450);
   assert.equal(tanaka.summary.overtimeMinutes, 60);

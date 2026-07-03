@@ -10,8 +10,8 @@ import {
 } from "../js/shift-metrics.js";
 
 const fullShift = {
-  code: "early",
-  name: "早番",
+  code: "01",
+  name: "01",
   start: "09:00",
   end: "18:00",
   isWork: true,

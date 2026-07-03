@@ -11,18 +11,18 @@ function sampleWorkspace() {
       { id: "e2", name: "佐藤", code: "E002", department: "資材", order: 1 }
     ],
     shiftTypes: [
-      { code: "early", name: "早番", shortLabel: "早", start: "09:00", end: "18:00", isWork: true, overtimeMinutes: 60 },
-      { code: "off", name: "公休", shortLabel: "休", start: "", end: "", isWork: false, paidMinutes: 0, overtimeMinutes: 0 }
+      { code: "01", name: "01", shortLabel: "01", start: "09:00", end: "18:00", isWork: true, overtimeMinutes: 60 },
+      { code: "休", name: "公休", shortLabel: "休", start: "", end: "", isWork: false, paidMinutes: 0, overtimeMinutes: 0 }
     ],
     shifts: {
       "2026-07": {
         e1: {
-          "2026-07-01": "early",
-          "2026-07-02": "off",
-          "2026-07-03": "early",
-          "2026-07-04": "early"
+          "2026-07-01": "01",
+          "2026-07-02": "休",
+          "2026-07-03": "01",
+          "2026-07-04": "01"
         },
-        e2: { "2026-07-01": "off" }
+        e2: { "2026-07-01": "休" }
       }
     },
     breaks: {
@@ -45,7 +45,7 @@ test("月間印刷データは従業員順とシフト略称を維持する", ()
   assert.equal(data.days.length, 31);
   assert.deepEqual(data.rows.map((row) => row.name), ["佐藤", "田中"]);
   const tanaka = data.rows[1];
-  assert.equal(tanaka.cells[0].label, "早");
+  assert.equal(tanaka.cells[0].label, "01");
   assert.equal(tanaka.cells[1].label, "休");
   assert.equal(tanaka.workDays, 3);
   assert.equal(tanaka.paidMinutes, 450 * 3);
