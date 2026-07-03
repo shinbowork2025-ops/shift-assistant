@@ -1,5 +1,6 @@
 import { state, isShiftLocked } from "./model.js";
 import { buildMonthOverview } from "./month-overview.js";
+import { employmentTypeLabel } from "./employment-types.js";
 import {
   weekendClass,
   createHeaderCell,
@@ -76,7 +77,12 @@ export function renderMonthTable(elements) {
     employeeButton.dataset.employeeId = employee.id;
     employeeButton.append(document.createTextNode(employee.name));
     const fixedOvertimeLabel = `固定残業${formatHours(summary.fixedOvertimeHours)}`;
-    const details = [employee.code, employee.department, fixedOvertimeLabel].filter(Boolean).join(" / ");
+    const details = [
+      employee.code,
+      employee.department,
+      employmentTypeLabel(employee.employmentType),
+      fixedOvertimeLabel
+    ].filter(Boolean).join(" / ");
     const code = document.createElement("span");
     code.className = "employee-code";
     code.textContent = details;

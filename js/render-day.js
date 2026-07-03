@@ -1,5 +1,6 @@
 import { state } from "./model.js";
 import { buildDailyOverview } from "./daily-overview.js";
+import { EMPLOYMENT_TYPES, employmentTypeShortLabel, employmentTypeLabel } from "./employment-types.js";
 import {
   shiftToneClass,
   createHeaderCell,
@@ -47,14 +48,19 @@ export function renderDailyTable(elements) {
 
   const tbody = document.createElement("tbody");
   for (const rowData of overview.rows) {
-    const { employee, shiftCode, validation, cells } = rowData;
+    const { employee, shiftCode, validation, cells, employmentType } = rowData;
     const row = document.createElement("tr");
     if (!validation.ok) row.classList.add("break-invalid-row");
 
     const nameCell = document.createElement("th");
     nameCell.scope = "row";
     nameCell.className = "daily-employee-column";
-    nameCell.append(document.createTextNode(employee.name));
+    const typeTag = document.createElement("span");
+    typeTag.className = `employment-tag employment-${employmentType}`;
+    typeTag.textContent = employmentTypeShortLabel(employmentType);
+    typeTag.title = employmentTypeLabel(employmentType);
+    typeTag.setAttribute("aria-label", employmentTypeLabel(employmentType));
+    nameCell.append(typeTag, document.createTextNode(employee.name));
     if (!validation.ok) {
       const warning = document.createElement("span");
       warning.className = "break-warning";
@@ -85,8 +91,26 @@ export function renderDailyTable(elements) {
   table.append(tbody);
 
   const tfoot = document.createElement("tfoot");
+
+  // 雇用区分ごとに必要人数が異なるため、区分別の実配置人数を先に示し、
+  // 最後に従来どおり合計を警告色付きで表示する。
+  for (const type of EMPLOYMENT_TYPES) {
+    const typeRow = document.createElement("tr");
+    typeRow.className = "employment-coverage-row";
+    typeRow.append(createHeaderCell(type.label, "daily-employee-column"));
+    typeRow.append(createDataCell("休憩除外", "daily-select-column"));
+    overview.coverageByType[type.code].forEach((count, index) => {
+      const slot = overview.slots[index];
+      const cell = createDataCell(String(count), `coverage-cell employment-coverage-cell${count === 0 ? " employment-coverage-empty" : ""}`);
+      if (slot % 60 === 0) cell.classList.add("hour-start");
+      cell.title = `${Math.floor(slot / 60)}:${String(slot % 60).padStart(2, "0")} ${type.label}${count}人`;
+      typeRow.append(cell);
+    });
+    tfoot.append(typeRow);
+  }
+
   const coverageRow = document.createElement("tr");
-  coverageRow.append(createHeaderCell("実配置人数", "daily-employee-column"));
+  coverageRow.append(createHeaderCell("実配置合計", "daily-employee-column"));
   coverageRow.append(createDataCell("休憩除外", "daily-select-column"));
   overview.coverage.forEach((count, index) => {
     const slot = overview.slots[index];

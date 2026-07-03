@@ -523,6 +523,26 @@ input { padding: 8px 10px; }
 .coverage-low { color: #6a3a00; background: #ffd8a8; }
 .coverage-ok { color: #14532d; background: #d3f9d8; }
 
+/* 雇用区分：従業員名のタグと区分別の実配置人数行 */
+.employment-tag {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  border-radius: 5px;
+  font-size: .68rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+.employment-fulltime { color: #fff; background: var(--primary); }
+.employment-semi { color: #0f4e42; background: #b7ebd9; }
+.employment-parttime { color: #4a4436; background: #f1e2b8; }
+
+.employment-coverage-row th { font-weight: 700; }
+.employment-coverage-cell { color: var(--text); background: var(--surface-muted); font-weight: 700; }
+.employment-coverage-cell.employment-coverage-empty { color: #b6bfc8; font-weight: 400; }
+
 .break-rule-note {
   margin-top: 14px;
   padding: 12px 14px;

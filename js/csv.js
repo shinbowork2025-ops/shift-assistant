@@ -1,4 +1,5 @@
 import { state, createId, isValidTime, scheduleSave } from "./model.js";
+import { DEFAULT_EMPLOYMENT_TYPE, matchEmploymentType } from "./employment-types.js";
 import { compareEmployeeOrder } from "./workspace-normalizer.js";
 
 export function parseCsv(text) {
@@ -90,6 +91,14 @@ function importEmployee(record, summary) {
     return;
   }
 
+  let employmentType = null;
+  if (record.employmentTypeText) {
+    employmentType = matchEmploymentType(record.employmentTypeText);
+    if (!employmentType) {
+      summary.errors.push(`${record.line}行目: 雇用区分は社員、準社員、パート・アルバイトのいずれかで入力してください。`);
+    }
+  }
+
   const existing = record.code
     ? state.employees.find((employee) => employee.code === record.code)
     : state.employees.find((employee) => employee.name === record.name);
@@ -99,6 +108,7 @@ function importEmployee(record, summary) {
     existing.code = record.code || existing.code;
     existing.department = record.department;
     existing.order = record.order || existing.order;
+    if (employmentType) existing.employmentType = employmentType;
     if (record.fixedOvertimeMinutes !== null) existing.fixedOvertimeMinutes = record.fixedOvertimeMinutes;
     summary.updatedEmployees += 1;
     return;
@@ -110,6 +120,7 @@ function importEmployee(record, summary) {
     code: record.code,
     department: record.department,
     order: record.order || state.employees.length + 1,
+    employmentType: employmentType ?? DEFAULT_EMPLOYMENT_TYPE,
     fixedOvertimeMinutes: record.fixedOvertimeMinutes ?? 0
   });
   summary.addedEmployees += 1;
@@ -172,6 +183,7 @@ export function importMasterRows(rows) {
     employeeName: findColumn(headers, ["氏名", "従業員名", "スタッフ名", "employee", "employeeName"]),
     shiftName: findColumn(headers, ["シフト名", "勤務名", "shift", "shiftName"]),
     department: findColumn(headers, ["所属", "部門", "department"]),
+    employmentType: findColumn(headers, ["雇用区分", "雇用形態", "employmentType"]),
     order: findColumn(headers, ["表示順", "順番", "order"]),
     start: findColumn(headers, ["開始時刻", "開始", "start", "startTime"]),
     end: findColumn(headers, ["終了時刻", "終了", "end", "endTime"]),
@@ -183,7 +195,8 @@ export function importMasterRows(rows) {
     overtimeMinutes: findColumn(headers, ["残業分", "シフト残業分", "overtimeMinutes"])
   };
 
-  const hasEmployeeHeader = columns.employeeName >= 0 || columns.fixedOvertimeHours >= 0 || columns.fixedOvertimeMinutes >= 0;
+  const hasEmployeeHeader = columns.employeeName >= 0 || columns.employmentType >= 0
+    || columns.fixedOvertimeHours >= 0 || columns.fixedOvertimeMinutes >= 0;
   const hasShiftHeader = columns.shiftName >= 0 || columns.start >= 0 || columns.end >= 0 || columns.overtimeHours >= 0 || columns.overtimeMinutes >= 0;
   if (columns.type < 0 && !hasEmployeeHeader && !hasShiftHeader) {
     throw new Error("従業員名、シフト名、開始時刻などの対応する見出しが見つかりません。");
@@ -214,6 +227,7 @@ export function importMasterRows(rows) {
         code: valueAt(row, columns.code),
         name: valueAt(row, columns.employeeName) || commonName,
         department: valueAt(row, columns.department),
+        employmentTypeText: valueAt(row, columns.employmentType),
         order: Number(valueAt(row, columns.order)) || 0,
         fixedOvertimeMinutes
       }, summary);

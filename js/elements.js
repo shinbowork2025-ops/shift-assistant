@@ -1,4 +1,5 @@
 import { state, getActiveWorkspace, currentMonthValue } from "./model.js";
+import { normalizeEmploymentType } from "./employment-types.js";
 import { initializeEmployeeRestForm, populateEmployeeRestForm } from "./employee-rest-form.js";
 import { initializeEmployeeWorkShiftForm, populateEmployeeWorkShiftForm } from "./employee-work-shift-form.js";
 
@@ -17,7 +18,7 @@ const elementIds = [
   "emptyAddEmployeeButton", "emptyImportButton", "emptySampleButton",
   "employeeDialog", "employeeForm", "employeeDialogTitle",
   "employeeIdInput", "employeeNameInput", "employeeCodeInput", "employeeDepartmentInput", "employeeOrderInput",
-  "employeeFixedOvertimeInput",
+  "employeeEmploymentTypeInput", "employeeFixedOvertimeInput",
   "closeEmployeeDialogButton", "cancelEmployeeButton", "deleteEmployeeButton", "confirmDialog",
   "confirmTitle", "confirmMessage", "confirmCancelButton", "confirmOkButton"
 ];
@@ -61,6 +62,7 @@ export function openEmployeeDialog(employeeId = "") {
   elements.employeeCodeInput.value = employee?.code ?? "";
   elements.employeeDepartmentInput.value = employee?.department ?? "";
   elements.employeeOrderInput.value = employee ? String(employee.order ?? "") : String(state.employees.length + 1);
+  elements.employeeEmploymentTypeInput.value = normalizeEmploymentType(employee?.employmentType);
   elements.employeeFixedOvertimeInput.value = employee ? String((employee.fixedOvertimeMinutes ?? 0) / 60) : "0";
   populateEmployeeRestForm(employee);
   populateEmployeeWorkShiftForm(employee);

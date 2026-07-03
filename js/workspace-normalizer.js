@@ -1,5 +1,6 @@
 import { currentMonthValue, getDaysInMonth, isDateValue, isMonthValue, isValidTime } from "./date-time.js";
 import { createId } from "./ids.js";
+import { normalizeEmploymentType } from "./employment-types.js";
 import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
 import { nonNegativeMinutes } from "./shift-metrics.js";
 import { normalizeShiftLocks } from "./shift-locks.js";
@@ -31,6 +32,7 @@ export function normalizeEmployees(candidate) {
       code: typeof employee.code === "string" ? employee.code.trim().slice(0, 20) : "",
       department: typeof employee.department === "string" ? employee.department.trim().slice(0, 30) : "",
       order: Number.isFinite(Number(employee.order)) ? Number(employee.order) : index + 1,
+      employmentType: normalizeEmploymentType(employee.employmentType),
       fixedOvertimeMinutes: nonNegativeMinutes(employee.fixedOvertimeMinutes),
       restPatternId: normalizeRestPatternId(employee.restPatternId),
       restPatternOffset: normalizeRestPatternOffset(employee.restPatternOffset),
