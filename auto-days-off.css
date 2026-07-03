@@ -58,7 +58,15 @@
   border: 1px solid #cbd5e1;
   border-radius: 7px;
   padding: 5px 8px;
-  background: #fff;
+  background: var(--surface, #fff);
+}
+
+.employee-rest-badge {
+  display: block;
+  margin-top: 3px;
+  color: #475569;
+  font-size: .7rem;
+  font-weight: 800;
 }
 
 .auto-days-off-dialog {
@@ -82,6 +90,7 @@
   border-left: 4px solid #64748b;
   padding: 9px 11px;
   background: #f8fafc;
+  color: #1f2937;
   font-size: .85rem;
   line-height: 1.6;
 }
@@ -92,6 +101,7 @@
   border-radius: 10px;
   padding: 12px;
   background: #f8fafc;
+  color: #1f2937;
 }
 
 .auto-days-off-preview p {
@@ -130,6 +140,7 @@
   border-radius: 10px;
   padding: 12px 14px;
   background: #f8fafc;
+  color: #1f2937;
 }
 
 .auto-days-off-result p {
