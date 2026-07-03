@@ -23,7 +23,7 @@ export function renderTransferPrintDocument(workspace, printedAt) {
     group.rows.forEach((row, index) => {
       const tableRow = document.createElement("tr");
       if (row.status !== "OK") tableRow.classList.add("print-warning-row");
-      const dateLabel = index === 0 ? `${group.day}日（${group.weekdayLabel}）` : "";
+      const dateLabel = index === 0 ? `${group.day}日（${group.label}）` : "";
       tableRow.append(createCell("th", dateLabel, `print-transfer-date ${printWeekendClass(group.weekday)}`));
       tableRow.append(createCell("td", [row.name, row.department].filter(Boolean).join(" / "), "print-transfer-employee"));
       tableRow.append(createCell("td", row.shiftName));
