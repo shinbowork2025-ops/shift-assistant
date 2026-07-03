@@ -5,6 +5,9 @@ import { runWithHistory } from "../history.js";
 import { refresh } from "./view-actions.js";
 
 export function createCurrentWorkShiftPlan({ selectedShiftCodes, mode }) {
+  if (!Array.isArray(selectedShiftCodes) || selectedShiftCodes.length === 0) {
+    throw new Error("自動割当に使う勤務シフトを1つ以上選択してください。");
+  }
   return buildWorkShiftPlan({
     monthValue: state.selectedMonth,
     employees: state.employees,
