@@ -5,7 +5,6 @@ import {
   restoreApplicationState
 } from "./model.js";
 import { buildMonthOverview } from "./month-overview.js";
-import { SAMPLE_MASTER_CSV } from "./csv.js";
 
 function downloadFile(fileName, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
@@ -69,8 +68,17 @@ export function exportCsv() {
   downloadFile(`${workspaceName}-${state.selectedMonth}.csv`, csv, "text/csv;charset=utf-8");
 }
 
-export function downloadMasterCsvSample() {
-  downloadFile("shift-assistant-master-sample.csv", `\uFEFF${SAMPLE_MASTER_CSV}`, "text/csv;charset=utf-8");
+export async function downloadMasterWorkbookSample() {
+  const {
+    SAMPLE_MASTER_WORKBOOK_FILE_NAME,
+    SAMPLE_MASTER_WORKBOOK_MIME_TYPE,
+    sampleMasterWorkbookBytes
+  } = await import("./sample-master-workbook.js");
+  downloadFile(
+    SAMPLE_MASTER_WORKBOOK_FILE_NAME,
+    sampleMasterWorkbookBytes(),
+    SAMPLE_MASTER_WORKBOOK_MIME_TYPE
+  );
 }
 
 export function backupJson() {
