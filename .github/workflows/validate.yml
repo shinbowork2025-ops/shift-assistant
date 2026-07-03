@@ -13,8 +13,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          show-progress: false
       - name: Inspect embedded sample workbook
-        run: python3 tools/inspect_sample_workbook.py
+        run: python3 tools/inspect_sample_workbook.py > sample-inspection.json
+      - name: Upload sample inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-inspection
+          path: sample-inspection.json
+          retention-days: 1
       - name: Check JavaScript syntax
         run: find js tests -name '*.js' -o -name '*.mjs' | xargs -n1 node --check
       - name: Run automated tests
