@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  normalizeEmployees,
   normalizeWorkspace,
   applyWorkspaceToState,
   syncWorkspaceFromState
@@ -151,4 +152,17 @@ test("既存従業員は手動扱い、新設定は正規化して保持する",
   assert.equal(workspace.employees[1].restPatternOffset, 2);
   assert.equal(workspace.employees[1].targetDaysOff, 9);
   assert.deepEqual(workspace.employees[1].fixedDaysOff, [1, 4]);
+});
+
+test("従業員の雇用区分を正規化して保持する", () => {
+  const employees = normalizeEmployees([
+    { id: "e1", name: "田中", order: 1, employmentType: "fulltime" },
+    { id: "e2", name: "佐藤", order: 2, employmentType: "準社員" },
+    { id: "e3", name: "鈴木", order: 3 }
+  ]);
+
+  assert.equal(employees[0].employmentType, "fulltime");
+  assert.equal(employees[1].employmentType, "semi");
+  // 区分未設定の既存データはパート・アルバイト扱いで読み込む。
+  assert.equal(employees[2].employmentType, "parttime");
 });

@@ -1,5 +1,6 @@
 import { dayFromDate, timeToMinutes } from "./date-time.js";
 import { validateBreaks } from "./break-rules.js";
+import { EMPLOYMENT_TYPES, normalizeEmploymentType } from "./employment-types.js";
 import { buildShiftTypeMap, getShiftCodeFromData } from "./month-overview.js";
 
 export const TIMELINE_SLOT_MINUTES = 15;
@@ -83,13 +84,21 @@ export function buildDailyOverview({ dateValue, employees = [], shiftTypes = [],
   const range = timelineRange(assignments);
   const slots = buildSlots(range.start, range.end);
   const coverage = slots.map(() => 0);
+  // 雇用区分ごとに必要人数が異なるため、休憩を除いた実配置人数を区分別にも集計する。
+  const coverageByType = Object.fromEntries(
+    EMPLOYMENT_TYPES.map((type) => [type.code, slots.map(() => 0)])
+  );
   const rows = assignments.map((assignment) => {
+    const employmentType = normalizeEmploymentType(assignment.employee.employmentType);
     const cells = slots.map((slotStart, index) => {
       const cell = slotCell(assignment, slotStart);
-      if (cell.kind === "work") coverage[index] += 1;
+      if (cell.kind === "work") {
+        coverage[index] += 1;
+        coverageByType[employmentType][index] += 1;
+      }
       return cell;
     });
-    return { ...assignment, cells };
+    return { ...assignment, employmentType, cells };
   });
 
   return {
@@ -99,6 +108,7 @@ export function buildDailyOverview({ dateValue, employees = [], shiftTypes = [],
     range,
     slots,
     coverage,
+    coverageByType,
     rows
   };
 }

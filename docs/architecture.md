@@ -38,6 +38,7 @@ app.js ─ 初期化
         │
         └─ 純粋計算モジュール
              ├─ date-time.js
+             ├─ employment-types.js
              ├─ intervals.js
              ├─ shift-metrics.js
              ├─ month-overview.js
@@ -139,9 +140,9 @@ state
 - 休憩情報
 - 休憩検証
 - 15分単位の勤務・休憩セル
-- 休憩を除いた実配置人数
+- 休憩を除いた実配置人数（合計と雇用区分別）
 
-を一度に構築します。
+を一度に構築します。雇用区分の定義と表記ゆれの正規化は`employment-types.js`へ集約しています。
 
 ## 休憩
 

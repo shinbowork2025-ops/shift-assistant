@@ -11,6 +11,7 @@ import {
   clearShiftLocksForMonth
 } from "../model.js";
 import { generateBreaksForDate } from "../breaks.js";
+import { normalizeEmploymentType } from "../employment-types.js";
 import { compareEmployeeOrder } from "../workspace-normalizer.js";
 import { readEmployeeRestForm } from "../employee-rest-form.js";
 import { readEmployeeWorkShiftForm } from "../employee-work-shift-form.js";
@@ -49,6 +50,7 @@ export function saveEmployeeFromDialog() {
   const fixedOvertimeHours = Number(elements.employeeFixedOvertimeInput.value || 0);
   if (!name || !Number.isFinite(fixedOvertimeHours) || fixedOvertimeHours < 0) return;
   const fixedOvertimeMinutes = Math.round(fixedOvertimeHours * 60);
+  const employmentType = normalizeEmploymentType(elements.employeeEmploymentTypeInput.value);
   const restSettings = readEmployeeRestForm();
   const workShiftSettings = readEmployeeWorkShiftForm();
   const orderValue = Number(elements.employeeOrderInput.value);
@@ -64,6 +66,7 @@ export function saveEmployeeFromDialog() {
           name,
           code,
           department,
+          employmentType,
           fixedOvertimeMinutes,
           ...restSettings,
           ...workShiftSettings
@@ -76,6 +79,7 @@ export function saveEmployeeFromDialog() {
         name,
         code,
         department,
+        employmentType,
         fixedOvertimeMinutes,
         ...restSettings,
         ...workShiftSettings,

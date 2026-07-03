@@ -56,3 +56,47 @@ test("休憩未配置の長時間勤務を警告対象にする", () => {
   assert.equal(overview.rows[0].validation.ok, false);
   assert.equal(overview.rows[0].validation.shortage, 60);
 });
+
+test("雇用区分ごとの実配置人数を集計する", () => {
+  const overview = buildDailyOverview({
+    dateValue: "2026-07-02",
+    employees: [
+      { id: "e1", name: "田中", order: 1, employmentType: "fulltime" },
+      { id: "e2", name: "佐藤", order: 2, employmentType: "parttime" },
+      { id: "e3", name: "鈴木", order: 3 }
+    ],
+    shiftTypes,
+    shifts: {
+      "2026-07": {
+        e1: { "2026-07-02": "early" },
+        e2: { "2026-07-02": "early" },
+        e3: { "2026-07-02": "early" }
+      }
+    },
+    breaks: {
+      "2026-07-02": {
+        e1: [{ type: "lunch", label: "昼休憩", start: "12:00", end: "13:00" }]
+      }
+    }
+  });
+
+  const noonIndex = overview.slots.indexOf(12 * 60);
+  const twoPmIndex = overview.slots.indexOf(14 * 60);
+
+  // 社員は昼休憩中で0人、区分未設定はパート・アルバイト扱いになる。
+  assert.equal(overview.coverageByType.fulltime[noonIndex], 0);
+  assert.equal(overview.coverageByType.parttime[noonIndex], 2);
+  assert.equal(overview.coverageByType.semi[noonIndex], 0);
+  assert.equal(overview.coverageByType.fulltime[twoPmIndex], 1);
+  assert.equal(overview.coverageByType.parttime[twoPmIndex], 2);
+  assert.equal(overview.rows[0].employmentType, "fulltime");
+  assert.equal(overview.rows[2].employmentType, "parttime");
+
+  // 区分別の合計は常に全体の実配置人数と一致する。
+  overview.slots.forEach((_, index) => {
+    const total = overview.coverageByType.fulltime[index]
+      + overview.coverageByType.semi[index]
+      + overview.coverageByType.parttime[index];
+    assert.equal(total, overview.coverage[index]);
+  });
+});
