@@ -56,7 +56,7 @@ function renderPreferredOptions(employee) {
   const fragment = document.createDocumentFragment();
   const automatic = document.createElement("option");
   automatic.value = "";
-  automatic.textContent = "自動（既存傾向と配置バランスを優先）";
+  automatic.textContent = "自動（旦存傾向と配置バランスを優先）";
   fragment.append(automatic);
   for (const shiftType of shifts) {
     const option = document.createElement("option");
@@ -68,8 +68,15 @@ function renderPreferredOptions(employee) {
   controls.preferred.value = shifts.some((item) => item.code === previous) ? previous : "";
 }
 
+function ensureAtLeastOneShift(fallbackInput = null) {
+  if (!controls.shiftInputs.length || controls.shiftInputs.some((input) => input.checked)) return;
+  const fallback = fallbackInput ?? controls.shiftInputs[0];
+  if (fallback) fallback.checked = true;
+}
+
 function syncPreferredAvailability() {
   if (!controls) return;
+  ensureAtLeastOneShift();
   const checked = new Set(controls.shiftInputs.filter((input) => input.checked).map((input) => input.value));
   const allSelected = controls.shiftInputs.length > 0 && checked.size === controls.shiftInputs.length;
   for (const option of controls.preferred.options) {
@@ -79,7 +86,7 @@ function syncPreferredAvailability() {
     controls.preferred.value = "";
   }
   controls.selectedCount.textContent = controls.shiftInputs.length
-    ? `${checked.size}/${controls.shiftInputs.length}種類を許可`
+    ? `${checked.size}/${controls.shiftInputs.length}章馞を見叼
     : "勤務シフトがありません";
 }
 
@@ -92,7 +99,7 @@ export function initializeEmployeeWorkShiftForm() {
   const section = document.createElement("fieldset");
   section.className = "employee-work-shift-settings";
   const legend = document.createElement("legend");
-  legend.textContent = "勤務シフトの自動割当設定";
+  legend.textContent = "勧務シフトの自動割当設定";
 
   const preferred = document.createElement("select");
   preferred.id = "employeePreferredShiftInput";
@@ -103,29 +110,31 @@ export function initializeEmployeeWorkShiftForm() {
   selectAll.type = "button";
   selectAll.className = "button secondary compact";
   selectAll.textContent = "全て許可";
-  const clearAll = document.createElement("button");
-  clearAll.type = "button";
-  clearAll.className = "button secondary compact";
-  clearAll.textContent = "全て解除";
+  const narrowSelection = document.createElement("button");
+  narrowSelection.type = "button";
+  narrowSelection.className = "button secondary compact";
+  narrowSelection.textContent = "先頭だけ許可";
   const selectedCount = document.createElement("span");
   selectedCount.className = "work-shift-count";
-  toolbar.append(selectAll, clearAll, selectedCount);
+  toolbar.append(selectAll, narrowSelection, selectedCount);
 
   const shiftList = document.createElement("div");
   shiftList.className = "work-shift-check-list";
   shiftList.setAttribute("role", "group");
-  shiftList.setAttribute("aria-label", "使用可能な勤務シフト");
+  shiftList.setAttribute("aria-label", "使用可能な勧務シフト");
 
   const avoidLabel = document.createElement("label");
   avoidLabel.className = "inline-check-label";
   const avoidLateEarly = document.createElement("input");
   avoidLateEarly.type = "checkbox";
   avoidLateEarly.id = "employeeAvoidLateEarlyInput";
-  avoidLabel.append(avoidLateEarly, document.createTextNode("遅番の翌日に早番を割り当てない（勤務間隔11時間を目安）"));
+  avoidLabel.append(avoidLateEarly, document.createTextNode("遅番の翌日に早番を割り当てない（務務間隔11時間を目安）");
 
   const note = document.createElement("p");
   note.className = "rest-pattern-description";
-  note.textContent = "全て許可した状態は保存上「制限なし」として扱います。優先シフトは固定ではなく、必要な時間帯とのバランスを見ながら強く優先します。";
+  note.textContent = "使用可能な務務シフトは最低1章馞必要です。八章馞を見召する状態の保存上『制�nなし』ににります。優先シフトは固定ではく、必要な晒�⿎����C���ώ
+�
+K���j��c強く優先します。";
 
   section.append(
     legend,
@@ -141,7 +150,7 @@ export function initializeEmployeeWorkShiftForm() {
     section,
     preferred,
     selectAll,
-    clearAll,
+    narrowSelection,
     selectedCount,
     shiftList,
     shiftInputs: [],
@@ -152,12 +161,15 @@ export function initializeEmployeeWorkShiftForm() {
     controls.shiftInputs.forEach((input) => { input.checked = true; });
     syncPreferredAvailability();
   });
-  clearAll.addEventListener("click", () => {
-    controls.shiftInputs.forEach((input) => { input.checked = false; });
+  narrowSelection.addEventListener("click", () => {
+    controls.shiftInputs.forEach((input, index) => { input.checked = index === 0; });
     controls.preferred.value = "";
     syncPreferredAvailability();
   });
-  shiftList.addEventListener("change", syncPreferredAvailability);
+  shiftList.addEventListener("change", (event) => {
+    ensureAtLeastOneShift(event.target);
+    syncPreferredAvailability();
+  });
   return controls;
 }
 
@@ -175,15 +187,13 @@ export function readEmployeeWorkShiftForm() {
   if (!controls) {
     return { allowedShiftCodes: [], preferredShiftCode: "", avoidLateEarly: true };
   }
+  ensureAtLeastOneShift();
   const allCodes = controls.shiftInputs.map((input) => input.value);
   const selectedCodes = controls.shiftInputs.filter((input) => input.checked).map((input) => input.value);
   const allowedShiftCodes = selectedCodes.length === allCodes.length ? [] : normalizeAllowedShiftCodes(selectedCodes);
-  const preferredShiftCode = selectedCodes.length === 0
-    ? ""
-    : normalizePreferredShiftCode(controls.preferred.value);
   return {
     allowedShiftCodes,
-    preferredShiftCode,
+    preferredShiftCode: normalizePreferredShiftCode(controls.preferred.value),
     avoidLateEarly: normalizeAvoidLateEarly(controls.avoidLateEarly.checked)
   };
 }
