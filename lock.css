@@ -1,0 +1,171 @@
+.lock-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #c7cdd4;
+  border-left: 5px solid #475569;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.lock-heading {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.lock-heading strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.lock-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: .84rem;
+  line-height: 1.5;
+}
+
+.lock-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lock-mode-button.primary {
+  background: #475569;
+}
+
+.lock-mode-button.primary:hover {
+  background: #334155;
+}
+
+.shift-lock-cell {
+  position: relative;
+}
+
+.cell-lock-button {
+  position: absolute;
+  z-index: 4;
+  top: 1px;
+  right: 1px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  color: #334155;
+  background: rgba(255, 255, 255, .78);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: .18;
+}
+
+.shift-lock-cell:hover .cell-lock-button,
+.cell-lock-button:focus-visible,
+.shift-cell-locked .cell-lock-button {
+  opacity: 1;
+}
+
+.shift-cell-locked {
+  box-shadow: inset 0 0 0 3px #475569;
+}
+
+.shift-cell-locked::before {
+  position: absolute;
+  z-index: 2;
+  inset: 2px;
+  border-radius: 5px;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(71, 85, 105, .05) 0,
+    rgba(71, 85, 105, .05) 5px,
+    rgba(71, 85, 105, .14) 5px,
+    rgba(71, 85, 105, .14) 8px
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.shift-cell-locked .shift-select:disabled,
+.daily-select-locked .shift-select:disabled {
+  opacity: 1;
+  color: inherit;
+  cursor: not-allowed;
+  -webkit-text-fill-color: currentColor;
+}
+
+.table-container.lock-mode .shift-lock-cell {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.table-container.lock-mode .shift-lock-cell .shift-select,
+.table-container.lock-mode .shift-lock-cell .cell-lock-button {
+  pointer-events: none;
+  user-select: none;
+}
+
+.table-container.lock-mode .shift-lock-cell:hover,
+.table-container.lock-mode .shift-lock-cell:focus-visible {
+  z-index: 3;
+  outline: 3px solid #475569;
+  outline-offset: -3px;
+}
+
+.table-container.lock-mode .lock-cell-touched {
+  box-shadow: inset 0 0 0 4px #334155;
+}
+
+body.lock-dragging {
+  cursor: crosshair;
+  user-select: none;
+}
+
+.daily-select-locked {
+  position: relative;
+  box-shadow: inset 0 0 0 2px #475569;
+}
+
+.daily-lock-label {
+  display: block;
+  margin-top: 3px;
+  color: #475569;
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+@media (max-width: 1000px) {
+  .lock-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lock-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media print {
+  .lock-panel,
+  .cell-lock-button,
+  .daily-lock-label {
+    display: none !important;
+  }
+
+  .shift-cell-locked,
+  .daily-select-locked {
+    box-shadow: none !important;
+  }
+
+  .shift-cell-locked::before {
+    display: none !important;
+  }
+}
