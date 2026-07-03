@@ -1,0 +1,154 @@
+.month-generation-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.employee-rest-settings {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.employee-rest-settings > legend {
+  padding: 0 6px;
+  font-weight: 800;
+}
+
+.employee-rest-settings label {
+  display: grid;
+  gap: 5px;
+}
+
+.form-note,
+.rest-pattern-description {
+  color: var(--text-muted);
+  font-size: .8rem;
+  line-height: 1.5;
+}
+
+.rest-pattern-description {
+  margin: -4px 0 0;
+}
+
+.weekday-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+}
+
+.weekday-checks legend {
+  width: 100%;
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
+.weekday-checks label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: #fff;
+}
+
+.auto-days-off-dialog {
+  width: min(720px, calc(100vw - 24px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.auto-days-off-dialog form {
+  display: grid;
+  gap: 14px;
+}
+
+.auto-days-off-dialog label {
+  display: grid;
+  gap: 5px;
+}
+
+.auto-days-off-note {
+  margin: 0;
+  border-left: 4px solid #64748b;
+  padding: 9px 11px;
+  background: #f8fafc;
+  font-size: .85rem;
+  line-height: 1.6;
+}
+
+.auto-days-off-preview {
+  min-height: 80px;
+  border: 1px solid #d7dde4;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.auto-days-off-preview p {
+  margin: 5px 0 10px;
+}
+
+.auto-days-off-employee-list,
+.auto-days-off-preview details ul,
+.auto-days-off-result ul {
+  margin: 8px 0 0;
+  padding-left: 1.3rem;
+}
+
+.auto-days-off-employee-list {
+  columns: 2;
+  column-gap: 24px;
+}
+
+.auto-days-off-employee-list li {
+  break-inside: avoid;
+  margin-bottom: 4px;
+}
+
+.auto-days-off-employee-list li.warning {
+  font-weight: 700;
+}
+
+.auto-days-off-preview details {
+  margin-top: 12px;
+}
+
+.auto-days-off-result {
+  margin: 0 0 14px;
+  border: 1px solid #b9c4cf;
+  border-left: 5px solid #475569;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+
+.auto-days-off-result p {
+  margin: 5px 0;
+}
+
+@media (max-width: 720px) {
+  .month-generation-actions {
+    justify-content: flex-start;
+  }
+
+  .auto-days-off-employee-list {
+    columns: 1;
+  }
+}
+
+@media print {
+  .month-generation-actions,
+  .auto-days-off-result {
+    display: none !important;
+  }
+}
