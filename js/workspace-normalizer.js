@@ -1,4 +1,5 @@
 import { currentMonthValue, getDaysInMonth, isDateValue, isMonthValue, isValidTime } from "./date-time.js";
+import { normalizeDayOffRequests } from "./day-off-requests.js";
 import { createId } from "./ids.js";
 import { normalizeEmploymentType } from "./employment-types.js";
 import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
@@ -110,6 +111,7 @@ export function normalizeWorkspace(candidate, index = 0) {
     shifts: migration.shifts,
     breaks: migration.breaks,
     shiftLocks: migration.shiftLocks,
+    dayOffRequests: normalizeDayOffRequests(candidate.dayOffRequests),
     createdAt: candidate.createdAt ?? candidate.updatedAt ?? now,
     updatedAt: candidate.updatedAt ?? now
   };
@@ -136,6 +138,7 @@ export function applyWorkspaceToState(targetState, workspace) {
   targetState.shifts = structuredClone(workspace.shifts);
   targetState.breaks = structuredClone(workspace.breaks);
   targetState.shiftLocks = structuredClone(workspace.shiftLocks);
+  targetState.dayOffRequests = structuredClone(workspace.dayOffRequests ?? {});
   targetState.updatedAt = workspace.updatedAt;
 }
 
@@ -150,6 +153,7 @@ export function syncWorkspaceFromState(workspace, sourceState) {
   workspace.shifts = sourceState.shifts;
   workspace.breaks = sourceState.breaks;
   workspace.shiftLocks = sourceState.shiftLocks;
+  workspace.dayOffRequests = sourceState.dayOffRequests;
   workspace.updatedAt = sourceState.updatedAt ?? workspace.updatedAt;
   return workspace;
 }
