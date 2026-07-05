@@ -1,0 +1,76 @@
+{
+  "cases": [
+    {
+      "id": "six-nine-hour-workers",
+      "description": "全員9時間拘束で同時休憩の分散を見る",
+      "shifts": [
+        { "employeeId": "e01", "start": "09:00", "end": "18:00" },
+        { "employeeId": "e02", "start": "09:00", "end": "18:00" },
+        { "employeeId": "e03", "start": "09:00", "end": "18:00" },
+        { "employeeId": "e04", "start": "09:00", "end": "18:00" },
+        { "employeeId": "e05", "start": "09:00", "end": "18:00" },
+        { "employeeId": "e06", "start": "09:00", "end": "18:00" }
+      ]
+    },
+    {
+      "id": "mixed-seven-hour-workers",
+      "description": "7時間拘束混在で45分帯を確認する",
+      "shifts": [
+        { "employeeId": "e01", "start": "08:00", "end": "15:00" },
+        { "employeeId": "e02", "start": "09:00", "end": "16:00" },
+        { "employeeId": "e03", "start": "10:00", "end": "17:00" },
+        { "employeeId": "e04", "start": "11:00", "end": "18:00" }
+      ]
+    },
+    {
+      "id": "mixed-full-day-workers",
+      "description": "開店から閉店まで長短15人が混在する",
+      "shifts": [
+        { "employeeId": "e01", "start": "06:45", "end": "16:15" },
+        { "employeeId": "e02", "start": "06:45", "end": "17:45" },
+        { "employeeId": "e03", "start": "08:45", "end": "18:15" },
+        { "employeeId": "e04", "start": "08:45", "end": "19:00" },
+        { "employeeId": "e05", "start": "08:45", "end": "19:30" },
+        { "employeeId": "e06", "start": "09:30", "end": "19:00" },
+        { "employeeId": "e07", "start": "08:45", "end": "20:15" },
+        { "employeeId": "e08", "start": "10:30", "end": "20:00" },
+        { "employeeId": "e09", "start": "10:45", "end": "20:15" },
+        { "employeeId": "e10", "start": "06:45", "end": "15:15" },
+        { "employeeId": "e11", "start": "08:45", "end": "16:00" },
+        { "employeeId": "e12", "start": "15:45", "end": "20:00" },
+        { "employeeId": "e13", "start": "08:45", "end": "13:00" },
+        { "employeeId": "e14", "start": "12:45", "end": "17:00" },
+        { "employeeId": "e15", "start": "17:00", "end": "20:00" }
+      ]
+    },
+    {
+      "id": "peak-shortage-workers",
+      "description": "ピーク帯不足ぎみの混雑ケース",
+      "shifts": [
+        { "employeeId": "e01", "start": "09:00", "end": "18:00" },
+        { "employeeId": "e02", "start": "09:00", "end": "18:00" },
+        { "employeeId": "e03", "start": "09:30", "end": "18:30" },
+        { "employeeId": "e04", "start": "10:00", "end": "19:00" },
+        { "employeeId": "e05", "start": "10:00", "end": "19:00" }
+      ]
+    },
+    {
+      "id": "locked-break-worker",
+      "description": "ロック休憩がある従業員を固定する",
+      "shifts": [
+        {
+          "employeeId": "e01",
+          "start": "09:00",
+          "end": "18:00",
+          "breaks": [
+            { "type": "small", "label": "小休憩", "start": "11:00", "end": "11:15", "locked": true },
+            { "type": "lunch", "label": "昼休憩", "start": "13:00", "end": "14:00", "locked": true },
+            { "type": "small", "label": "小休憩", "start": "16:00", "end": "16:15", "locked": true }
+          ]
+        },
+        { "employeeId": "e02", "start": "09:00", "end": "18:00" },
+        { "employeeId": "e03", "start": "09:00", "end": "18:00" }
+      ]
+    }
+  ]
+}
