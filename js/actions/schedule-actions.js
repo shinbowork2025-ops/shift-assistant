@@ -11,6 +11,7 @@ import {
   clearShiftLocksForMonth
 } from "../model.js";
 import { generateBreaksForDate } from "../breaks.js";
+import { clearMonthDayOffRequests, removeEmployeeDayOffRequests } from "../day-off-requests.js";
 import { normalizeEmploymentType } from "../employment-types.js";
 import { compareEmployeeOrder } from "../workspace-normalizer.js";
 import { readEmployeeRestForm } from "../employee-rest-form.js";
@@ -98,13 +99,14 @@ export async function deleteEmployeeFromDialog() {
   const employee = state.employees.find((item) => item.id === employeeId);
   if (!employee) return;
   closeEmployeeDialog();
-  const confirmed = await confirmAction("従業員を削除", `${employee.name}さんと、その人の全月のシフト案・休憩・ロックを削除します。`, "削除");
+  const confirmed = await confirmAction("従業員を削除", `${employee.name}さんと、その人の全月のシフト案・休憩・ロック・希望休を削除します。`, "削除");
   if (!confirmed) return;
   runWithHistory(`${employee.name}さんを削除`, () => {
     state.employees = state.employees.filter((item) => item.id !== employeeId);
     for (const month of Object.values(state.shifts)) delete month[employeeId];
     for (const dayBreaks of Object.values(state.breaks)) delete dayBreaks[employeeId];
     removeShiftLocksForEmployee(employeeId, { save: false });
+    removeEmployeeDayOffRequests(state.dayOffRequests ?? {}, employeeId);
     scheduleSave();
   });
   refresh();
@@ -117,7 +119,7 @@ export function autoPlaceBreaks() {
 }
 
 export async function clearCurrentMonth() {
-  const confirmed = await confirmAction("月間シフトをクリア", `${monthDisplayName(state.selectedMonth)}の入力済みシフト案・休憩・セルロックをすべて削除します。`, "クリア");
+  const confirmed = await confirmAction("月間シフトをクリア", `${monthDisplayName(state.selectedMonth)}の入力済みシフト案・休憩・セルロック・希望休をすべて削除します。`, "クリア");
   if (!confirmed) return;
   runWithHistory(`${monthDisplayName(state.selectedMonth)}をクリア`, () => {
     delete state.shifts[state.selectedMonth];
@@ -125,6 +127,7 @@ export async function clearCurrentMonth() {
       if (dateValue.startsWith(state.selectedMonth)) delete state.breaks[dateValue];
     }
     clearShiftLocksForMonth(state.selectedMonth, { save: false });
+    clearMonthDayOffRequests(state.dayOffRequests ?? {}, state.selectedMonth);
     scheduleSave();
   });
   refresh();
