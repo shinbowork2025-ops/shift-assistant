@@ -1,1 +1,7 @@
-{"name":"five"}
+{
+  "name": "case five",
+  "seed": 505,
+  "groups": [
+    { "count": 5, "shiftStart": 540, "shiftEnd": 1080 }
+  ]
+}
