@@ -11,6 +11,7 @@ import { bindEvents } from "./events.js";
 import { refresh, undoLastAction, redoLastAction } from "./actions.js";
 import { initializeHistoryUi } from "./history-ui.js";
 import { initializePaintInput } from "./paint-input.js";
+import { initializeMonthScheduleUi } from "./month-schedule-ui.js";
 import { initializeProposalButton } from "./ui-hook.js";
 import { elements, setSaveStatus } from "./elements.js";
 import { render } from "./render.js";
@@ -61,6 +62,7 @@ async function initialize() {
     setSaveStatus(`読込失敗: ${error.message}`, true);
   }
   render(elements);
+  initializeMonthScheduleUi({ setStatus: setSaveStatus });
   // boot-guard.jsが監視する初期化完了フラグ。モジュール読込が失敗して
   // ここへ到達しない場合、ガードが再読み込みの案内を表示する。
   document.documentElement.dataset.appReady = "1";
