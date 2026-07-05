@@ -11,6 +11,7 @@ import { bindEvents } from "./events.js";
 import { refresh, undoLastAction, redoLastAction } from "./actions.js";
 import { initializeHistoryUi } from "./history-ui.js";
 import { initializePaintInput } from "./paint-input.js";
+import { initializeProposalButton } from "./ui-hook.js";
 import { elements, setSaveStatus } from "./elements.js";
 import { render } from "./render.js";
 import { consumeWorkspaceMigrationFlag } from "./workspace-normalizer.js";
@@ -26,6 +27,7 @@ function loadStylesheet(href) {
 async function initialize() {
   loadStylesheet("./print-page.css");
   loadStylesheet("./paint.css");
+  loadStylesheet("./optimizer-view.css");
   setStatusHandler(setSaveStatus);
   initializeHistoryUi({ onUndo: undoLastAction, onRedo: redoLastAction });
   initializePaintInput({
@@ -34,6 +36,7 @@ async function initialize() {
     setStatus: setSaveStatus
   });
   bindEvents();
+  initializeProposalButton(elements.autoBreakButton);
   // デバウンス待ちの変更をタブ切替・クローズ時に取りこぼさない。
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") void flushPendingSave().catch(() => {});
