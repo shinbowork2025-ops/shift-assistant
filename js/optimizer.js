@@ -284,7 +284,6 @@ export function buildGreedyBreaks(assignments, existingBreaksByEmployee = {}, ta
     let best = patterns[0] ?? [];
     let bestScore = Number.POSITIVE_INFINITY;
     for (const pattern of patterns) {
-      const candidateBreaks = { ...result, [assignment.employee.id]: pattern };
       const candidateScore = candidateScoreWithPattern({
         activeCounts,
         baseLoad,
@@ -337,10 +336,10 @@ export function optimizeBreaks(dayPlan, config = {}) {
         const baseTargetDeviation = totalTargetDeviation(assignments, currentBreaks) - targetDeviationFor(assignment, currentBreaks[employeeId] ?? []);
         let employeeBestBreaks = currentBreaks;
         let employeeBestScore = currentScore;
+        let employeeBestPattern = currentBreaks[employeeId] ?? [];
 
         for (const pattern of patterns) {
           iterations += 1;
-          const candidateBreaks = { ...currentBreaks, [employeeId]: pattern };
           const candidateScore = candidateScoreWithPattern({
             activeCounts,
             baseLoad,
@@ -351,12 +350,13 @@ export function optimizeBreaks(dayPlan, config = {}) {
             config: mergedConfig
           });
           if (candidateScore.total < employeeBestScore.total) {
-            employeeBestBreaks = candidateBreaks;
+            employeeBestPattern = pattern;
             employeeBestScore = candidateScore;
           }
         }
 
         if (employeeBestScore.total < currentScore.total) {
+          employeeBestBreaks = { ...currentBreaks, [employeeId]: employeeBestPattern };
           currentBreaks = employeeBestBreaks;
           currentScore = employeeBestScore;
           improved = true;
