@@ -1,0 +1,49 @@
+{
+  "monthValue": "2026-07",
+  "shiftTypes": [
+    { "code": "A", "name": "勤務A", "shortLabel": "A", "start": "06:45", "end": "16:15", "isWork": true, "overtimeMinutes": 0 },
+    { "code": "B", "name": "勤務B", "shortLabel": "B", "start": "08:45", "end": "18:15", "isWork": true, "overtimeMinutes": 0 },
+    { "code": "C", "name": "勤務C", "shortLabel": "C", "start": "10:45", "end": "20:15", "isWork": true, "overtimeMinutes": 0 },
+    { "code": "休", "name": "公休", "shortLabel": "休", "start": "", "end": "", "isWork": false, "paidMinutes": 0, "overtimeMinutes": 0 }
+  ],
+  "employees": [
+    { "id": "e01", "name": "従業員01", "order": 1, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e02", "name": "従業員02", "order": 2, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e03", "name": "従業員03", "order": 3, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e04", "name": "従業員04", "order": 4, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e05", "name": "従業員05", "order": 5, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e06", "name": "従業員06", "order": 6, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e07", "name": "従業員07", "order": 7, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e08", "name": "従業員08", "order": 8, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e09", "name": "従業員09", "order": 9, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e10", "name": "従業員10", "order": 10, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e11", "name": "従業員11", "order": 11, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e12", "name": "従業員12", "order": 12, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e13", "name": "従業員13", "order": 13, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e14", "name": "従業員14", "order": 14, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 },
+    { "id": "e15", "name": "従業員15", "order": 15, "targetDaysOff": 8, "restPatternId": "5on2off", "allowedShiftCodes": ["A", "B", "C"], "fixedOvertimeMinutes": 0 }
+  ],
+  "shifts": {
+    "2026-07": {
+      "e01": { "2026-07-01": "A" },
+      "e02": { "2026-07-01": "B" },
+      "e03": { "2026-07-01": "C" }
+    }
+  },
+  "shiftLocks": {
+    "2026-07": {
+      "e01": { "2026-07-01": true },
+      "e02": { "2026-07-01": true },
+      "e03": { "2026-07-01": true }
+    }
+  },
+  "dayOffRequests": {
+    "2026-07": {
+      "e01": { "2026-07-05": true, "2026-07-19": true },
+      "e02": { "2026-07-06": true },
+      "e03": { "2026-07-07": true },
+      "e04": { "2026-07-08": true },
+      "e05": { "2026-07-09": true }
+    }
+  }
+}
