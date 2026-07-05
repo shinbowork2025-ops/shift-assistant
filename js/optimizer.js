@@ -381,6 +381,8 @@ export function optimizeBreaks(dayPlan, config = {}) {
     if (currentScore.total < bestScore.total) {
       bestBreaks = structuredClone(currentBreaks);
       bestScore = currentScore;
+    } else if (restart > 0) {
+      break;
     }
   }
 
