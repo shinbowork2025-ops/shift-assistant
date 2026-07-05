@@ -1,1 +1,82 @@
-.rest-proposal-dialog { width: min(820px, calc(100vw - 24px)); }
+.rest-proposal-dialog {
+  width: min(820px, calc(100vw - 24px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.rest-proposal-dialog form,
+.rest-proposal-result {
+  display: grid;
+  gap: 14px;
+}
+
+.rest-proposal-note,
+.rest-proposal-status {
+  margin: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.6;
+}
+
+.rest-proposal-note {
+  border-left: 4px solid #2563eb;
+  background: #eff6ff;
+  color: #1e3a5f;
+}
+
+.rest-proposal-status {
+  font-weight: 700;
+}
+
+.rest-proposal-status.working {
+  background: #fef3c7;
+  color: #78350f;
+}
+
+.rest-proposal-status.success {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.rest-proposal-status.error {
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.rest-score-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.rest-score-table th,
+.rest-score-table td {
+  border: 1px solid #cbd5e1;
+  padding: 7px 9px;
+  text-align: right;
+}
+
+.rest-score-table th:first-child {
+  text-align: left;
+}
+
+.rest-proposal-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 7px;
+}
+
+.rest-proposal-row {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #d7dde4;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  color: #1f2937;
+}
+
+.rest-proposal-row span {
+  font-size: .82rem;
+  font-variant-numeric: tabular-nums;
+}
