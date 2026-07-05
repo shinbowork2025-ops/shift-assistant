@@ -1,0 +1,9 @@
+{
+  "name": "7時間拘束混在",
+  "seed": 202,
+  "groups": [
+    { "count": 3, "shiftStart": 480, "shiftEnd": 900 },
+    { "count": 3, "shiftStart": 540, "shiftEnd": 960 },
+    { "count": 2, "shiftStart": 600, "shiftEnd": 1020 }
+  ]
+}

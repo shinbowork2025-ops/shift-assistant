@@ -1,0 +1,7 @@
+{
+  "name": "全員9時間拘束6人",
+  "seed": 101,
+  "groups": [
+    { "count": 6, "shiftStart": 540, "shiftEnd": 1080 }
+  ]
+}

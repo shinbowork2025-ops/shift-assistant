@@ -1,0 +1,10 @@
+{
+  "name": "長短混在15人",
+  "seed": 303,
+  "groups": [
+    { "count": 4, "shiftStart": 405, "shiftEnd": 945 },
+    { "count": 4, "shiftStart": 525, "shiftEnd": 1065 },
+    { "count": 4, "shiftStart": 645, "shiftEnd": 1215 },
+    { "count": 3, "shiftStart": 765, "shiftEnd": 1200 }
+  ]
+}

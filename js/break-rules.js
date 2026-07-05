@@ -26,7 +26,8 @@ export function plannedBreakTemplates(spanMinutes) {
     return [{ type: "small", label: "小休憩", duration: 15, targetOffset: 120 }];
   }
 
-  // 45分を差し引いた実働が8時間以下に収まる拘束時間帯。
+  // 8時間45分以下は、初期解として45分休憩を中央付近へ配置する。
+  // 探索層では45分1回に加えて30分+15分も候補として比較する。
   if (span <= 525) {
     return [{
       type: "lunch",
@@ -36,17 +37,7 @@ export function plannedBreakTemplates(spanMinutes) {
     }];
   }
 
-  // 8時間46分〜8時間59分は60分を配置する。
-  if (span < 540) {
-    return [{
-      type: "lunch",
-      label: "昼休憩",
-      duration: 60,
-      targetOffset: Math.max(60, Math.round((span - 60) / 2))
-    }];
-  }
-
-  // 通常の長時間シフトは店舗ルールを維持し、15分+60分+15分を配置する。
+  // 8時間45分超は15分+60分+15分を配置する。
   return [
     { type: "small", label: "小休憩", duration: 15, targetOffset: 120 },
     { type: "lunch", label: "昼休憩", duration: 60, targetOffset: Math.max(180, Math.round((span - 60) / 2)) },

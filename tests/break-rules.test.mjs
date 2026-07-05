@@ -14,7 +14,7 @@ const boundaryCases = [
   { label: "7:00", span: 420, planned: 45 },
   { label: "8:00", span: 480, planned: 45 },
   { label: "8:45", span: 525, planned: 45 },
-  { label: "8:46", span: 526, planned: 60 },
+  { label: "8:46", span: 526, planned: 90 },
   { label: "9:00", span: 540, planned: 90 },
   { label: "12:00", span: 720, planned: 90 }
 ];
