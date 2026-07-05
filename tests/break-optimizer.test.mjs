@@ -6,6 +6,8 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { buildGreedyBreaks, optimizeBreaks } from "../js/optimizer.js";
 import { checkHard } from "../js/scoring.js";
+import { generateBreaksForDate } from "../js/breaks.js";
+import { state } from "../js/model.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fixturePath = path.join(repositoryRoot, "js", "fixtures", "break-optimizer-cases.json");
@@ -94,4 +96,36 @@ test("30人1日分の休憩探索は1秒以内に終わる", () => {
 
   assert.equal(checkHard(assignments, optimized.breaks).ok, true);
   assert.equal(elapsed < 1000, true, `elapsed=${elapsed.toFixed(1)}ms`);
+});
+
+test("既存の休憩自動配置APIから探索結果を保存できる", () => {
+  state.selectedMonth = "2026-07";
+  state.employees = [
+    { id: "e1", name: "田中", order: 1 },
+    { id: "e2", name: "佐藤", order: 2 }
+  ];
+  state.shiftTypes = [
+    { code: "W", name: "勤務", start: "09:00", end: "18:00", isWork: true }
+  ];
+  state.shifts = {
+    "2026-07": {
+      e1: { "2026-07-02": "W" },
+      e2: { "2026-07-02": "W" }
+    }
+  };
+  state.breaks = {};
+
+  const result = generateBreaksForDate("2026-07-02", null, {
+    save: false,
+    optimizerConfig: { seed: "api-integration" }
+  });
+
+  const assignments = [
+    assignmentFromShift({ employeeId: "e1", start: "09:00", end: "18:00" }, 0),
+    assignmentFromShift({ employeeId: "e2", start: "09:00", end: "18:00" }, 1)
+  ];
+  assert.equal(result.e1.length, 3);
+  assert.equal(result.e2.length, 3);
+  assert.deepEqual(state.breaks["2026-07-02"], result);
+  assert.equal(checkHard(assignments, result).ok, true);
 });
