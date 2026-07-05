@@ -4,13 +4,14 @@ import {
   getShift,
   isShiftLocked,
   setShift,
+  setBreaksForDate,
   scheduleSave,
   monthDisplayName,
   dateKey,
   removeShiftLocksForEmployee,
   clearShiftLocksForMonth
 } from "../model.js";
-import { generateBreaksForDate } from "../breaks.js";
+import { generateBreaksForDate, createBreakOptimizationProposalForDate } from "../breaks.js";
 import { normalizeEmploymentType } from "../employment-types.js";
 import { compareEmployeeOrder } from "../workspace-normalizer.js";
 import { readEmployeeRestForm } from "../employee-rest-form.js";
@@ -23,6 +24,12 @@ import {
   confirmAction
 } from "../elements.js";
 import { refresh } from "./view-actions.js";
+
+let breakOptimizationInFlight = false;
+
+function scoreBreakdownText(breakdown = {}) {
+  return `人員:${breakdown.availabilityPenalty ?? 0} / 同時休憩:${breakdown.concurrencyPenalty ?? 0} / 目標時刻:${breakdown.timingPenalty ?? 0} / 制約:${breakdown.hardPenalty ?? 0}`;
+}
 
 export function handleShiftChange(select) {
   const day = Number(select.dataset.day);
@@ -110,10 +117,46 @@ export async function deleteEmployeeFromDialog() {
   refresh();
 }
 
-export function autoPlaceBreaks() {
-  runWithHistory("当日の休憩を再配置", () => generateBreaksForDate(state.selectedDate));
-  refresh();
-  setSaveStatus("休憩を再配置しました");
+export async function autoPlaceBreaks() {
+  if (breakOptimizationInFlight) return;
+  breakOptimizationInFlight = true;
+  const targetDate = state.selectedDate;
+  const originalLabel = elements.autoBreakButton.textContent;
+  elements.autoBreakButton.disabled = true;
+  elements.autoBreakButton.textContent = "最適化中…";
+  setSaveStatus("休憩案を作成しています…");
+
+  try {
+    const proposal = await createBreakOptimizationProposalForDate(targetDate, { useWorker: true });
+    if (!proposal.hardOk) {
+      setSaveStatus(`休憩案を作成できませんでした: ${proposal.hardIssues.join(" / ")}`, true);
+      return;
+    }
+    const message = [
+      `${targetDate} の休憩案を作成しました。`,
+      `スコア ${proposal.initialScore} → ${proposal.optimizedScore}`,
+      `改善前内訳: ${scoreBreakdownText(proposal.initialBreakdown)}`,
+      `改善後内訳: ${scoreBreakdownText(proposal.optimizedBreakdown)}`,
+      `探索: ${proposal.restarts}再始動 / ${proposal.sweeps}周 / ${proposal.elapsedMs}ms`
+    ].join(" ");
+    const confirmed = await confirmAction("休憩最適化の提案", message, "適用");
+    if (!confirmed) {
+      setSaveStatus("休憩案の適用をキャンセルしました");
+      return;
+    }
+    runWithHistory("当日の休憩を再配置", () => {
+      setBreaksForDate(targetDate, proposal.optimizedBreaks, { save: false });
+      scheduleSave();
+    });
+    refresh();
+    setSaveStatus(`休憩を最適化しました（スコア ${proposal.initialScore} → ${proposal.optimizedScore}）`);
+  } catch (error) {
+    setSaveStatus(`休憩最適化に失敗: ${error.message}`, true);
+  } finally {
+    breakOptimizationInFlight = false;
+    elements.autoBreakButton.disabled = false;
+    elements.autoBreakButton.textContent = originalLabel;
+  }
 }
 
 export async function clearCurrentMonth() {
