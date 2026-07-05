@@ -37,15 +37,32 @@ function expandGroups(groups = []) {
   return employees;
 }
 
+function coverageFromRanges(ranges = []) {
+  const result = Array(96).fill(0);
+  for (const range of ranges) {
+    for (let minute = range.start; minute < range.end; minute += 15) result[Math.floor(minute / 15)] = range.count;
+  }
+  return result;
+}
+
 test("optimizer smoke", () => {
   const result = optimizeBreaks({ employees: [] }, { seed: 1 });
   assert.equal(result.score, 0);
 });
 
-test("fixtures load", async () => {
-  for (const name of fixtureNames) {
-    const fixture = await loadFixture(name);
+for (const fixtureName of fixtureNames) {
+  test(`optimizer fixture: ${fixtureName}`, async () => {
+    const fixture = await loadFixture(fixtureName);
     const dayPlan = addGreedyInitialSolution({ employees: expandGroups(fixture.groups) });
-    assert.ok(dayPlan.employees.length > 0);
-  }
-});
+    const config = {
+      seed: fixture.seed,
+      restarts: 3,
+      requiredCoverage: coverageFromRanges(fixture.requiredCoverageRanges)
+    };
+    const first = optimizeBreaks(dayPlan, config);
+    const second = optimizeBreaks(dayPlan, config);
+    assert.ok(first.score <= first.initialScore, `${first.score} > ${first.initialScore}`);
+    assert.equal(first.hardCheck.ok, true, first.hardCheck.issues.join("\n"));
+    assert.deepEqual(first.breaks, second.breaks);
+  });
+}
