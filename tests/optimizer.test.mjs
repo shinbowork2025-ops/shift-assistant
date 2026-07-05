@@ -18,10 +18,10 @@ async function loadFixture(name) {
   return JSON.parse(await readFile(fileURLToPath(url), "utf8"));
 }
 
-function expandGroups(groups = []) {
+function expandFixture(fixture) {
   const employees = [];
   let index = 0;
-  for (const group of groups) {
+  for (const group of fixture.groups ?? []) {
     for (let count = 0; count < group.count; count += 1) {
       employees.push({
         id: `e${index + 1}`,
@@ -33,6 +33,18 @@ function expandGroups(groups = []) {
       });
       index += 1;
     }
+  }
+  for (const fixed of fixture.fixedItems ?? []) {
+    const employee = employees[fixed.employeeIndex];
+    if (!employee) continue;
+    employee.breaks.push({
+      type: fixed.type,
+      label: fixed.label,
+      start: fixed.start,
+      end: fixed.end,
+      target: fixed.target,
+      locked: Boolean(fixed.fixed)
+    });
   }
   return employees;
 }
@@ -53,7 +65,7 @@ test("optimizer smoke", () => {
 for (const fixtureName of fixtureNames) {
   test(`optimizer fixture: ${fixtureName}`, async () => {
     const fixture = await loadFixture(fixtureName);
-    const dayPlan = addGreedyInitialSolution({ employees: expandGroups(fixture.groups) });
+    const dayPlan = addGreedyInitialSolution({ employees: expandFixture(fixture) });
     const config = {
       seed: fixture.seed,
       restarts: 3,
@@ -64,5 +76,14 @@ for (const fixtureName of fixtureNames) {
     assert.ok(first.score <= first.initialScore, `${first.score} > ${first.initialScore}`);
     assert.equal(first.hardCheck.ok, true, first.hardCheck.issues.join("\n"));
     assert.deepEqual(first.breaks, second.breaks);
+
+    for (const fixed of fixture.fixedItems ?? []) {
+      const employeeId = `e${fixed.employeeIndex + 1}`;
+      const actual = first.breaks[employeeId]?.find((item) => item.locked && item.start === fixed.start);
+      assert.deepEqual(
+        { start: actual?.start, end: actual?.end, locked: actual?.locked },
+        { start: fixed.start, end: fixed.end, locked: true }
+      );
+    }
   });
 }
