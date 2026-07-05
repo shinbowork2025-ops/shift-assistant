@@ -87,6 +87,10 @@ export function buildInitialMonthPlan(options) {
         employeeRequests[day] = true;
         if (existing && existing !== publicHolidayCode) {
           conflicts.push(`${employee.name}・${day}日は希望休と入力済みシフト「${existing}」が競合しています。`);
+        } else if (!existing && locked) {
+          // ロックされた空きセルは適用時（respectLock）に公休へ変更できないため、
+          // プレビューだけ公休になり適用では空欄のまま残る不整合を防ぐ。競合として扱う。
+          conflicts.push(`${employee.name}・${day}日は希望休とロックされた空きセルが競合しています。`);
         }
         employeeAssignments[day] = publicHolidayCode;
         setTempShift(tempShifts, monthValue, employee.id, day, publicHolidayCode);

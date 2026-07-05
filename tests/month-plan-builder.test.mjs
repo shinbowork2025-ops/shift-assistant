@@ -53,6 +53,37 @@ test("希望休と入力済み勤務の競合を拒否する", () => {
   }), /競合/);
 });
 
+test("希望休とロックされた空きセルの競合を拒否する", () => {
+  // ロックされた空きセルは適用時に公休へ変更できないため、プレビューだけ公休に
+  // なって適用では空欄のまま残る不整合を避け、初期案生成で競合として拒否する。
+  assert.throws(() => buildInitialMonthPlan({
+    monthValue: "2026-07",
+    employees: employees(),
+    shiftTypes,
+    shifts: {},
+    shiftLocks: { "2026-07": { e1: { "2026-07-05": true } } },
+    dayOffRequests: { "2026-07": { e1: { "2026-07-05": true } } },
+    selectedEmployeeIds: ["e1"],
+    selectedWorkShiftCodes: ["A", "B"]
+  }), /競合/);
+});
+
+test("希望休がロックされた公休セルと一致する場合は競合にしない", () => {
+  // 既にロック済みの公休へ希望休が重なるのは矛盾しない（適用時に変更不要）。
+  const plan = buildInitialMonthPlan({
+    monthValue: "2026-07",
+    employees: employees(),
+    shiftTypes,
+    shifts: { "2026-07": { e1: { "2026-07-05": "休" } } },
+    shiftLocks: { "2026-07": { e1: { "2026-07-05": true } } },
+    dayOffRequests: { "2026-07": { e1: { "2026-07-05": true } } },
+    selectedEmployeeIds: ["e1"],
+    selectedWorkShiftCodes: ["A", "B"]
+  });
+  assert.equal(plan.assignments.e1[5], "休");
+  assert.equal(plan.fixedValues.e1[5], "休");
+});
+
 test("元データとの差分だけを適用候補として返す", () => {
   const original = { "2026-07": { e1: { "2026-07-01": "A" } } };
   const plan = buildInitialMonthPlan({
