@@ -93,6 +93,92 @@ function loadWithoutEmployee(breaksByEmployee, employeeId, config) {
   return buildBreakLoadCounts(baseBreaks, config);
 }
 
+function slotContribution(activeCount, load, weights) {
+  if (!load) return {
+    unavailableSlots: 0,
+    lowCoverage: 0,
+    concurrentBreaks: 0
+  };
+  const available = activeCount - load;
+  return {
+    unavailableSlots: available <= 0 ? 1 : 0,
+    lowCoverage: load * load,
+    concurrentBreaks: load * load
+  };
+}
+
+function addContribution(target, contribution, direction = 1) {
+  target.unavailableSlots += contribution.unavailableSlots * direction;
+  target.lowCoverage += contribution.lowCoverage * direction;
+  target.concurrentBreaks += contribution.concurrentBreaks * direction;
+}
+
+function patternSlotCounts(breaks = [], config) {
+  const counts = new Map();
+  for (const breakItem of breaks ?? []) {
+    const start = timeToMinutes(breakItem?.start);
+    const end = timeToMinutes(breakItem?.end);
+    if (start === null || end === null || end <= start) continue;
+    for (let minute = Math.floor(start / config.slotMinutes) * config.slotMinutes; minute < end; minute += config.slotMinutes) {
+      counts.set(minute, (counts.get(minute) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function breakLoadBreakdown(activeCounts, breakLoad, config) {
+  const breakdown = {
+    unavailableSlots: 0,
+    lowCoverage: 0,
+    concurrentBreaks: 0,
+    targetDeviation: 0
+  };
+  for (const [slot, activeCount] of activeCounts) {
+    addContribution(breakdown, slotContribution(activeCount, breakLoad.get(slot) ?? 0, config.weights));
+  }
+  return breakdown;
+}
+
+function targetDeviationFor(assignment, breaks = []) {
+  const shiftStart = timeToMinutes(assignment.shiftType?.start);
+  if (shiftStart === null) return 0;
+  return assignment.templates.reduce((sum, template, index) => {
+    const start = timeToMinutes(breaks[index]?.start);
+    return start === null ? sum : sum + Math.abs(start - (shiftStart + template.targetOffset));
+  }, 0);
+}
+
+function totalTargetDeviation(assignments, breaksByEmployee = {}) {
+  return assignments.reduce((sum, assignment) => (
+    sum + targetDeviationFor(assignment, breaksByEmployee[assignment.employee.id] ?? [])
+  ), 0);
+}
+
+function totalFromBreakdown(breakdown, config) {
+  return (
+    breakdown.unavailableSlots * config.weights.unavailableSlot
+    + breakdown.lowCoverage * config.weights.lowCoverage
+    + breakdown.concurrentBreaks * config.weights.concurrentBreak
+    + breakdown.targetDeviation * config.weights.targetDeviation
+  );
+}
+
+function scoreFromBreakdown(breakdown, config) {
+  return { total: totalFromBreakdown(breakdown, config), breakdown };
+}
+
+function candidateScoreWithPattern({ activeCounts, baseLoad, baseBreakdown, baseTargetDeviation, assignment, pattern, config }) {
+  const breakdown = { ...baseBreakdown, targetDeviation: baseTargetDeviation + targetDeviationFor(assignment, pattern) };
+  for (const [slot, count] of patternSlotCounts(pattern, config)) {
+    const activeCount = activeCounts.get(slot) ?? 0;
+    const oldLoad = baseLoad.get(slot) ?? 0;
+    const nextLoad = oldLoad + count;
+    addContribution(breakdown, slotContribution(activeCount, oldLoad, config.weights), -1);
+    addContribution(breakdown, slotContribution(activeCount, nextLoad, config.weights));
+  }
+  return scoreFromBreakdown(breakdown, config);
+}
+
 function isCompatibleWithPlaced(candidate, placed, config) {
   const start = timeToMinutes(candidate.start);
   const end = timeToMinutes(candidate.end);
@@ -172,12 +258,21 @@ export function buildGreedyBreaks(assignments, existingBreaksByEmployee = {}, ta
     if (!targets.has(assignment.employee.id)) continue;
     const patterns = enumerateBreakPatterns(assignment, existingBreaksByEmployee?.[assignment.employee.id] ?? [], mergedConfig);
     const baseLoad = loadWithoutEmployee(result, assignment.employee.id, mergedConfig);
+    const baseBreakdown = breakLoadBreakdown(activeCounts, baseLoad, mergedConfig);
+    const baseTargetDeviation = totalTargetDeviation(normalized, result) - targetDeviationFor(assignment, result[assignment.employee.id] ?? []);
     let best = patterns[0] ?? [];
     let bestScore = Number.POSITIVE_INFINITY;
     for (const pattern of patterns) {
       const candidateBreaks = { ...result, [assignment.employee.id]: pattern };
-      const breakLoadCounts = addBreaksToLoad(baseLoad, pattern, mergedConfig);
-      const candidateScore = score(normalized, candidateBreaks, { ...mergedConfig, activeCounts, breakLoadCounts }).total;
+      const candidateScore = candidateScoreWithPattern({
+        activeCounts,
+        baseLoad,
+        baseBreakdown,
+        baseTargetDeviation,
+        assignment,
+        pattern,
+        config: mergedConfig
+      }).total;
       if (candidateScore < bestScore) {
         best = pattern;
         bestScore = candidateScore;
@@ -217,14 +312,23 @@ export function optimizeBreaks(dayPlan, config = {}) {
         if (!assignment) continue;
         const patterns = patternsByEmployee.get(employeeId) ?? [];
         const baseLoad = loadWithoutEmployee(currentBreaks, employeeId, mergedConfig);
+        const baseBreakdown = breakLoadBreakdown(activeCounts, baseLoad, mergedConfig);
+        const baseTargetDeviation = totalTargetDeviation(assignments, currentBreaks) - targetDeviationFor(assignment, currentBreaks[employeeId] ?? []);
         let employeeBestBreaks = currentBreaks;
         let employeeBestScore = currentScore;
 
         for (const pattern of patterns) {
           iterations += 1;
           const candidateBreaks = { ...currentBreaks, [employeeId]: pattern };
-          const breakLoadCounts = addBreaksToLoad(baseLoad, pattern, mergedConfig);
-          const candidateScore = score(assignments, candidateBreaks, { ...mergedConfig, activeCounts, breakLoadCounts });
+          const candidateScore = candidateScoreWithPattern({
+            activeCounts,
+            baseLoad,
+            baseBreakdown,
+            baseTargetDeviation,
+            assignment,
+            pattern,
+            config: mergedConfig
+          });
           if (candidateScore.total < employeeBestScore.total) {
             employeeBestBreaks = candidateBreaks;
             employeeBestScore = candidateScore;
