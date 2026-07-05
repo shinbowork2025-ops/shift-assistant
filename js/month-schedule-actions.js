@@ -1,5 +1,5 @@
 import { generateBreaksForDate } from "./breaks.js";
-import { setDayOffRequestInData } from "../day-off-requests.js";
+import { setDayOffRequestInData } from "./day-off-requests.js";
 import { monthPlanChanges, buildInitialMonthPlan } from "../month-plan-builder.js";
 import { dateKey, scheduleSave, setShift, state } from "../model.js";
 import { runWithHistory } from "../history.js";
@@ -27,13 +27,7 @@ export function saveEmployeeDayOffRequests(employeeId, requestedDays) {
   const requested = new Set(requestedDays.map(Number));
   return runWithHistory("希望休を設定", () => {
     for (let day = 1; day <= 31; day += 1) {
-      setDayOffRequestInData(
-        requestData(),
-        state.selectedMonth,
-        employeeId,
-        dateKey(state.selectedMonth, day),
-        requested.has(day)
-      );
+      setDayOffRequestInData(requestData(), state.selectedMonth, employeeId, dateKey(state.selectedMonth, day), requested.has(day));
     }
     scheduleSave();
     refresh();
