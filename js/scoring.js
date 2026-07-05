@@ -101,7 +101,7 @@ export function checkHard(assignments, breaksByEmployee = {}, config = {}) {
 export function score(assignments, breaksByEmployee = {}, config = {}) {
   const weights = { ...BREAK_SCORE_WEIGHTS, ...(config.weights ?? {}) };
   const active = config.activeCounts ?? buildActiveWorkerCounts(assignments, config);
-  const breakLoad = buildBreakLoadCounts(breaksByEmployee, config);
+  const breakLoad = config.breakLoadCounts ?? buildBreakLoadCounts(breaksByEmployee, config);
   const breakdown = {
     unavailableSlots: 0,
     lowCoverage: 0,

@@ -1,6 +1,12 @@
 import { minutesToTime, timeToMinutes } from "./date-time.js";
 import { plannedBreakTemplates } from "./break-rules.js";
-import { checkHard, score, buildActiveWorkerCounts, BREAK_SCORE_CONFIG } from "./scoring.js";
+import {
+  checkHard,
+  score,
+  buildActiveWorkerCounts,
+  buildBreakLoadCounts,
+  BREAK_SCORE_CONFIG
+} from "./scoring.js";
 import { shuffleWithSeed } from "./rng.js";
 
 const DEFAULT_OPTIMIZER_CONFIG = Object.freeze({
@@ -66,6 +72,25 @@ function decorateBreak(template, start, locked = false) {
     end: minutesToTime(start + template.duration),
     ...(locked ? { locked: true } : {})
   };
+}
+
+function addBreaksToLoad(load, breaks = [], config) {
+  const next = new Map(load);
+  for (const breakItem of breaks ?? []) {
+    const start = timeToMinutes(breakItem?.start);
+    const end = timeToMinutes(breakItem?.end);
+    if (start === null || end === null || end <= start) continue;
+    for (let minute = Math.floor(start / config.slotMinutes) * config.slotMinutes; minute < end; minute += config.slotMinutes) {
+      next.set(minute, (next.get(minute) ?? 0) + 1);
+    }
+  }
+  return next;
+}
+
+function loadWithoutEmployee(breaksByEmployee, employeeId, config) {
+  const baseBreaks = { ...(breaksByEmployee ?? {}) };
+  delete baseBreaks[employeeId];
+  return buildBreakLoadCounts(baseBreaks, config);
 }
 
 function isCompatibleWithPlaced(candidate, placed, config) {
@@ -146,11 +171,13 @@ export function buildGreedyBreaks(assignments, existingBreaksByEmployee = {}, ta
   for (const assignment of normalized) {
     if (!targets.has(assignment.employee.id)) continue;
     const patterns = enumerateBreakPatterns(assignment, existingBreaksByEmployee?.[assignment.employee.id] ?? [], mergedConfig);
+    const baseLoad = loadWithoutEmployee(result, assignment.employee.id, mergedConfig);
     let best = patterns[0] ?? [];
     let bestScore = Number.POSITIVE_INFINITY;
     for (const pattern of patterns) {
       const candidateBreaks = { ...result, [assignment.employee.id]: pattern };
-      const candidateScore = score(normalized, candidateBreaks, { ...mergedConfig, activeCounts }).total;
+      const breakLoadCounts = addBreaksToLoad(baseLoad, pattern, mergedConfig);
+      const candidateScore = score(normalized, candidateBreaks, { ...mergedConfig, activeCounts, breakLoadCounts }).total;
       if (candidateScore < bestScore) {
         best = pattern;
         bestScore = candidateScore;
@@ -169,6 +196,10 @@ export function optimizeBreaks(dayPlan, config = {}) {
   const targets = [...targetEmployeeSet(assignments, dayPlan?.targetEmployeeIds)];
   const initialBreaks = structuredClone(dayPlan?.initialBreaks ?? buildGreedyBreaks(assignments, dayPlan?.existingBreaks ?? {}, targets, mergedConfig));
   const initialScore = score(assignments, initialBreaks, { ...mergedConfig, activeCounts });
+  const patternsByEmployee = new Map(assignments.map((assignment) => [
+    assignment.employee.id,
+    enumerateBreakPatterns(assignment, dayPlan?.existingBreaks?.[assignment.employee.id] ?? initialBreaks[assignment.employee.id] ?? [], mergedConfig)
+  ]));
   let bestBreaks = structuredClone(initialBreaks);
   let bestScore = initialScore;
   let iterations = 0;
@@ -184,16 +215,16 @@ export function optimizeBreaks(dayPlan, config = {}) {
       for (const employeeId of order) {
         const assignment = assignments.find((item) => item.employee.id === employeeId);
         if (!assignment) continue;
-        const patterns = enumerateBreakPatterns(assignment, dayPlan?.existingBreaks?.[employeeId] ?? initialBreaks[employeeId] ?? [], mergedConfig);
+        const patterns = patternsByEmployee.get(employeeId) ?? [];
+        const baseLoad = loadWithoutEmployee(currentBreaks, employeeId, mergedConfig);
         let employeeBestBreaks = currentBreaks;
         let employeeBestScore = currentScore;
 
         for (const pattern of patterns) {
           iterations += 1;
           const candidateBreaks = { ...currentBreaks, [employeeId]: pattern };
-          const hard = checkHard(assignments, candidateBreaks, mergedConfig);
-          if (!hard.ok) continue;
-          const candidateScore = score(assignments, candidateBreaks, { ...mergedConfig, activeCounts });
+          const breakLoadCounts = addBreaksToLoad(baseLoad, pattern, mergedConfig);
+          const candidateScore = score(assignments, candidateBreaks, { ...mergedConfig, activeCounts, breakLoadCounts });
           if (candidateScore.total < employeeBestScore.total) {
             employeeBestBreaks = candidateBreaks;
             employeeBestScore = candidateScore;
