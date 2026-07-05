@@ -168,8 +168,10 @@ function scoreFromBreakdown(breakdown, config) {
 }
 
 function candidateScoreWithPattern({ activeCounts, baseLoad, baseBreakdown, baseTargetDeviation, assignment, pattern, config }) {
-  const breakdown = { ...baseBreakdown, targetDeviation: baseTargetDeviation + targetDeviationFor(assignment, pattern) };
-  for (const [slot, count] of patternSlotCounts(pattern, config)) {
+  const targetDeviation = pattern.targetDeviation ?? targetDeviationFor(assignment, pattern);
+  const slotCounts = pattern.slotCounts ?? patternSlotCounts(pattern, config);
+  const breakdown = { ...baseBreakdown, targetDeviation: baseTargetDeviation + targetDeviation };
+  for (const [slot, count] of slotCounts) {
     const activeCount = activeCounts.get(slot) ?? 0;
     const oldLoad = baseLoad.get(slot) ?? 0;
     const nextLoad = oldLoad + count;
@@ -177,6 +179,14 @@ function candidateScoreWithPattern({ activeCounts, baseLoad, baseBreakdown, base
     addContribution(breakdown, slotContribution(activeCount, nextLoad, config.weights));
   }
   return scoreFromBreakdown(breakdown, config);
+}
+
+function createPatternMeta(assignment, pattern, config) {
+  return {
+    breaks: pattern,
+    slotCounts: patternSlotCounts(pattern, config),
+    targetDeviation: targetDeviationFor(assignment, pattern)
+  };
 }
 
 function isCompatibleWithPlaced(candidate, placed, config) {
@@ -277,11 +287,12 @@ export function buildGreedyBreaks(assignments, existingBreaksByEmployee = {}, ta
 
   for (const assignment of normalized) {
     if (!targets.has(assignment.employee.id)) continue;
-    const patterns = enumerateBreakPatterns(assignment, existingBreaksByEmployee?.[assignment.employee.id] ?? [], mergedConfig);
+    const patterns = enumerateBreakPatterns(assignment, existingBreaksByEmployee?.[assignment.employee.id] ?? [], mergedConfig)
+      .map((pattern) => createPatternMeta(assignment, pattern, mergedConfig));
     const baseLoad = loadWithoutEmployee(result, assignment.employee.id, mergedConfig);
     const baseBreakdown = breakLoadBreakdown(activeCounts, baseLoad, mergedConfig);
     const baseTargetDeviation = totalTargetDeviation(normalized, result) - targetDeviationFor(assignment, result[assignment.employee.id] ?? []);
-    let best = patterns[0] ?? [];
+    let best = patterns[0]?.breaks ?? [];
     let bestScore = Number.POSITIVE_INFINITY;
     for (const pattern of patterns) {
       const candidateScore = candidateScoreWithPattern({
@@ -294,7 +305,7 @@ export function buildGreedyBreaks(assignments, existingBreaksByEmployee = {}, ta
         config: mergedConfig
       }).total;
       if (candidateScore < bestScore) {
-        best = pattern;
+        best = pattern.breaks;
         bestScore = candidateScore;
       }
     }
@@ -314,6 +325,7 @@ export function optimizeBreaks(dayPlan, config = {}) {
   const patternsByEmployee = new Map(assignments.map((assignment) => [
     assignment.employee.id,
     enumerateBreakPatterns(assignment, dayPlan?.existingBreaks?.[assignment.employee.id] ?? initialBreaks[assignment.employee.id] ?? [], mergedConfig)
+      .map((pattern) => createPatternMeta(assignment, pattern, mergedConfig))
   ]));
   let bestBreaks = structuredClone(initialBreaks);
   let bestScore = initialScore;
@@ -350,7 +362,7 @@ export function optimizeBreaks(dayPlan, config = {}) {
             config: mergedConfig
           });
           if (candidateScore.total < employeeBestScore.total) {
-            employeeBestPattern = pattern;
+            employeeBestPattern = pattern.breaks;
             employeeBestScore = candidateScore;
           }
         }
