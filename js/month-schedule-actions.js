@@ -1,4 +1,4 @@
-import { generateBreaksForDate } from "../breaks.js";
+import { generateBreaksForDate } from "./breaks.js";
 import { setDayOffRequestInData } from "../day-off-requests.js";
 import { monthPlanChanges, buildInitialMonthPlan } from "../month-plan-builder.js";
 import { dateKey, scheduleSave, setShift, state } from "../model.js";
