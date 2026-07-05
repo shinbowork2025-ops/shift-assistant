@@ -36,9 +36,9 @@ function targetDeviationOf(items) {
   return total;
 }
 
-function rawSlotMetrics(active, breakLoad, requiredCoverage, slot) {
-  const shortage = Math.max(0, requiredAt(requiredCoverage, slot) - (active[slot] - breakLoad[slot]));
-  const overlap = Math.max(0, breakLoad[slot] - 1);
+function rawSlotMetrics(activeCount, breakCount, requiredCount) {
+  const shortage = Math.max(0, requiredCount - (activeCount - breakCount));
+  const overlap = Math.max(0, breakCount - 1);
   return {
     understaffing: shortage * shortage,
     concurrentBreaks: overlap * overlap
@@ -121,7 +121,7 @@ export function createScoreContext(dayPlan, config = {}) {
   let understaffing = 0;
   let concurrentBreaks = 0;
   for (let slot = 0; slot < SCORE_SLOT_COUNT; slot += 1) {
-    const metrics = rawSlotMetrics(active, breakLoad, config.requiredCoverage, slot);
+    const metrics = rawSlotMetrics(active[slot], breakLoad[slot], requiredAt(config.requiredCoverage, slot));
     understaffing += metrics.understaffing;
     concurrentBreaks += metrics.concurrentBreaks;
   }
@@ -156,9 +156,10 @@ export function evaluateBreakReplacement(context, previousItems, nextItems) {
   const slotChanges = [];
   for (const [slot, delta] of deltas) {
     if (delta === 0) continue;
-    const before = rawSlotMetrics(context.active, context.breakLoad, context.requiredCoverage, slot);
+    const required = requiredAt(context.requiredCoverage, slot);
+    const before = rawSlotMetrics(context.active[slot], context.breakLoad[slot], required);
     const nextLoad = context.breakLoad[slot] + delta;
-    const after = rawSlotMetrics(context.active, { ...context.breakLoad, [slot]: nextLoad }, context.requiredCoverage, slot);
+    const after = rawSlotMetrics(context.active[slot], nextLoad, required);
     raw.understaffing += after.understaffing - before.understaffing;
     raw.concurrentBreaks += after.concurrentBreaks - before.concurrentBreaks;
     slotChanges.push([slot, nextLoad]);
