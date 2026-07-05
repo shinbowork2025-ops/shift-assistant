@@ -1,0 +1,11 @@
+{
+  "name": "all_9h_six_employees",
+  "employees": [
+    { "id": "e01", "name": "A01", "order": 1, "shiftStart": "09:00", "shiftEnd": "18:00" },
+    { "id": "e02", "name": "A02", "order": 2, "shiftStart": "09:00", "shiftEnd": "18:00" },
+    { "id": "e03", "name": "A03", "order": 3, "shiftStart": "09:00", "shiftEnd": "18:00" },
+    { "id": "e04", "name": "A04", "order": 4, "shiftStart": "09:00", "shiftEnd": "18:00" },
+    { "id": "e05", "name": "A05", "order": 5, "shiftStart": "09:00", "shiftEnd": "18:00" },
+    { "id": "e06", "name": "A06", "order": 6, "shiftStart": "09:00", "shiftEnd": "18:00" }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "locked_breaks_present",
+  "employees": [
+    { "id": "e01", "name": "E01", "order": 1, "shiftStart": "09:00", "shiftEnd": "18:00" },
+    { "id": "e02", "name": "E02", "order": 2, "shiftStart": "09:00", "shiftEnd": "18:00" },
+    { "id": "e03", "name": "E03", "order": 3, "shiftStart": "10:00", "shiftEnd": "19:00" },
+    { "id": "e04", "name": "E04", "order": 4, "shiftStart": "10:00", "shiftEnd": "19:00" },
+    { "id": "e05", "name": "E05", "order": 5, "shiftStart": "11:00", "shiftEnd": "20:00" },
+    { "id": "e06", "name": "E06", "order": 6, "shiftStart": "11:00", "shiftEnd": "20:00" }
+  ],
+  "existingBreaksByEmployee": {
+    "e01": [
+      { "type": "small", "label": "小休憩", "start": "11:00", "end": "11:15", "locked": true },
+      { "type": "lunch", "label": "昼休憩", "start": "13:00", "end": "14:00", "locked": true },
+      { "type": "small", "label": "小休憩", "start": "16:00", "end": "16:15", "locked": true }
+    ],
+    "e03": [
+      { "type": "small", "label": "小休憩", "start": "12:00", "end": "12:15", "locked": true }
+    ]
+  }
+}

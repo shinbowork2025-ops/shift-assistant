@@ -1,0 +1,11 @@
+{
+  "name": "mixed_7h_band",
+  "employees": [
+    { "id": "e01", "name": "B01", "order": 1, "shiftStart": "09:00", "shiftEnd": "16:00" },
+    { "id": "e02", "name": "B02", "order": 2, "shiftStart": "10:00", "shiftEnd": "17:00" },
+    { "id": "e03", "name": "B03", "order": 3, "shiftStart": "11:00", "shiftEnd": "18:00" },
+    { "id": "e04", "name": "B04", "order": 4, "shiftStart": "09:30", "shiftEnd": "17:30" },
+    { "id": "e05", "name": "B05", "order": 5, "shiftStart": "08:30", "shiftEnd": "16:30" },
+    { "id": "e06", "name": "B06", "order": 6, "shiftStart": "12:00", "shiftEnd": "19:00" }
+  ]
+}
