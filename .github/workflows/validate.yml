@@ -15,12 +15,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Upload README snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase2-readme
-          path: README.md
-          retention-days: 1
       - name: Check JavaScript syntax
         run: find js tests -name '*.js' -o -name '*.mjs' | xargs -n1 node --check
       - name: Run automated tests
