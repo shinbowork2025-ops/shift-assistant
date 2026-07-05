@@ -41,6 +41,25 @@ function buildCandidateMap(initialPlan, config) {
   return result;
 }
 
+function runRestart(initialPlan, candidatesByEmployee, config, restart, maxPasses) {
+  const random = mulberry32(`${config.seed ?? 1}:${restart}`);
+  let plan = clonePlan(initialPlan);
+  const context = createScoreContext(plan, config);
+  const currentCandidates = new Map(plan.employees.map((employee) => [
+    employee.id,
+    compiledCandidate(employee.breaks)
+  ]));
+  let passes = 0;
+
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    passes += 1;
+    const next = runStep(plan, context, currentCandidates, candidatesByEmployee, random, config);
+    plan = next.plan;
+    if (!next.improved) break;
+  }
+  return { plan, result: context.result, passes };
+}
+
 export function improvePlan(dayPlan, config = {}) {
   const initialPlan = clonePlan(dayPlan);
   const initialScore = score(initialPlan, config);
