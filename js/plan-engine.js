@@ -61,18 +61,38 @@ function runRestart(initialPlan, candidatesByEmployee, config, restart, maxPasse
 }
 
 export function improvePlan(dayPlan, config = {}) {
+  const restarts = Math.max(1, Math.floor(Number(config.restarts ?? 3) || 3));
+  const maxPasses = Math.max(1, Math.floor(Number(config.maxPasses ?? 20) || 20));
   const initialPlan = clonePlan(dayPlan);
   const initialScore = score(initialPlan, config);
-  buildCandidateMap(initialPlan, config);
+  const candidatesByEmployee = buildCandidateMap(initialPlan, config);
+  let bestPlan = initialPlan;
+  let bestScore = initialScore;
+  let totalPasses = 0;
+
+  for (let restart = 0; restart < restarts; restart += 1) {
+    const current = runRestart(initialPlan, candidatesByEmployee, config, restart, maxPasses);
+    totalPasses += current.passes;
+    const currentSignature = JSON.stringify(breakMap(current.plan));
+    const bestSignature = JSON.stringify(breakMap(bestPlan));
+    if (
+      current.result.total < bestScore.total - EPSILON
+      || (Math.abs(current.result.total - bestScore.total) <= EPSILON && currentSignature < bestSignature)
+    ) {
+      bestPlan = current.plan;
+      bestScore = current.result;
+    }
+  }
+
   return {
-    breaks: breakMap(initialPlan),
-    score: initialScore.total,
-    breakdown: initialScore.breakdown,
+    breaks: breakMap(bestPlan),
+    score: bestScore.total,
+    breakdown: bestScore.breakdown,
     initialScore: initialScore.total,
     initialBreakdown: initialScore.breakdown,
-    iterations: 0,
-    restarts: 0,
+    iterations: totalPasses,
+    restarts,
     seed: config.seed ?? 1,
-    hardCheck: checkHard(initialPlan, config)
+    hardCheck: checkHard(bestPlan, config)
   };
 }
