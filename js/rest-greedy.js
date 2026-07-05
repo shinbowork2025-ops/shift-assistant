@@ -31,12 +31,26 @@ function chooseStart(target, earliest, latest, duration, active, load) {
 
 function templatesAfterLocked(span, locked) {
   const templates = plannedBreakTemplates(span).map((item) => ({ ...item }));
-  for (const item of locked) {
-    const duration = Number(item.end) - Number(item.start);
-    const index = templates.findIndex((template) => template.duration === duration);
-    if (index >= 0) templates.splice(index, 1);
+  // ロック済み休憩が確保している休憩時間を「予算」とみなし、その分だけ
+  // テンプレートを取り除く。単純な同一長一致だと、既定テンプレートより長い
+  // 休憩をロックした場合（例: 45分想定の勤務に60分をロック）にテンプレートが
+  // 残り、二重に休憩が追加されて過剰配置になるため、長いテンプレートから
+  // 予算で吸収して残りだけを初期配置する。
+  let budget = locked.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.end) - Number(item.start)),
+    0
+  );
+  const dropped = new Set();
+  const byDurationDesc = templates
+    .map((template, index) => ({ template, index }))
+    .sort((a, b) => b.template.duration - a.template.duration || a.index - b.index);
+  for (const { template, index } of byDurationDesc) {
+    if (budget >= template.duration) {
+      budget -= template.duration;
+      dropped.add(index);
+    }
   }
-  return templates;
+  return templates.filter((_, index) => !dropped.has(index));
 }
 
 export function generateGreedyRestPlan(dayPlan) {
