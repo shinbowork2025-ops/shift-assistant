@@ -26,6 +26,37 @@ function requiredAt(requiredCoverage, slot) {
   return Math.max(0, Number(requiredCoverage?.[slotMinute] ?? requiredCoverage?.[String(slotMinute)]) || 0);
 }
 
+function targetDeviationOf(items) {
+  let total = 0;
+  for (const item of items ?? []) {
+    const start = minute(item.start);
+    const target = minute(item.target);
+    if (start !== null && target !== null) total += Math.abs(start - target);
+  }
+  return total;
+}
+
+function rawSlotMetrics(active, breakLoad, requiredCoverage, slot) {
+  const shortage = Math.max(0, requiredAt(requiredCoverage, slot) - (active[slot] - breakLoad[slot]));
+  const overlap = Math.max(0, breakLoad[slot] - 1);
+  return {
+    understaffing: shortage * shortage,
+    concurrentBreaks: overlap * overlap
+  };
+}
+
+function weightedResult(raw, weights) {
+  const weighted = {
+    understaffing: raw.understaffing * weights.understaffing,
+    concurrentBreaks: raw.concurrentBreaks * weights.concurrentBreaks,
+    targetDeviation: raw.targetDeviation * weights.targetDeviation
+  };
+  return {
+    total: weighted.understaffing + weighted.concurrentBreaks + weighted.targetDeviation,
+    breakdown: { ...raw, weighted }
+  };
+}
+
 export function checkHard(dayPlan, config = {}) {
   const edge = Math.max(0, Number(config.edgeBufferMinutes ?? 60) || 0);
   const minimumGap = Math.max(0, Number(config.minimumBreakGapMinutes ?? 60) || 0);
@@ -67,7 +98,7 @@ export function checkHard(dayPlan, config = {}) {
   return { ok: issues.length === 0, issues: [...new Set(issues)] };
 }
 
-export function score(dayPlan, config = {}) {
+export function createScoreContext(dayPlan, config = {}) {
   const weights = { ...DEFAULT_WEIGHTS, ...(config.weights ?? {}) };
   const active = Array(SCORE_SLOT_COUNT).fill(0);
   const breakLoad = Array(SCORE_SLOT_COUNT).fill(0);
@@ -78,33 +109,71 @@ export function score(dayPlan, config = {}) {
     const shiftEnd = minute(employee.shiftEnd);
     if (shiftStart === null || shiftEnd === null || shiftEnd <= shiftStart) continue;
     for (const slot of slots(shiftStart, shiftEnd)) active[slot] += 1;
-
     for (const item of employee.breaks ?? []) {
       const start = minute(item.start);
       const end = minute(item.end);
       if (start === null || end === null || end <= start) continue;
       for (const slot of slots(start, end)) breakLoad[slot] += 1;
-      const target = minute(item.target);
-      if (target !== null) targetDeviation += Math.abs(start - target);
     }
+    targetDeviation += targetDeviationOf(employee.breaks);
   }
 
   let understaffing = 0;
   let concurrentBreaks = 0;
   for (let slot = 0; slot < SCORE_SLOT_COUNT; slot += 1) {
-    const shortage = Math.max(0, requiredAt(config.requiredCoverage, slot) - (active[slot] - breakLoad[slot]));
-    understaffing += shortage * shortage;
-    const overlap = Math.max(0, breakLoad[slot] - 1);
-    concurrentBreaks += overlap * overlap;
+    const metrics = rawSlotMetrics(active, breakLoad, config.requiredCoverage, slot);
+    understaffing += metrics.understaffing;
+    concurrentBreaks += metrics.concurrentBreaks;
   }
 
-  const weighted = {
-    understaffing: understaffing * weights.understaffing,
-    concurrentBreaks: concurrentBreaks * weights.concurrentBreaks,
-    targetDeviation: targetDeviation * weights.targetDeviation
-  };
+  const raw = { understaffing, concurrentBreaks, targetDeviation };
   return {
-    total: weighted.understaffing + weighted.concurrentBreaks + weighted.targetDeviation,
-    breakdown: { understaffing, concurrentBreaks, targetDeviation, weighted }
+    active,
+    breakLoad,
+    requiredCoverage: config.requiredCoverage,
+    weights,
+    raw,
+    result: weightedResult(raw, weights)
   };
+}
+
+export function evaluateBreakReplacement(context, previousItems, nextItems) {
+  const deltas = new Map();
+  for (const item of previousItems ?? []) {
+    const start = minute(item.start);
+    const end = minute(item.end);
+    if (start === null || end === null) continue;
+    for (const slot of slots(start, end)) deltas.set(slot, (deltas.get(slot) ?? 0) - 1);
+  }
+  for (const item of nextItems ?? []) {
+    const start = minute(item.start);
+    const end = minute(item.end);
+    if (start === null || end === null) continue;
+    for (const slot of slots(start, end)) deltas.set(slot, (deltas.get(slot) ?? 0) + 1);
+  }
+
+  const raw = { ...context.raw };
+  const slotChanges = [];
+  for (const [slot, delta] of deltas) {
+    if (delta === 0) continue;
+    const before = rawSlotMetrics(context.active, context.breakLoad, context.requiredCoverage, slot);
+    const nextLoad = context.breakLoad[slot] + delta;
+    const after = rawSlotMetrics(context.active, { ...context.breakLoad, [slot]: nextLoad }, context.requiredCoverage, slot);
+    raw.understaffing += after.understaffing - before.understaffing;
+    raw.concurrentBreaks += after.concurrentBreaks - before.concurrentBreaks;
+    slotChanges.push([slot, nextLoad]);
+  }
+  raw.targetDeviation += targetDeviationOf(nextItems) - targetDeviationOf(previousItems);
+  return { ...weightedResult(raw, context.weights), raw, slotChanges };
+}
+
+export function applyBreakReplacement(context, evaluation) {
+  for (const [slot, value] of evaluation.slotChanges) context.breakLoad[slot] = value;
+  context.raw = { ...evaluation.raw };
+  context.result = { total: evaluation.total, breakdown: evaluation.breakdown };
+  return context;
+}
+
+export function score(dayPlan, config = {}) {
+  return createScoreContext(dayPlan, config).result;
 }
