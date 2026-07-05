@@ -40,7 +40,7 @@ export function applyMonthScheduleProposal(result) {
   const changes = monthPlanChanges(result.plan, state.shifts);
   let applied = 0;
   let skippedLocked = 0;
-  const changedByDate = new Map();
+  const changedDates = new Set();
 
   runWithHistory("月間シフト案を適用", () => {
     for (const change of changes) {
@@ -54,12 +54,15 @@ export function applyMonthScheduleProposal(result) {
         continue;
       }
       applied += 1;
-      const changedDate = dateKey(result.plan.monthValue, change.day);
-      if (!changedByDate.has(changedDate)) changedByDate.set(changedDate, new Set());
-      changedByDate.get(changedDate).add(change.employeeId);
+      changedDates.add(dateKey(result.plan.monthValue, change.day));
     }
-    for (const [changedDate, employeeIds] of changedByDate) {
-      generateBreaksForDate(changedDate, [...employeeIds], { save: false });
+    // 月間探索のハード制約検証は、その日に勤務する全従業員へ初期休憩案を
+    // 生成した状態で行っている。適用時に変更した従業員だけ休憩を再生成すると、
+    // 変更のない既存シフトの休憩が未生成・古いまま残り、検証済みの案と実際の
+    // 保存内容がずれて法定休憩違反になりうる。変更のあった日は勤務者全員分を
+    // 再生成し、検証時と一致させる。
+    for (const changedDate of changedDates) {
+      generateBreaksForDate(changedDate, null, { save: false });
     }
     if (applied > 0) scheduleSave();
   });
