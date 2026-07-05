@@ -1,4 +1,10 @@
-import { checkHard, score } from "./scoring.js";
+import {
+  applyBreakReplacement,
+  checkHard,
+  createScoreContext,
+  evaluateBreakReplacement,
+  score
+} from "./scoring.js";
 import { mulberry32, shuffled } from "./rng.js";
 
 const GRID_MINUTES = 15;
@@ -78,6 +84,7 @@ function signature(breaks) {
 }
 
 export function enumerateBreakPatterns(employee, config = {}) {
+  if (employee.fixedBreaks) return [(employee.breaks ?? []).map((item) => ({ ...item }))];
   const edge = Math.max(0, Number(config.edgeBufferMinutes ?? 60) || 0);
   const minimumGapMinutes = Math.max(0, Number(config.minimumBreakGapMinutes ?? 60) || 0);
   const shiftStart = Number(employee.shiftStart);
@@ -94,7 +101,8 @@ export function enumerateBreakPatterns(employee, config = {}) {
     function visit(index, placed) {
       if (index >= remaining.length) {
         const complete = [...locked, ...placed].sort((a, b) => a.start - b.start || a.end - b.end);
-        results.set(signature(complete), complete);
+        const candidateEmployee = { ...employee, breaks: complete };
+        if (checkHard({ employees: [candidateEmployee] }, config).ok) results.set(signature(complete), complete);
         return;
       }
 
@@ -137,6 +145,10 @@ function breakMap(dayPlan) {
   ]));
 }
 
+function currentEmployee(dayPlan, employeeId) {
+  return dayPlan.employees.find((employee) => employee.id === employeeId);
+}
+
 export function optimizeBreaks(dayPlan, config = {}) {
   const restarts = Math.max(1, Math.floor(Number(config.restarts ?? 3) || 3));
   const maxPasses = Math.max(1, Math.floor(Number(config.maxPasses ?? 20) || 20));
@@ -154,7 +166,7 @@ export function optimizeBreaks(dayPlan, config = {}) {
   for (let restart = 0; restart < restarts; restart += 1) {
     const random = mulberry32(`${seed}:${restart}`);
     let currentPlan = clonePlan(initialPlan);
-    let currentScore = score(currentPlan, config);
+    const context = createScoreContext(currentPlan, config);
 
     for (let pass = 0; pass < maxPasses; pass += 1) {
       totalPasses += 1;
@@ -162,31 +174,34 @@ export function optimizeBreaks(dayPlan, config = {}) {
       const order = shuffled(currentPlan.employees.map((employee) => employee.id), random);
 
       for (const employeeId of order) {
+        const employee = currentEmployee(currentPlan, employeeId);
+        const previousItems = employee?.breaks ?? [];
         const candidates = candidatesByEmployee.get(employeeId) ?? [];
-        let employeeBestPlan = currentPlan;
-        let employeeBestScore = currentScore;
-        let employeeBestSignature = signature(currentPlan.employees.find((item) => item.id === employeeId)?.breaks ?? []);
-        const currentValid = checkHard(currentPlan, config).ok;
+        const feasibleSignatures = new Set(candidates.map(signature));
+        const forceReplacement = !feasibleSignatures.has(signature(previousItems))
+          || !checkHard({ employees: [employee] }, config).ok;
+        let selectedCandidate = null;
+        let selectedEvaluation = null;
+        let selectedSignature = "";
 
         for (const candidate of candidates) {
-          const proposal = withEmployeeBreaks(currentPlan, employeeId, candidate);
-          if (!checkHard(proposal, config).ok) continue;
-          const proposalScore = score(proposal, config);
-          const proposalSignature = signature(candidate);
+          const evaluation = evaluateBreakReplacement(context, previousItems, candidate);
+          const candidateSignature = signature(candidate);
           if (
-            !currentValid
-            || proposalScore.total < employeeBestScore.total - EPSILON
-            || (Math.abs(proposalScore.total - employeeBestScore.total) <= EPSILON && proposalSignature < employeeBestSignature)
+            selectedEvaluation === null
+            || evaluation.total < selectedEvaluation.total - EPSILON
+            || (Math.abs(evaluation.total - selectedEvaluation.total) <= EPSILON && candidateSignature < selectedSignature)
           ) {
-            employeeBestPlan = proposal;
-            employeeBestScore = proposalScore;
-            employeeBestSignature = proposalSignature;
+            selectedCandidate = candidate;
+            selectedEvaluation = evaluation;
+            selectedSignature = candidateSignature;
           }
         }
 
-        if (!currentValid || employeeBestScore.total < currentScore.total - EPSILON) {
-          currentPlan = employeeBestPlan;
-          currentScore = employeeBestScore;
+        if (!selectedCandidate || !selectedEvaluation) continue;
+        if (forceReplacement || selectedEvaluation.total < context.result.total - EPSILON) {
+          currentPlan = withEmployeeBreaks(currentPlan, employeeId, selectedCandidate);
+          applyBreakReplacement(context, selectedEvaluation);
           improved = true;
         }
       }
@@ -194,6 +209,7 @@ export function optimizeBreaks(dayPlan, config = {}) {
       if (!improved) break;
     }
 
+    const currentScore = context.result;
     const currentSignature = JSON.stringify(breakMap(currentPlan));
     const bestSignature = JSON.stringify(breakMap(bestPlan));
     if (
