@@ -1,0 +1,230 @@
+.month-search-dialog,
+.day-off-request-dialog {
+  width: min(880px, calc(100vw - 24px));
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+}
+
+.month-search-dialog form,
+.day-off-request-dialog form {
+  display: grid;
+  gap: 14px;
+}
+
+.month-search-target {
+  font-size: 1rem;
+}
+
+.month-search-dialog fieldset {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.month-search-dialog legend {
+  padding: 0 6px;
+  font-weight: 800;
+}
+
+.compact-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.compact-button-row .button {
+  min-height: 30px;
+  padding: 4px 9px;
+  font-size: .78rem;
+}
+
+.month-search-check-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 5px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.month-search-check-list label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  padding: 6px 8px;
+  background: var(--surface, #fff);
+  font-size: .82rem;
+}
+
+.month-search-check-list.shift-list {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+
+.month-search-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.month-search-settings label,
+.day-off-request-dialog > form > label {
+  display: grid;
+  gap: 5px;
+}
+
+.month-search-note {
+  margin: 0;
+  border-left: 4px solid #7c3aed;
+  padding: 9px 11px;
+  background: #f5f3ff;
+  color: #312e81;
+  font-size: .85rem;
+  line-height: 1.6;
+}
+
+.month-search-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.month-search-progress progress {
+  width: 100%;
+  height: 18px;
+}
+
+.month-search-progress span {
+  font-size: .82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.month-search-result {
+  min-height: 70px;
+  border: 1px solid #c4b5fd;
+  border-radius: 10px;
+  padding: 12px;
+  background: #faf5ff;
+  color: #1f2937;
+}
+
+.month-search-result.error {
+  border-color: #fca5a5;
+  background: #fff1f2;
+  color: #991b1b;
+}
+
+.month-search-result p {
+  margin: 6px 0;
+}
+
+.month-search-result ul {
+  margin: 8px 0 0;
+  padding-left: 1.25rem;
+}
+
+.month-score-breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.month-score-breakdown > div {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #ddd6fe;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+}
+
+.month-score-breakdown span {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.month-search-actions {
+  flex-wrap: wrap;
+}
+
+.month-search-summary {
+  margin-top: 10px;
+  border: 1px solid #c4b5fd;
+  border-left: 5px solid #7c3aed;
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: #faf5ff;
+  color: #312e81;
+}
+
+.month-proposal-changed {
+  outline: 3px solid #a855f7;
+  outline-offset: -3px;
+  background: #faf5ff !important;
+}
+
+.month-proposal-changed .shift-select {
+  font-weight: 900;
+}
+
+.day-off-request-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(72px, 1fr));
+  gap: 6px;
+}
+
+.day-request-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #d7dde4;
+  border-radius: 7px;
+  padding: 7px;
+  background: #fff;
+  font-size: .82rem;
+}
+
+.day-request-item.weekday-0,
+.day-request-item.weekday-6 {
+  background: #fff7ed;
+}
+
+.day-off-request-marker {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  z-index: 3;
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  background: #7c3aed;
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .month-search-settings,
+  .month-score-breakdown {
+    grid-template-columns: 1fr;
+  }
+
+  .day-off-request-grid {
+    grid-template-columns: repeat(4, minmax(62px, 1fr));
+  }
+}
+
+@media print {
+  .month-search-summary,
+  .day-off-request-marker {
+    display: none !important;
+  }
+}
