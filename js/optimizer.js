@@ -227,14 +227,35 @@ export function enumerateBreakPatterns(assignment, existingBreaks = [], config =
     }
 
     const template = templates[index];
+    const previousEnd = placed.length
+      ? timeToMinutes(placed[placed.length - 1].end)
+      : shiftStart;
+    const remainingTemplates = templates.slice(index + 1);
+    const remainingMinutes = remainingTemplates.reduce((sum, item) => (
+      sum + item.duration + mergedConfig.minBreakGapMinutes
+    ), 0);
     const locked = lockedByIndex.get(index);
     if (locked) {
-      if (isCompatibleWithPlaced(locked, placed, mergedConfig)) visit(index + 1, [...placed, locked]);
+      const lockedStart = timeToMinutes(locked.start);
+      const lockedEnd = timeToMinutes(locked.end);
+      if (
+        lockedStart !== null
+        && lockedEnd !== null
+        && previousEnd !== null
+        && lockedStart >= previousEnd + (placed.length ? mergedConfig.minBreakGapMinutes : 0)
+        && lockedEnd <= shiftEnd - mergedConfig.edgeBufferMinutes - remainingMinutes
+        && isCompatibleWithPlaced(locked, placed, mergedConfig)
+      ) {
+        visit(index + 1, [...placed, locked]);
+      }
       return;
     }
 
-    const earliest = shiftStart + mergedConfig.edgeBufferMinutes;
-    const latest = shiftEnd - mergedConfig.edgeBufferMinutes - template.duration;
+    const earliest = Math.max(
+      shiftStart + mergedConfig.edgeBufferMinutes,
+      previousEnd + (placed.length ? mergedConfig.minBreakGapMinutes : 0)
+    );
+    const latest = shiftEnd - mergedConfig.edgeBufferMinutes - template.duration - remainingMinutes;
     for (const start of slotStartRange(earliest, latest, mergedConfig.slotMinutes)) {
       const candidate = decorateBreak(template, start);
       if (isCompatibleWithPlaced(candidate, placed, mergedConfig)) visit(index + 1, [...placed, candidate]);
