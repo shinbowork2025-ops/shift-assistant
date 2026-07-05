@@ -1,7 +1,8 @@
 import { checkHard, createScoreContext, score } from "./scoring.js";
-import { applyCompiledRest, compileRestCandidate, evaluateCompiledRest } from "./rest-candidate.js";
+import { compileRestCandidate } from "./rest-candidate.js";
 import { enumerateBreakPatterns, restCandidateCacheKey, restSignature } from "./rest-pattern-enumerator.js";
-import { mulberry32, shuffled } from "./rng.js";
+import { mulberry32 } from "./rng.js";
+import { runStep } from "./improve-step.js";
 
 const EPSILON = 1e-9;
 
@@ -12,15 +13,6 @@ function clonePlan(dayPlan) {
       ...employee,
       breaks: (employee.breaks ?? []).map((item) => ({ ...item }))
     }))
-  };
-}
-
-function withEmployeeBreaks(dayPlan, employeeId, breaks) {
-  return {
-    ...dayPlan,
-    employees: dayPlan.employees.map((employee) => employee.id === employeeId
-      ? { ...employee, breaks: breaks.map((item) => ({ ...item })) }
-      : employee)
   };
 }
 
