@@ -23,6 +23,7 @@ import {
   shiftDay,
   changeView,
   handleShiftChange,
+  moveEmployeeBreak,
   saveEmployeeFromDialog,
   deleteEmployeeFromDialog,
   autoPlaceBreaks,
@@ -30,6 +31,9 @@ import {
   restoreBackupFile,
   clearCurrentMonth
 } from "./actions.js";
+
+const BREAK_DRAG_MIME = "application/x-shift-assistant-break";
+let currentBreakDragPayload = null;
 
 function bindWorkspaceEvents() {
   elements.workspaceSelect.addEventListener("change", async () => {
@@ -75,6 +79,73 @@ function bindNavigationEvents() {
   });
 }
 
+function readBreakDragPayload(event) {
+  if (currentBreakDragPayload) return currentBreakDragPayload;
+  try {
+    return JSON.parse(event.dataTransfer?.getData(BREAK_DRAG_MIME) || "");
+  } catch {
+    return null;
+  }
+}
+
+function clearBreakDragState() {
+  currentBreakDragPayload = null;
+  elements.dailyChartContainer.querySelectorAll(".break-dragging, .break-drop-hover").forEach((cell) => {
+    cell.classList.remove("break-dragging", "break-drop-hover");
+  });
+}
+
+function bindBreakDragEvents() {
+  elements.dailyChartContainer.addEventListener("dragstart", (event) => {
+    const cell = event.target.closest(".break-draggable");
+    if (!cell) return;
+    const payload = {
+      employeeId: cell.dataset.employeeId,
+      employeeName: cell.dataset.employeeName,
+      shiftCode: cell.dataset.shiftCode,
+      day: Number(cell.dataset.day),
+      dateValue: cell.dataset.dateValue,
+      breakIndex: Number(cell.dataset.breakIndex)
+    };
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(BREAK_DRAG_MIME, JSON.stringify(payload));
+    event.dataTransfer.setData("text/plain", cell.title || "休憩");
+    currentBreakDragPayload = payload;
+    cell.classList.add("break-dragging");
+  });
+
+  elements.dailyChartContainer.addEventListener("dragover", (event) => {
+    const target = event.target.closest(".break-drop-target");
+    const payload = readBreakDragPayload(event);
+    if (!target || !payload || target.dataset.employeeId !== payload.employeeId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    target.classList.add("break-drop-hover");
+  });
+
+  elements.dailyChartContainer.addEventListener("dragleave", (event) => {
+    event.target.closest(".break-drop-target")?.classList.remove("break-drop-hover");
+  });
+
+  elements.dailyChartContainer.addEventListener("drop", (event) => {
+    const target = event.target.closest(".break-drop-target");
+    const payload = readBreakDragPayload(event);
+    clearBreakDragState();
+    if (!target || !payload || target.dataset.employeeId !== payload.employeeId) return;
+    event.preventDefault();
+    const result = moveEmployeeBreak({
+      ...payload,
+      newStartMinute: Number(target.dataset.slotStart)
+    });
+    setSaveStatus(
+      result.ok ? `${payload.employeeName}さんの休憩を移動しました` : result.message,
+      !result.ok
+    );
+  });
+
+  elements.dailyChartContainer.addEventListener("dragend", clearBreakDragState);
+}
+
 function bindScheduleEvents() {
   for (const container of [elements.tableContainer, elements.dailyChartContainer]) {
     container.addEventListener("change", (event) => {
@@ -103,6 +174,7 @@ function bindScheduleEvents() {
     const { openCoverageRequirementDialog } = await import("./coverage-requirements-ui.js");
     openCoverageRequirementDialog({ setStatus: setSaveStatus });
   });
+  bindBreakDragEvents();
 }
 
 function bindEmployeeDialogEvents() {

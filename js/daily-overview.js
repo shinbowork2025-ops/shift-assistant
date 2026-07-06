@@ -33,8 +33,9 @@ function buildSlots(start, end) {
 }
 
 function normalizedBreaks(breaks = []) {
-  return breaks.map((breakItem) => ({
+  return breaks.map((breakItem, index) => ({
     ...breakItem,
+    index,
     startMinute: timeToMinutes(breakItem?.start),
     endMinute: timeToMinutes(breakItem?.end)
   })).filter((breakItem) => (
@@ -56,6 +57,9 @@ function slotCell(assignment, slotStart) {
   if (breakItem) {
     return {
       kind: "break",
+      breakIndex: breakItem.index,
+      breakStart: breakItem.startMinute,
+      breakEnd: breakItem.endMinute,
       breakType: breakItem.type,
       title: `${breakItem.label} ${breakItem.start}〜${breakItem.end}`
     };

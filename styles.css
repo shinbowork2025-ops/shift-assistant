@@ -521,6 +521,27 @@ input { padding: 8px 10px; }
   border-top: 4px solid #c2410c;
   border-bottom: 4px solid #c2410c;
 }
+.break-draggable {
+  cursor: grab;
+  position: relative;
+}
+.break-draggable:active,
+.break-dragging {
+  cursor: grabbing;
+  opacity: .65;
+}
+.break-draggable::after {
+  content: "↔";
+  display: block;
+  color: #7c2d12;
+  font-size: .65rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.break-drop-hover {
+  outline: 3px solid #2563eb;
+  outline-offset: -3px;
+}
 
 .break-warning {
   display: block;
