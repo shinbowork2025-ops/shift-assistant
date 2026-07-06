@@ -28,6 +28,7 @@ import {
 import { buildMonthOverview } from "./month-overview.js";
 import { createId } from "./ids.js";
 import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
+import { normalizeCoverageRequirements } from "./coverage-requirements.js";
 import {
   isShiftLockedInData,
   setShiftLockInData,
@@ -73,6 +74,7 @@ export const state = {
   shifts: {},
   breaks: {},
   shiftLocks: {},
+  coverageRequirements: [],
   updatedAt: null
 };
 
@@ -251,6 +253,16 @@ export function removeShiftLocksForEmployee(employeeId, options = {}) {
   const count = removeEmployeeShiftLocks(state.shiftLocks, employeeId);
   if (count > 0 && options.save !== false) scheduleSave();
   return count;
+}
+
+export function getCoverageRequirements() {
+  return state.coverageRequirements ?? [];
+}
+
+export function setCoverageRequirements(requirements, options = {}) {
+  state.coverageRequirements = normalizeCoverageRequirements(requirements);
+  if (options.save !== false) scheduleSave();
+  return state.coverageRequirements;
 }
 
 function removeEmptyShiftContainers(monthValue, employeeId) {

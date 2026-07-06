@@ -28,7 +28,8 @@ function currentWorkspaceDocument() {
     shiftTypes: state.shiftTypes,
     shifts: state.shifts,
     breaks: state.breaks,
-    shiftLocks: state.shiftLocks
+    shiftLocks: state.shiftLocks,
+    coverageRequirements: state.coverageRequirements
   };
 }
 
@@ -54,6 +55,7 @@ function applySnapshot(snapshot) {
   state.shifts = structuredClone(snapshot.shifts);
   state.breaks = structuredClone(snapshot.breaks);
   state.shiftLocks = structuredClone(snapshot.shiftLocks ?? {});
+  state.coverageRequirements = structuredClone(snapshot.coverageRequirements ?? []);
   scheduleSave();
 }
 

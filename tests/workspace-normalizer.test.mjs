@@ -27,6 +27,22 @@ test("印刷ビューを含むワークスペース状態を維持する", () =>
   });
   assert.equal(workspace.currentView, "print");
   assert.deepEqual(workspace.shiftLocks, {});
+  assert.deepEqual(workspace.coverageRequirements, []);
+});
+
+test("必要人数の設定をワークスペースへ正規化して保持する", () => {
+  const workspace = normalizeWorkspace({
+    id: "w1",
+    name: "園芸",
+    selectedMonth: "2026-07",
+    coverageRequirements: [
+      { scope: "weekday", start: "09:00", end: "17:00", requiredTotal: "3", requiredByType: { fulltime: 1 } }
+    ]
+  });
+  assert.equal(workspace.coverageRequirements.length, 1);
+  assert.equal(workspace.coverageRequirements[0].scope, "weekday");
+  assert.equal(workspace.coverageRequirements[0].requiredTotal, 3);
+  assert.equal(workspace.coverageRequirements[0].requiredByType.fulltime, 1);
 });
 
 test("ワークスペース読込時は編集状態を独立コピーする", () => {

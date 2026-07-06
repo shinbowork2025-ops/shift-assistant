@@ -22,6 +22,7 @@ export function createBlankWorkspace({ id, name, targetMonth, now, shiftTypes })
     shifts: {},
     breaks: {},
     shiftLocks: {},
+    coverageRequirements: [],
     createdAt: now,
     updatedAt: now
   };
@@ -48,6 +49,7 @@ export function wrapLegacyState(candidate, { id, now, defaultMonth, shiftTypes }
     shifts: candidate?.shifts && typeof candidate.shifts === "object" ? structuredClone(candidate.shifts) : {},
     breaks: candidate?.breaks && typeof candidate.breaks === "object" ? structuredClone(candidate.breaks) : {},
     shiftLocks: candidate?.shiftLocks && typeof candidate.shiftLocks === "object" ? structuredClone(candidate.shiftLocks) : {},
+    coverageRequirements: Array.isArray(candidate?.coverageRequirements) ? structuredClone(candidate.coverageRequirements) : [],
     createdAt: candidate?.createdAt ?? candidate?.updatedAt ?? now,
     updatedAt: candidate?.updatedAt ?? now
   };
