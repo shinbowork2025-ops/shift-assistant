@@ -26,6 +26,10 @@ export {
 } from "./actions/schedule-actions.js";
 
 export {
+  moveEmployeeBreak
+} from "./actions/break-edit-actions.js";
+
+export {
   importMasterFile,
   restoreBackupFile
 } from "./actions/file-actions.js";

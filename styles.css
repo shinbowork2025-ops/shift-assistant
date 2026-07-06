@@ -521,6 +521,27 @@ input { padding: 8px 10px; }
   border-top: 4px solid #c2410c;
   border-bottom: 4px solid #c2410c;
 }
+.break-draggable {
+  cursor: grab !important;
+  position: relative;
+  color: #7c2d12;
+  font-size: .68rem;
+  font-weight: 900;
+  line-height: 1;
+  user-select: none;
+}
+.break-draggable:active,
+.break-dragging {
+  cursor: grabbing !important;
+  opacity: .65;
+}
+.break-drag-handle {
+  box-shadow: inset 0 0 0 2px rgba(124, 45, 18, .35);
+}
+.break-drop-hover {
+  outline: 3px solid #2563eb;
+  outline-offset: -3px;
+}
 
 .break-warning {
   display: block;

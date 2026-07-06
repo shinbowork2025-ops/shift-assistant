@@ -96,9 +96,30 @@ export function renderDailyTable(elements) {
       const slot = overview.slots[index];
       const cell = document.createElement("td");
       cell.className = `timeline-cell ${timelineClass(cellData)}`;
+      cell.dataset.employeeId = employee.id;
+      cell.dataset.employeeName = employee.name;
+      cell.dataset.shiftCode = shiftCode;
+      cell.dataset.day = String(overview.day);
+      cell.dataset.dateValue = overview.dateValue;
+      cell.dataset.slotStart = String(slot);
       if (!validation.ok && cellData.kind === "work") cell.classList.add("timeline-break-invalid");
       if (slot % 60 === 0) cell.classList.add("hour-start");
       if (cellData.title) cell.title = cellData.title;
+      if (cellData.kind === "work" || cellData.kind === "break") {
+        cell.classList.add("break-drop-target");
+      }
+      if (cellData.kind === "break") {
+        cell.draggable = true;
+        cell.classList.add("break-draggable");
+        if (cellData.isBreakStart) {
+          cell.classList.add("break-drag-handle");
+          cell.textContent = "移";
+        }
+        cell.dataset.breakIndex = String(cellData.breakIndex);
+        cell.dataset.breakStart = String(cellData.breakStart);
+        cell.dataset.breakEnd = String(cellData.breakEnd);
+        cell.setAttribute("aria-label", `${employee.name}さんの${cellData.title}をドラッグして移動`);
+      }
       row.append(cell);
     });
     tbody.append(row);
