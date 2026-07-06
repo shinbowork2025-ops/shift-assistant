@@ -93,8 +93,18 @@ export function renderMonthTable(elements) {
     cells.forEach((cellData, index) => {
       const dayInfo = overview.days[index];
       const locked = isShiftLocked(employee.id, dayInfo.day);
+      // 希望休は「非勤務のシフト区分がロックされているセル」として表す。
+      // ロックされていれば公休自動配置・勤務自動割当・月間ソルバーは変更しない。
+      const isRequestedOff = locked && Boolean(cellData.shiftType) && !cellData.shiftType.isWork;
       const cell = document.createElement("td");
-      cell.className = [weekendClass(dayInfo.weekday), "paint-cell", "shift-lock-cell", locked ? "shift-cell-locked" : ""].filter(Boolean).join(" ");
+      cell.className = [
+        weekendClass(dayInfo.weekday),
+        "paint-cell",
+        "shift-lock-cell",
+        locked ? "shift-cell-locked" : "",
+        isRequestedOff ? "requested-off-cell" : ""
+      ].filter(Boolean).join(" ");
+      if (isRequestedOff) cell.title = `希望休：${cellData.shiftType.name}（ロック済み）`;
       cell.dataset.employeeId = employee.id;
       cell.dataset.day = String(dayInfo.day);
       cell.dataset.locked = String(locked);

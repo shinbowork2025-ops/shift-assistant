@@ -1,0 +1,125 @@
+.off-request-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #dab98a;
+  border-left: 5px solid #b45309;
+  border-radius: 10px;
+  background: #fff8ee;
+}
+
+.off-request-heading {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.off-request-heading strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.off-request-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: .84rem;
+  line-height: 1.5;
+}
+
+.off-request-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.off-request-code-select {
+  min-height: 42px;
+  min-width: 140px;
+}
+
+.off-request-mode-button.primary {
+  background: #b45309;
+}
+
+.off-request-mode-button.primary:hover {
+  background: #92400e;
+}
+
+.requested-off-cell {
+  position: relative;
+}
+
+.requested-off-cell.shift-cell-locked {
+  box-shadow: inset 0 0 0 3px #b45309;
+}
+
+.requested-off-cell.shift-cell-locked::before {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(180, 83, 9, .06) 0,
+    rgba(180, 83, 9, .06) 5px,
+    rgba(180, 83, 9, .16) 5px,
+    rgba(180, 83, 9, .16) 8px
+  );
+}
+
+.requested-off-cell::after {
+  content: "★";
+  position: absolute;
+  z-index: 5;
+  top: 1px;
+  left: 1px;
+  font-size: 9px;
+  line-height: 1;
+  color: #b45309;
+  pointer-events: none;
+}
+
+.table-container.off-request-mode .shift-lock-cell {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.table-container.off-request-mode .shift-lock-cell .shift-select,
+.table-container.off-request-mode .shift-lock-cell .cell-lock-button {
+  pointer-events: none;
+  user-select: none;
+}
+
+.table-container.off-request-mode .shift-lock-cell:hover,
+.table-container.off-request-mode .shift-lock-cell:focus-visible {
+  z-index: 3;
+  outline: 3px solid #b45309;
+  outline-offset: -3px;
+}
+
+.table-container.off-request-mode .off-request-cell-touched {
+  box-shadow: inset 0 0 0 4px #92400e;
+}
+
+body.off-request-dragging {
+  cursor: crosshair;
+  user-select: none;
+}
+
+@media (max-width: 1000px) {
+  .off-request-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .off-request-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media print {
+  .off-request-panel { display: none !important; }
+  .requested-off-cell.shift-cell-locked { box-shadow: none !important; }
+  .requested-off-cell.shift-cell-locked::before,
+  .requested-off-cell::after { display: none !important; }
+}
