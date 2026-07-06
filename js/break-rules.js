@@ -20,13 +20,13 @@ export function plannedBreakTemplates(spanMinutes) {
 
   if (span <= 240) return [];
 
-  // 店舗ルールとして、4時間超〜6時間15分までは任意の15分休憩を入れる。
-  // 6時間15分までは、この15分を差し引くと実働6時間以下になる。
-  if (span <= 375) {
+  // 店舗ルールとして、4時間超〜5時間までは任意の15分休憩を入れる。
+  if (span <= 300) {
     return [{ type: "small", label: "小休憩", duration: 15, targetOffset: 120 }];
   }
 
-  // 45分を差し引いた実働が8時間以下に収まる拘束時間帯。
+  // 5時間を超えたら食事がとれるよう昼休憩45分を配置する。
+  // 8時間45分までは、45分を差し引いた実働が8時間以下に収まる。
   if (span <= 525) {
     return [{
       type: "lunch",
