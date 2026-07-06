@@ -47,6 +47,21 @@ test("必要人数不足を最優先に改善する", () => {
   assert.equal(result.validation.ok, true);
 });
 
+test("残った必要人数不足の日別・時間帯別レポートを返す", () => {
+  const plan = oneDayPlan();
+  plan.coverageRequirements = [
+    { scope: "everyday", start: "09:00", end: "12:00", requiredTotal: 3, requiredByType: {} },
+    { scope: "everyday", start: "17:00", end: "20:00", requiredTotal: 3, requiredByType: {} }
+  ];
+  const result = solveMonthSchedule(plan, { seed: 2468, iterations: 600 });
+
+  assert.equal(result.objective.shortagePeople > 0, true);
+  assert.equal(result.shortageReports.length, 1);
+  assert.equal(result.shortageReports[0].day, 1);
+  assert.match(result.shortageReports[0].messages.join(" / "), /09:00〜12:00/);
+  assert.match(result.shortageReports[0].messages.join(" / "), /17:00〜20:00/);
+});
+
 
 
 test("雇用区分別の必要人数を満たす組合せを優先する", () => {
