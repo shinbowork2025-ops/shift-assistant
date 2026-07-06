@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feature/monthly-solver-v2
 
 permissions:
   contents: read
@@ -15,6 +16,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-solver-source
+          path: |
+            .github
+            docs
+            js
+            tests
+            index.html
+            styles.css
+            README.md
+          retention-days: 1
       - name: Check JavaScript syntax
         run: find js tests -name '*.js' -o -name '*.mjs' | xargs -n1 node --check
       - name: Run automated tests
