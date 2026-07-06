@@ -27,6 +27,7 @@ export function moveBreakToStart({ breaks = [], breakIndex, newStartMinute, shif
 
   const duration = breakDuration(breaks[index]);
   if (duration === null) return { ok: false, message: "休憩の開始・終了時刻が正しくありません。" };
+  const before = { start: breaks[index].start, end: breaks[index].end };
 
   const shiftStart = timeToMinutes(shiftType?.start);
   const shiftEnd = timeToMinutes(shiftType?.end);
@@ -56,5 +57,6 @@ export function moveBreakToStart({ breaks = [], breakIndex, newStartMinute, shif
       : { ...breakItem }
   )).sort((a, b) => (timeToMinutes(a.start) ?? 0) - (timeToMinutes(b.start) ?? 0));
 
-  return { ok: true, breaks: nextBreaks, moved: nextBreaks.find((item) => item.start === minutesToTime(start)) };
+  const after = { start: minutesToTime(start), end: minutesToTime(end) };
+  return { ok: true, breaks: nextBreaks, before, after };
 }

@@ -108,13 +108,14 @@ export function renderDailyTable(elements) {
       if (cellData.kind === "work" || cellData.kind === "break") {
         cell.classList.add("break-drop-target");
       }
-      if (cellData.kind === "break") {
+      if (cellData.kind === "break" && cellData.isBreakStart) {
         cell.draggable = true;
-        cell.classList.add("break-draggable");
+        cell.classList.add("break-draggable", "break-drag-handle");
+        cell.textContent = "移";
         cell.dataset.breakIndex = String(cellData.breakIndex);
         cell.dataset.breakStart = String(cellData.breakStart);
         cell.dataset.breakEnd = String(cellData.breakEnd);
-        cell.setAttribute("aria-label", `${employee.name}さんの${cellData.title}。ドラッグして移動できます。`);
+        cell.setAttribute("aria-label", `${employee.name}さんの${cellData.title}をドラッグして移動`);
       }
       row.append(cell);
     });

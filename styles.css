@@ -524,19 +524,18 @@ input { padding: 8px 10px; }
 .break-draggable {
   cursor: grab;
   position: relative;
+  color: #7c2d12;
+  font-size: .68rem;
+  font-weight: 900;
+  line-height: 1;
 }
 .break-draggable:active,
 .break-dragging {
   cursor: grabbing;
   opacity: .65;
 }
-.break-draggable::after {
-  content: "↔";
-  display: block;
-  color: #7c2d12;
-  font-size: .65rem;
-  font-weight: 900;
-  line-height: 1;
+.break-drag-handle {
+  box-shadow: inset 0 0 0 2px rgba(124, 45, 18, .35);
 }
 .break-drop-hover {
   outline: 3px solid #2563eb;

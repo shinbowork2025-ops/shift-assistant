@@ -16,6 +16,8 @@ test("休憩を同じ長さのまま15分単位で移動する", () => {
   assert.deepEqual(result.breaks, [
     { type: "lunch", label: "昼休憩", start: "13:00", end: "13:45" }
   ]);
+  assert.deepEqual(result.before, { start: "12:00", end: "12:45" });
+  assert.deepEqual(result.after, { start: "13:00", end: "13:45" });
 });
 
 test("勤務時間外へは移動しない", () => {

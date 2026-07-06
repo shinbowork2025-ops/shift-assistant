@@ -138,7 +138,9 @@ function bindBreakDragEvents() {
       newStartMinute: Number(target.dataset.slotStart)
     });
     setSaveStatus(
-      result.ok ? `${payload.employeeName}さんの休憩を移動しました` : result.message,
+      result.ok
+        ? `${payload.employeeName}さんの休憩を${result.before.start}〜${result.before.end}から${result.after.start}〜${result.after.end}へ移動しました`
+        : result.message,
       !result.ok
     );
   });

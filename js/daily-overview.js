@@ -60,6 +60,7 @@ function slotCell(assignment, slotStart) {
       breakIndex: breakItem.index,
       breakStart: breakItem.startMinute,
       breakEnd: breakItem.endMinute,
+      isBreakStart: slotStart === breakItem.startMinute,
       breakType: breakItem.type,
       title: `${breakItem.label} ${breakItem.start}〜${breakItem.end}`
     };
