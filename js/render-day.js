@@ -108,10 +108,13 @@ export function renderDailyTable(elements) {
       if (cellData.kind === "work" || cellData.kind === "break") {
         cell.classList.add("break-drop-target");
       }
-      if (cellData.kind === "break" && cellData.isBreakStart) {
+      if (cellData.kind === "break") {
         cell.draggable = true;
-        cell.classList.add("break-draggable", "break-drag-handle");
-        cell.textContent = "移";
+        cell.classList.add("break-draggable");
+        if (cellData.isBreakStart) {
+          cell.classList.add("break-drag-handle");
+          cell.textContent = "移";
+        }
         cell.dataset.breakIndex = String(cellData.breakIndex);
         cell.dataset.breakStart = String(cellData.breakStart);
         cell.dataset.breakEnd = String(cellData.breakEnd);

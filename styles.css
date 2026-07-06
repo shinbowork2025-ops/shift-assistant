@@ -522,16 +522,17 @@ input { padding: 8px 10px; }
   border-bottom: 4px solid #c2410c;
 }
 .break-draggable {
-  cursor: grab;
+  cursor: grab !important;
   position: relative;
   color: #7c2d12;
   font-size: .68rem;
   font-weight: 900;
   line-height: 1;
+  user-select: none;
 }
 .break-draggable:active,
 .break-dragging {
-  cursor: grabbing;
+  cursor: grabbing !important;
   opacity: .65;
 }
 .break-drag-handle {
