@@ -14,6 +14,7 @@ export const REQUIREMENT_SCOPE_LABELS = Object.freeze({
 
 const MAX_REQUIRED = 99;
 const MAX_REQUIREMENTS = 20;
+const COVERAGE_SLOT_MINUTES = 15;
 
 function nonNegativeInt(value) {
   const number = Number(value);
@@ -23,6 +24,11 @@ function nonNegativeInt(value) {
 
 function zeroByType() {
   return Object.fromEntries(EMPLOYMENT_TYPES.map((type) => [type.code, 0]));
+}
+
+function slotOverlapsRequirement(slotStart, requirementStart, requirementEnd) {
+  const slotEnd = slotStart + COVERAGE_SLOT_MINUTES;
+  return slotStart < requirementEnd && slotEnd > requirementStart;
 }
 
 export function normalizeCoverageRequirement(candidate, index = 0) {
@@ -95,6 +101,7 @@ function formatBandMessage(report) {
 
 // activeRequirements は activeRequirementsForWeekday の結果を渡す。
 // slots/coverage/coverageByType は buildDailyOverview の同名データ（15分刻み）。
+// 要件の開始・終了が15分境界に一致しなくても、要件区間と1分でも重なるスロットを評価する。
 export function evaluateCoverage({ activeRequirements = [], slots = [], coverage = [], coverageByType = {} }) {
   const perSlot = slots.map((minute, index) => {
     let requiredTotal = 0;
@@ -103,7 +110,7 @@ export function evaluateCoverage({ activeRequirements = [], slots = [], coverage
     for (const requirement of activeRequirements) {
       const start = timeToMinutes(requirement.start);
       const end = timeToMinutes(requirement.end);
-      if (minute < start || minute >= end) continue;
+      if (!slotOverlapsRequirement(minute, start, end)) continue;
       hasRequirement = true;
       requiredTotal = Math.max(requiredTotal, requirement.requiredTotal);
       for (const type of EMPLOYMENT_TYPES) {
@@ -123,14 +130,14 @@ export function evaluateCoverage({ activeRequirements = [], slots = [], coverage
   });
 
   // メッセージはバンド単位に集約する。セルの赤表示（perSlot）と整合するよう、
-  // 各バンドの範囲内での最大不足人数を示す。
+  // 各バンドと重なる15分スロット内での最大不足人数を示す。
   const bandReports = activeRequirements.map((requirement) => {
     const start = timeToMinutes(requirement.start);
     const end = timeToMinutes(requirement.end);
     let maxTotalShort = 0;
     const maxByTypeShort = zeroByType();
     slots.forEach((minute, index) => {
-      if (minute < start || minute >= end) return;
+      if (!slotOverlapsRequirement(minute, start, end)) return;
       maxTotalShort = Math.max(maxTotalShort, Math.max(0, requirement.requiredTotal - (coverage[index] ?? 0)));
       for (const type of EMPLOYMENT_TYPES) {
         maxByTypeShort[type.code] = Math.max(
