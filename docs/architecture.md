@@ -158,6 +158,10 @@ state
 
 配置時刻の決定は純粋ソルバー`break-scheduler.js`が行います。貪欲な初期配置のあと、辞書式の全体目的関数（最小実配置人数の最大化 → 手薄スロット数の最小化 → 同時休憩の平準化 → 目標時刻からのずれ最小化）を改善する移動を繰り返します。`breaks.js`はアプリ状態との橋渡しだけを担います。ルール変更時は、画面・印刷・CSVへ個別の条件分岐を追加せず、共通関数を変更してください。
 
+### 手動編集
+
+`js/break-edit-ui.js`は1日チャートの「休憩✎」ボタンから遅延読み込みするダイアログで、選択中の日付・従業員1人分の休憩配列を直接編集します。保存は`model.js`の`setEmployeeBreaksForDate(dateValue, employeeId, breaksArray, options)`（他の従業員の配列を維持したまま1人分だけ差し替える）を`js/actions/break-edit-actions.js`から`runWithHistory()`で呼び出し、Undo対象にします。入力欄はvalidateBreaks()を使って保存前にライブ検証します。自動配置（`generateBreaksForDate`）は手動編集を区別せず上書きするため、シフト変更や「休憩を再配置」を実行すると手動編集は失われます。
+
 ## Undo・Redo
 
 `history.js`は操作の前後状態から差分を作成し、ワークスペース別に最大50件保持します。

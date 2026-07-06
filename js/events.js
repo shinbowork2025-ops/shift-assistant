@@ -90,6 +90,13 @@ function bindScheduleEvents() {
     if (dayButton) selectDate(`${state.selectedMonth}-${String(Number(dayButton.dataset.day)).padStart(2, "0")}`);
   });
 
+  elements.dailyChartContainer.addEventListener("click", async (event) => {
+    const editButton = event.target.closest(".break-edit-button");
+    if (!editButton) return;
+    const { openBreakEditDialog } = await import("./break-edit-ui.js");
+    openBreakEditDialog({ employeeId: editButton.dataset.employeeId, setStatus: setSaveStatus });
+  });
+
   elements.autoBreakButton.addEventListener("click", autoPlaceBreaks);
   elements.clearMonthButton.addEventListener("click", clearCurrentMonth);
   elements.coverageRequirementButton.addEventListener("click", async () => {

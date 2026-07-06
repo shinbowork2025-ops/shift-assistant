@@ -306,6 +306,14 @@ export function setBreaksForDate(dateValue, breaksByEmployee, options = {}) {
   if (options.save !== false) scheduleSave();
 }
 
+// 1人分の休憩配列だけを差し替える。他の従業員の配列はそのまま維持する。
+export function setEmployeeBreaksForDate(dateValue, employeeId, breaksArray, options = {}) {
+  const result = structuredClone(state.breaks[dateValue] ?? {});
+  if (Array.isArray(breaksArray) && breaksArray.length > 0) result[employeeId] = breaksArray;
+  else delete result[employeeId];
+  setBreaksForDate(dateValue, result, options);
+}
+
 export function employeeSummary(employeeId) {
   const overview = buildMonthOverview({
     monthValue: state.selectedMonth,
