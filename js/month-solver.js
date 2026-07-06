@@ -93,6 +93,18 @@ function step(search) {
   updateBest(search);
 }
 
+function shortageReports(plan) {
+  const context = createMonthSolverScoreContext(plan);
+  return [...context.dayMetrics.values()]
+    .filter((metric) => metric.shortagePeople > 0)
+    .map((metric) => ({
+      day: metric.day,
+      shortagePeople: metric.shortagePeople,
+      shortageSlots: metric.shortageSlots,
+      messages: metric.requirementMessages
+    }));
+}
+
 function result(search, stopped) {
   const validation = validateMonthSolverPlan(search.bestPlan);
   return {
@@ -107,6 +119,7 @@ function result(search, stopped) {
     initialTemperature: search.initialTemperature,
     finalTemperature: search.temperature,
     stopped,
+    shortageReports: shortageReports(search.bestPlan),
     validation
   };
 }
