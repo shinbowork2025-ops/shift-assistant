@@ -462,8 +462,8 @@ input { padding: 8px 10px; }
   position: sticky;
   left: 150px;
   z-index: 4;
-  min-width: 205px;
-  max-width: 205px;
+  min-width: 235px;
+  max-width: 235px;
   padding: 3px;
   background: #f8fafb;
 }
@@ -472,6 +472,22 @@ input { padding: 8px 10px; }
 .daily-chart-table tfoot .daily-employee-column,
 .daily-chart-table tfoot .daily-select-column { z-index: 6; font-weight: 700; background: var(--surface-raised); }
 .daily-shift-select { min-width: 195px; }
+
+.daily-select-wrap { display: flex; align-items: center; gap: 4px; }
+.daily-select-wrap .daily-shift-select { flex: 1; min-width: 0; }
+.break-edit-button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: .72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.break-edit-button:hover { background: var(--surface-muted); }
 
 .timeline-header-cell, .timeline-cell, .coverage-cell {
   width: 24px;
@@ -589,6 +605,40 @@ input { padding: 8px 10px; }
 .coverage-req-remove { align-self: center; margin-left: auto; }
 .button.compact { min-height: 38px; padding: 6px 12px; }
 .coverage-req-empty { margin: 0; }
+
+/* 休憩の手動編集ダイアログ */
+.break-edit-dialog { width: min(94vw, 560px); }
+.break-edit-subtitle { margin: -8px 0 0; color: var(--text-muted); font-size: .86rem; }
+.break-edit-list { display: grid; gap: 10px; }
+.break-edit-row {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+.break-edit-field { gap: 3px; font-size: .74rem; font-weight: 700; }
+.break-edit-field span { color: var(--text-muted); }
+.break-edit-remove { align-self: center; margin-left: auto; }
+.break-edit-empty { margin: 0; }
+.break-edit-preview {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: .84rem;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+.break-edit-preview.break-edit-preview-warning {
+  color: #8a1c16;
+  background: var(--danger-soft);
+  font-weight: 700;
+}
 
 .break-rule-note {
   margin-top: 14px;
@@ -751,8 +801,9 @@ dialog form { display: grid; gap: 16px; padding: 22px; }
   .view-button { min-height: 52px; }
   .button { min-height: var(--control-height); }
   .daily-chart-table .daily-employee-column { min-width: 120px; max-width: 120px; }
-  .daily-chart-table .daily-select-column { left: 120px; min-width: 175px; max-width: 175px; }
-  .daily-shift-select { min-width: 165px; }
+  .daily-chart-table .daily-select-column { left: 120px; min-width: 205px; max-width: 205px; }
+  .daily-shift-select { min-width: 140px; }
+  .break-edit-button { font-size: .68rem; padding: 2px 4px; }
 }
 
 /* --------------------------------------------------------------------------

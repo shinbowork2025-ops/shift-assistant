@@ -50,7 +50,7 @@ export function renderDailyTable(elements) {
 
   const tbody = document.createElement("tbody");
   for (const rowData of overview.rows) {
-    const { employee, shiftCode, validation, cells, employmentType } = rowData;
+    const { employee, shiftCode, shiftType, validation, cells, employmentType } = rowData;
     const row = document.createElement("tr");
     if (!validation.ok) row.classList.add("break-invalid-row");
 
@@ -76,7 +76,20 @@ export function renderDailyTable(elements) {
     const selectCell = document.createElement("td");
     selectCell.className = "daily-select-column";
     if (!validation.ok) selectCell.title = validationMessage(validation);
-    selectCell.append(createShiftSelect(employee, overview.day, shiftCode, true));
+    const selectWrap = document.createElement("div");
+    selectWrap.className = "daily-select-wrap";
+    selectWrap.append(createShiftSelect(employee, overview.day, shiftCode, true));
+    if (shiftType?.isWork) {
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.className = "break-edit-button";
+      editButton.dataset.employeeId = employee.id;
+      editButton.title = "休憩を編集";
+      editButton.setAttribute("aria-label", `${employee.name}さんの休憩を編集`);
+      editButton.textContent = "休憩✎";
+      selectWrap.append(editButton);
+    }
+    selectCell.append(selectWrap);
     row.append(selectCell);
 
     cells.forEach((cellData, index) => {
