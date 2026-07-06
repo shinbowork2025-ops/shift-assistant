@@ -115,6 +115,20 @@
   font-size: .82rem;
 }
 
+.month-solver-shortage-reports {
+  margin-top: 10px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
+.month-solver-shortage-reports summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
 .month-solver-metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

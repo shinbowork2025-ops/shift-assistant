@@ -285,6 +285,31 @@ function changePreviewList(changes) {
   return list;
 }
 
+function shortageReportSection(reports) {
+  if (!Array.isArray(reports) || reports.length === 0) return null;
+  const details = document.createElement("details");
+  details.className = "month-solver-shortage-reports";
+  details.open = true;
+  const summary = document.createElement("summary");
+  summary.textContent = `残っている不足の内訳（${reports.length}日）`;
+  const list = document.createElement("ul");
+  for (const report of reports.slice(0, 10)) {
+    const item = document.createElement("li");
+    const messages = Array.isArray(report.messages) && report.messages.length
+      ? report.messages.join(" / ")
+      : `${report.shortagePeople}人枠不足・${report.shortageSlots}スロット`;
+    item.textContent = `${report.day}日：${messages}`;
+    list.append(item);
+  }
+  if (reports.length > 10) {
+    const item = document.createElement("li");
+    item.textContent = `ほか${reports.length - 10}日`;
+    list.append(item);
+  }
+  details.append(summary, list);
+  return details;
+}
+
 function showResult(result) {
   stopWorker();
   currentResult = result;
@@ -311,10 +336,11 @@ function showResult(result) {
   const details = document.createElement("p");
   details.textContent = `${result.iterations.toLocaleString()}反復、候補採用率${(result.acceptanceRate * 100).toFixed(1)}%。${changes.length}セルを変更候補にしています。`;
   const changeList = changePreviewList(changes);
+  const shortageSection = shortageReportSection(result.shortageReports);
   const issues = document.createElement("ul");
   if (result.objective.shortagePeople > 0) {
     const item = document.createElement("li");
-    item.textContent = `必要人数不足が${result.objective.shortagePeople}人枠残っています。1日チャートで不足時間帯を確認してください。`;
+    item.textContent = `必要人数不足が${result.objective.shortagePeople}人枠残っています。内訳を確認し、必要なら1日チャートで休憩配置も見直してください。`;
     issues.append(item);
   }
   if (result.objective.hard > 0) {
@@ -327,7 +353,14 @@ function showResult(result) {
     item.textContent = issue;
     issues.append(item);
   }
-  ui.dialog.result.replaceChildren(title, stats, details, changeList, issues);
+  ui.dialog.result.replaceChildren(
+    title,
+    stats,
+    details,
+    changeList,
+    ...(shortageSection ? [shortageSection] : []),
+    issues
+  );
   previewPlan(result.plan);
 }
 
