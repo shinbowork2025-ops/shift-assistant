@@ -14,6 +14,7 @@ export function createCurrentWorkShiftPlan({ selectedShiftCodes, mode }) {
     shiftTypes: state.shiftTypes,
     shifts: state.shifts,
     shiftLocks: state.shiftLocks,
+    coverageRequirements: state.coverageRequirements,
     selectedShiftCodes,
     mode
   });
