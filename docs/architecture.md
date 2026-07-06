@@ -44,6 +44,7 @@ app.js ─ 初期化
              ├─ month-overview.js
              ├─ daily-overview.js
              ├─ break-rules.js
+             ├─ break-scheduler.js
              ├─ workspace-normalizer.js
              └─ history-patch.js
 ```
@@ -152,7 +153,7 @@ state
 - 必要時間：`requiredBreakMinutes()`
 - 検証：`validateBreaks()`
 
-自動配置アルゴリズムは`breaks.js`にあります。ルール変更時は、画面・印刷・CSVへ個別の条件分岐を追加せず、共通関数を変更してください。
+配置時刻の決定は純粋ソルバー`break-scheduler.js`が行います。貪欲な初期配置のあと、辞書式の全体目的関数（最小実配置人数の最大化 → 手薄スロット数の最小化 → 同時休憩の平準化 → 目標時刻からのずれ最小化）を改善する移動を繰り返します。`breaks.js`はアプリ状態との橋渡しだけを担います。ルール変更時は、画面・印刷・CSVへ個別の条件分岐を追加せず、共通関数を変更してください。
 
 ## Undo・Redo
 
