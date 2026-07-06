@@ -8,8 +8,12 @@ import {
 } from "../js/break-rules.js";
 
 const boundaryCases = [
-  { label: "6:00", span: 360, planned: 15 },
-  { label: "6:01", span: 361, planned: 15 },
+  { label: "4:00", span: 240, planned: 0 },
+  { label: "4:01", span: 241, planned: 15 },
+  { label: "5:00", span: 300, planned: 15 },
+  { label: "5:01", span: 301, planned: 45 },
+  { label: "6:00", span: 360, planned: 45 },
+  { label: "6:01", span: 361, planned: 45 },
   { label: "6:45", span: 405, planned: 45 },
   { label: "7:00", span: 420, planned: 45 },
   { label: "8:00", span: 480, planned: 45 },
