@@ -101,7 +101,7 @@ state
 自分でパネルを生成するUIモジュール（履歴・ペイント・ロック・自動配置の結果）は、`index.html`に用意された次のスロットへマウントします。挿入位置の判断を各モジュールに分散させないでください。
 
 - `#historySlot`：操作履歴パネル（`history-ui.js`）
-- `#monthToolsSlot`：ペイント入力・セルロックのツールパネル
+- `#monthToolsSlot`：ペイント入力・セルロック・希望休のツールパネル
 - `#monthResultsSlot`：公休・勤務自動配置の結果表示
 
 スロットが見つからない場合に限り、従来のアンカー要素（`.schedule-heading`など）へのフォールバック挿入を許可します。
@@ -180,6 +180,10 @@ state
 5. 履歴へ1操作として登録
 
 セルごとに保存や全画面描画を実行しないでください。
+
+## 希望休
+
+`off-request-input.js`は`lock-input.js`と同じ`month-edit-mode.js`のペイント基盤（`off-request-paint`モード）を使うツールで、「セルへ休日区分を設定し、同時にロックする」を1ストロークで行います。ロック済みセルは`isShiftLockedInData()`を通じて`auto-days-off.js`・`auto-work-shifts.js`・`month-solver-plan.js`のすべてから固定値として除外されるため、この機能自体は新しい除外ロジックを追加せず、既存のロック不可侵の仕組みに乗るだけで成立します。「希望休解除を塗る」はロックだけを外し、休日区分の値は変更しません。`render-month.js`は`ロック済み && 非勤務`のセルを`requested-off-cell`として視覚的に区別します（新しい永続データは追加していません。既存の`shifts`・`shiftLocks`から導出した表示上の区別です）。
 
 ## CSV・Excel
 
