@@ -107,6 +107,14 @@
   padding-left: 1.25rem;
 }
 
+.month-solver-change-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 18px;
+  color: #4c1d95;
+  font-size: .82rem;
+}
+
 .month-solver-metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -159,7 +167,8 @@
 
 @media (max-width: 780px) {
   .month-solver-settings,
-  .month-solver-metrics {
+  .month-solver-metrics,
+  .month-solver-change-list {
     grid-template-columns: 1fr;
   }
 }

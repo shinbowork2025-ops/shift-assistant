@@ -254,6 +254,37 @@ function metricRow(label, before, after) {
   return row;
 }
 
+function planChanges(plan) {
+  const selected = new Set(plan.selectedEmployeeIds);
+  const changes = [];
+  for (const employee of plan.employees) {
+    if (!selected.has(employee.id)) continue;
+    for (let day = 1; day <= plan.daysInMonth; day += 1) {
+      const before = plan.originalAssignments?.[employee.id]?.[day] ?? "";
+      const after = plan.assignments?.[employee.id]?.[day] ?? "";
+      if (before === after) continue;
+      changes.push({ employeeName: employee.name, day, before, after });
+    }
+  }
+  return changes;
+}
+
+function changePreviewList(changes) {
+  const list = document.createElement("ul");
+  list.className = "month-solver-change-list";
+  for (const change of changes.slice(0, 8)) {
+    const item = document.createElement("li");
+    item.textContent = `${change.employeeName}・${change.day}日：${change.before || "空欄"} → ${change.after || "空欄"}`;
+    list.append(item);
+  }
+  if (changes.length > 8) {
+    const item = document.createElement("li");
+    item.textContent = `ほか${changes.length - 8}セル`;
+    list.append(item);
+  }
+  return list;
+}
+
 function showResult(result) {
   stopWorker();
   currentResult = result;
@@ -276,8 +307,10 @@ function showResult(result) {
     metricRow("公平性スコア", Math.round(result.initialObjective.fairness), Math.round(result.objective.fairness)),
     metricRow("優先・既存傾向", Math.round(result.initialObjective.preference), Math.round(result.objective.preference))
   );
+  const changes = planChanges(result.plan);
   const details = document.createElement("p");
-  details.textContent = `${result.iterations.toLocaleString()}反復、候補採用率${(result.acceptanceRate * 100).toFixed(1)}%。紫枠が現在の表から変わるセルです。`;
+  details.textContent = `${result.iterations.toLocaleString()}反復、候補採用率${(result.acceptanceRate * 100).toFixed(1)}%。${changes.length}セルを変更候補にしています。`;
+  const changeList = changePreviewList(changes);
   const issues = document.createElement("ul");
   if (result.objective.shortagePeople > 0) {
     const item = document.createElement("li");
@@ -294,7 +327,7 @@ function showResult(result) {
     item.textContent = issue;
     issues.append(item);
   }
-  ui.dialog.result.replaceChildren(title, stats, details, issues);
+  ui.dialog.result.replaceChildren(title, stats, details, changeList, issues);
   previewPlan(result.plan);
 }
 
