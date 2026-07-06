@@ -92,6 +92,10 @@ function bindScheduleEvents() {
 
   elements.autoBreakButton.addEventListener("click", autoPlaceBreaks);
   elements.clearMonthButton.addEventListener("click", clearCurrentMonth);
+  elements.coverageRequirementButton.addEventListener("click", async () => {
+    const { openCoverageRequirementDialog } = await import("./coverage-requirements-ui.js");
+    openCoverageRequirementDialog({ setStatus: setSaveStatus });
+  });
 }
 
 function bindEmployeeDialogEvents() {

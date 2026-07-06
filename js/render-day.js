@@ -29,8 +29,10 @@ export function renderDailyTable(elements) {
     employees: state.employees,
     shiftTypes: state.shiftTypes,
     shifts: state.shifts,
-    breaks: state.breaks
+    breaks: state.breaks,
+    coverageRequirements: state.coverageRequirements
   });
+  const evaluation = overview.requirementEvaluation;
   const table = document.createElement("table");
   table.className = "daily-chart-table";
 
@@ -91,9 +93,27 @@ export function renderDailyTable(elements) {
   table.append(tbody);
 
   const tfoot = document.createElement("tfoot");
+  const slotLabel = (slot) => `${Math.floor(slot / 60)}:${String(slot % 60).padStart(2, "0")}`;
+
+  // 必要人数が設定されていれば、合計の必要人数行を先頭に置いて基準を示す。
+  if (evaluation.hasAnyRequirement) {
+    const requiredRow = document.createElement("tr");
+    requiredRow.className = "coverage-required-row";
+    requiredRow.append(createHeaderCell("必要人数", "daily-employee-column"));
+    requiredRow.append(createDataCell("合計", "daily-select-column"));
+    evaluation.perSlot.forEach((slotInfo, index) => {
+      const slot = overview.slots[index];
+      const text = slotInfo.hasRequirement && slotInfo.requiredTotal > 0 ? String(slotInfo.requiredTotal) : "";
+      const cell = createDataCell(text, "coverage-cell coverage-required-cell");
+      if (slot % 60 === 0) cell.classList.add("hour-start");
+      if (text) cell.title = `${slotLabel(slot)} 必要合計${slotInfo.requiredTotal}人`;
+      requiredRow.append(cell);
+    });
+    tfoot.append(requiredRow);
+  }
 
   // 雇用区分ごとに必要人数が異なるため、区分別の実配置人数を先に示し、
-  // 最後に従来どおり合計を警告色付きで表示する。
+  // 最後に従来どおり合計を警告色付きで表示する。不足セルは赤で強調する。
   for (const type of EMPLOYMENT_TYPES) {
     const typeRow = document.createElement("tr");
     typeRow.className = "employment-coverage-row";
@@ -101,9 +121,15 @@ export function renderDailyTable(elements) {
     typeRow.append(createDataCell("休憩除外", "daily-select-column"));
     overview.coverageByType[type.code].forEach((count, index) => {
       const slot = overview.slots[index];
-      const cell = createDataCell(String(count), `coverage-cell employment-coverage-cell${count === 0 ? " employment-coverage-empty" : ""}`);
+      const short = evaluation.perSlot[index]?.byTypeShort[type.code] ?? 0;
+      const classes = ["coverage-cell", "employment-coverage-cell"];
+      if (short > 0) classes.push("coverage-short");
+      else if (count === 0) classes.push("employment-coverage-empty");
+      const cell = createDataCell(String(count), classes.join(" "));
       if (slot % 60 === 0) cell.classList.add("hour-start");
-      cell.title = `${Math.floor(slot / 60)}:${String(slot % 60).padStart(2, "0")} ${type.label}${count}人`;
+      cell.title = short > 0
+        ? `${slotLabel(slot)} ${type.label}${count}人（${short}人不足）`
+        : `${slotLabel(slot)} ${type.label}${count}人`;
       typeRow.append(cell);
     });
     tfoot.append(typeRow);
@@ -114,10 +140,15 @@ export function renderDailyTable(elements) {
   coverageRow.append(createDataCell("休憩除外", "daily-select-column"));
   overview.coverage.forEach((count, index) => {
     const slot = overview.slots[index];
-    const className = count === 0 ? "coverage-zero" : count === 1 ? "coverage-low" : "coverage-ok";
-    const cell = createDataCell(String(count), `coverage-cell ${className}`);
+    const short = evaluation.perSlot[index]?.totalShort ?? 0;
+    const statusClass = short > 0
+      ? "coverage-short"
+      : count === 0 ? "coverage-zero" : count === 1 ? "coverage-low" : "coverage-ok";
+    const cell = createDataCell(String(count), `coverage-cell ${statusClass}`);
     if (slot % 60 === 0) cell.classList.add("hour-start");
-    cell.title = `${Math.floor(slot / 60)}:${String(slot % 60).padStart(2, "0")} 実配置${count}人`;
+    cell.title = short > 0
+      ? `${slotLabel(slot)} 実配置${count}人（${short}人不足）`
+      : `${slotLabel(slot)} 実配置${count}人`;
     coverageRow.append(cell);
   });
   tfoot.append(coverageRow);
@@ -126,4 +157,23 @@ export function renderDailyTable(elements) {
   elements.dailyChartContainer.replaceChildren(table);
   elements.dailyEmptyState.hidden = state.employees.length > 0;
   elements.dailyChartContainer.hidden = state.employees.length === 0;
+  renderCoverageSummary(elements, evaluation);
+}
+
+function renderCoverageSummary(elements, evaluation) {
+  const summary = elements.coverageSummary;
+  if (!summary) return;
+  summary.hidden = state.employees.length === 0;
+  if (!evaluation.hasAnyRequirement) {
+    summary.className = "coverage-summary muted";
+    summary.textContent = "必要人数は未設定です。「必要人数を設定」から時間帯ごとの必要人数を登録できます。";
+    return;
+  }
+  if (evaluation.messages.length === 0) {
+    summary.className = "coverage-summary coverage-summary-ok";
+    summary.textContent = "✓ 設定した必要人数を満たしています。";
+    return;
+  }
+  summary.className = "coverage-summary coverage-summary-short";
+  summary.textContent = `⚠ 必要人数の不足　${evaluation.messages.join("　／　")}`;
 }

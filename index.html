@@ -8,7 +8,7 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Shift Assistant</title>
-  <link rel="stylesheet" href="./styles.css?v=20260703-2">
+  <link rel="stylesheet" href="./styles.css?v=20260706">
   <link rel="stylesheet" href="./print.css?v=20260703">
   <script src="./js/boot-guard.js" defer></script>
 </head>
@@ -123,6 +123,7 @@
             <input id="dateInput" type="date">
           </label>
           <button id="nextDayButton" class="button secondary" type="button" aria-label="翌日">→</button>
+          <button id="coverageRequirementButton" class="button secondary" type="button">必要人数を設定</button>
           <button id="autoBreakButton" class="button primary" type="button">休憩を再配置</button>
         </div>
       </div>
@@ -130,6 +131,7 @@
         <h3>従業員が登録されていません</h3>
         <p>「1 月間シフト表」の画面から従業員を登録してください。</p>
       </div>
+      <p id="coverageSummary" class="coverage-summary muted" role="status"></p>
       <div id="dailyChartContainer" class="table-container daily-chart-container" tabindex="0" aria-label="1日の勤務時間帯チャート"></div>
       <div class="break-rule-note">
         <strong>自動休憩：</strong>4時間超〜5時間の勤務は小休憩15分、5時間を超える勤務は昼休憩45分（8時間46分以上は60分）、9時間以上は小休憩15分・昼休憩60分・小休憩15分を配置します。配置時刻は、実配置人数が最も薄くなる瞬間を守るよう日全体で調整します。既存データは自動変更せず、警告確認後に「休憩を再配置」を使用してください。

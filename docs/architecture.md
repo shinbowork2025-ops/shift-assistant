@@ -39,6 +39,7 @@ app.js ─ 初期化
         └─ 純粋計算モジュール
              ├─ date-time.js
              ├─ employment-types.js
+             ├─ coverage-requirements.js
              ├─ intervals.js
              ├─ shift-metrics.js
              ├─ month-overview.js
@@ -145,6 +146,8 @@ state
 
 を一度に構築します。雇用区分の定義と表記ゆれの正規化は`employment-types.js`へ集約しています。
 
+必要人数の設定と充足評価は`coverage-requirements.js`（純粋モジュール）にあります。`buildDailyOverview()`は対象日の曜日に合うバンドだけを選び、必要人数が覆う時間帯を表示範囲へ広げたうえで、合計・雇用区分別の不足を`requirementEvaluation`として返します。設定はワークスペースの`coverageRequirements`として保存し、`model.js`の`getCoverageRequirements()`/`setCoverageRequirements()`と履歴（`history.js`のドキュメント）に含めます。編集UIは`coverage-requirements-ui.js`で、`必要人数を設定`ボタンから遅延読み込みします。
+
 ## 休憩
 
 休憩の法定基準と店舗ルールは`break-rules.js`へ集約します。
@@ -226,6 +229,7 @@ CIでは次を検査します。
 - ワークスペース移行
 - Undo／Redo差分
 - ペイントストローク
+- 必要人数の正規化と充足評価
 - DOM IDとHTMLの突き合わせ
 - 全ソースのUTF-8健全性（文字化けコミットの混入防止）
 

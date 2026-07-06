@@ -543,6 +543,53 @@ input { padding: 8px 10px; }
 .employment-coverage-cell { color: var(--text); background: var(--surface-muted); font-weight: 700; }
 .employment-coverage-cell.employment-coverage-empty { color: #b6bfc8; font-weight: 400; }
 
+/* 必要人数：基準行と、不足しているセルの強調 */
+.coverage-required-row th { font-weight: 700; }
+.coverage-required-cell { color: #4a4436; background: #fbf3d8; font-weight: 700; }
+.coverage-cell.coverage-short {
+  color: #fff;
+  background: var(--danger);
+  font-weight: 800;
+  box-shadow: inset 0 0 0 1px #7f1a15;
+}
+
+.coverage-summary {
+  margin: 0 0 12px;
+  padding: 9px 13px;
+  border-radius: 8px;
+  font-size: .9rem;
+  line-height: 1.6;
+}
+.coverage-summary.muted { padding: 4px 0; background: none; }
+.coverage-summary-ok { color: #14532d; background: var(--success-soft); font-weight: 700; }
+.coverage-summary-short {
+  color: #8a1c16;
+  background: var(--danger-soft);
+  border-left: 4px solid var(--danger);
+  font-weight: 700;
+}
+
+/* 必要人数の編集ダイアログ */
+.coverage-req-dialog { width: min(96vw, 760px); }
+.coverage-req-list { display: grid; gap: 10px; }
+.coverage-req-row {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+.coverage-req-field { gap: 3px; font-size: .74rem; font-weight: 700; }
+.coverage-req-field span { color: var(--text-muted); }
+.coverage-req-time { min-width: 108px; }
+.coverage-req-number { width: 60px; text-align: center; }
+.coverage-req-remove { align-self: center; margin-left: auto; }
+.button.compact { min-height: 38px; padding: 6px 12px; }
+.coverage-req-empty { margin: 0; }
+
 .break-rule-note {
   margin-top: 14px;
   padding: 12px 14px;
