@@ -1,4 +1,4 @@
-const VALID_MODES = new Set(["normal", "shift-paint", "lock-paint"]);
+const VALID_MODES = new Set(["normal", "shift-paint", "lock-paint", "off-request-paint"]);
 let activeMode = "normal";
 const listeners = new Set();
 let bootstrapRequested = false;
