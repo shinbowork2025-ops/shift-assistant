@@ -9,6 +9,7 @@ import { renderLegend } from "./render-common.js";
 import { renderMonthTable } from "./render-month.js";
 import { renderDailyTable } from "./render-day.js";
 import { renderPrintPreview } from "./render-print.js";
+import { renderMonthValidationDashboard } from "./month-validation-ui.js";
 import { syncPaintInput } from "./paint-input.js";
 
 function formatUpdatedAt(value) {
@@ -28,14 +29,12 @@ function renderWorkspaceControls(elements) {
   const workspaces = getWorkspaceList();
   const activeWorkspace = getActiveWorkspace();
   const fragment = document.createDocumentFragment();
-
   for (const workspace of workspaces) {
     const option = document.createElement("option");
     option.value = workspace.id;
     option.textContent = `${workspace.name}｜${monthDisplayName(workspace.targetMonth)}｜更新 ${formatUpdatedAt(workspace.updatedAt)}`;
     fragment.append(option);
   }
-
   elements.workspaceSelect.replaceChildren(fragment);
   elements.workspaceSelect.value = activeWorkspace?.id ?? "";
   elements.workspaceUpdatedAt.textContent = activeWorkspace
@@ -72,9 +71,9 @@ export function renderActiveView(elements) {
     renderPrintPreview(elements);
     return;
   }
-
   renderLegend(elements);
   renderMonthTable(elements);
+  renderMonthValidationDashboard();
   syncPaintInput();
 }
 
