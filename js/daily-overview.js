@@ -10,7 +10,6 @@ import { buildShiftTypeMap, getShiftCodeFromData } from "./month-overview.js";
 
 export const TIMELINE_SLOT_MINUTES = 15;
 
-// 必要人数バンドは、勤務がない時間帯でも不足を示せるよう表示範囲へ含める。
 function timelineRange(assignments, requirementBoundary = { start: null, end: null }) {
   const starts = [];
   const ends = [];
@@ -47,13 +46,8 @@ function normalizedBreaks(breaks = []) {
 
 function slotCell(assignment, slotStart) {
   if (!assignment.shiftType?.isWork) return { kind: "off", title: "" };
-  if (slotStart < assignment.shiftStart || slotStart >= assignment.shiftEnd) {
-    return { kind: "off", title: "" };
-  }
-
-  const breakItem = assignment.breaks.find((item) => (
-    slotStart >= item.startMinute && slotStart < item.endMinute
-  ));
+  if (slotStart < assignment.shiftStart || slotStart >= assignment.shiftEnd) return { kind: "off", title: "" };
+  const breakItem = assignment.breaks.find((item) => slotStart >= item.startMinute && slotStart < item.endMinute);
   if (breakItem) {
     return {
       kind: "break",
@@ -65,12 +59,15 @@ function slotCell(assignment, slotStart) {
       title: `${breakItem.label} ${breakItem.start}〜${breakItem.end}`
     };
   }
-
   return {
     kind: "work",
     shiftCode: assignment.shiftCode,
     title: `${assignment.shiftType.name} ${assignment.shiftType.start}〜${assignment.shiftType.end}`
   };
+}
+
+function coverageMap(names, slotCount) {
+  return Object.fromEntries([...new Set(names.filter(Boolean))].map((name) => [name, Array(slotCount).fill(0)]));
 }
 
 export function buildDailyOverview({
@@ -105,29 +102,45 @@ export function buildDailyOverview({
 
   const range = timelineRange(assignments, requirementBounds(activeRequirements));
   const slots = buildSlots(range.start, range.end);
-  const coverage = slots.map(() => 0);
-  // 雇用区分ごとに必要人数が異なるため、休憩を除いた実配置人数を区分別にも集計する。
+  const coverage = Array(slots.length).fill(0);
   const coverageByType = Object.fromEntries(
-    EMPLOYMENT_TYPES.map((type) => [type.code, slots.map(() => 0)])
+    EMPLOYMENT_TYPES.map((type) => [type.code, Array(slots.length).fill(0)])
   );
+  const coverageByDepartment = coverageMap(
+    activeRequirements.map((requirement) => requirement.requiredDepartment),
+    slots.length
+  );
+  const coverageByQualification = coverageMap(
+    activeRequirements.map((requirement) => requirement.requiredQualification),
+    slots.length
+  );
+
   const rows = assignments.map((assignment) => {
     const employmentType = normalizeEmploymentType(assignment.employee.employmentType);
+    const qualifications = Array.isArray(assignment.employee.qualifications) ? assignment.employee.qualifications : [];
     const cells = slots.map((slotStart, index) => {
       const cell = slotCell(assignment, slotStart);
       if (cell.kind === "work") {
         coverage[index] += 1;
         coverageByType[employmentType][index] += 1;
+        const department = assignment.employee.department;
+        if (coverageByDepartment[department]) coverageByDepartment[department][index] += 1;
+        for (const qualification of qualifications) {
+          if (coverageByQualification[qualification]) coverageByQualification[qualification][index] += 1;
+        }
       }
       return cell;
     });
-    return { ...assignment, employmentType, cells };
+    return { ...assignment, employmentType, qualifications, cells };
   });
 
   const requirementEvaluation = evaluateCoverage({
     activeRequirements,
     slots,
     coverage,
-    coverageByType
+    coverageByType,
+    coverageByDepartment,
+    coverageByQualification
   });
 
   return {
@@ -139,6 +152,8 @@ export function buildDailyOverview({
     slots,
     coverage,
     coverageByType,
+    coverageByDepartment,
+    coverageByQualification,
     requirementEvaluation,
     rows
   };
