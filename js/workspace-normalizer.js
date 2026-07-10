@@ -6,6 +6,8 @@ import { DEFAULT_SHIFT_TYPES } from "./shift-defaults.js";
 import { migrateShiftCatalog } from "./shift-catalog-migration.js";
 import { nonNegativeMinutes } from "./shift-metrics.js";
 import { normalizeShiftLocks } from "./shift-locks.js";
+import { normalizeRequestedDaysOff } from "./requested-days-off.js";
+import { normalizeManualBreakLocks } from "./manual-break-locks.js";
 import {
   normalizeFixedDaysOff,
   normalizeRestPatternId,
@@ -21,6 +23,14 @@ import { createBlankWorkspace } from "./workspace-schema.js";
 
 const VALID_VIEWS = new Set(["month", "day", "print"]);
 let workspaceMigrationPending = false;
+
+export function normalizeStringList(candidate, maxItems = 30) {
+  const source = Array.isArray(candidate)
+    ? candidate
+    : String(candidate ?? "").split(/[、,;\n]/);
+  return [...new Set(source.map((item) => String(item ?? "").trim().slice(0, 40)).filter(Boolean))]
+    .slice(0, maxItems);
+}
 
 export function consumeWorkspaceMigrationFlag() {
   const migrated = workspaceMigrationPending;
@@ -40,6 +50,7 @@ export function normalizeEmployees(candidate) {
       name: employee.name.trim().slice(0, 40),
       code: typeof employee.code === "string" ? employee.code.trim().slice(0, 20) : "",
       department: typeof employee.department === "string" ? employee.department.trim().slice(0, 30) : "",
+      qualifications: normalizeStringList(employee.qualifications),
       order: Number.isFinite(Number(employee.order)) ? Number(employee.order) : index + 1,
       employmentType: normalizeEmploymentType(employee.employmentType),
       fixedOvertimeMinutes: nonNegativeMinutes(employee.fixedOvertimeMinutes),
@@ -111,6 +122,8 @@ export function normalizeWorkspace(candidate, index = 0) {
     shifts: migration.shifts,
     breaks: migration.breaks,
     shiftLocks: migration.shiftLocks,
+    requestedDaysOff: normalizeRequestedDaysOff(candidate.requestedDaysOff),
+    manualBreakLocks: normalizeManualBreakLocks(candidate.manualBreakLocks),
     coverageRequirements: normalizeCoverageRequirements(candidate.coverageRequirements),
     createdAt: candidate.createdAt ?? candidate.updatedAt ?? now,
     updatedAt: candidate.updatedAt ?? now
@@ -138,6 +151,8 @@ export function applyWorkspaceToState(targetState, workspace) {
   targetState.shifts = structuredClone(workspace.shifts);
   targetState.breaks = structuredClone(workspace.breaks);
   targetState.shiftLocks = structuredClone(workspace.shiftLocks);
+  targetState.requestedDaysOff = structuredClone(workspace.requestedDaysOff ?? {});
+  targetState.manualBreakLocks = structuredClone(workspace.manualBreakLocks ?? {});
   targetState.coverageRequirements = structuredClone(workspace.coverageRequirements ?? []);
   targetState.updatedAt = workspace.updatedAt;
 }
@@ -153,6 +168,8 @@ export function syncWorkspaceFromState(workspace, sourceState) {
   workspace.shifts = sourceState.shifts;
   workspace.breaks = sourceState.breaks;
   workspace.shiftLocks = sourceState.shiftLocks;
+  workspace.requestedDaysOff = sourceState.requestedDaysOff ?? {};
+  workspace.manualBreakLocks = sourceState.manualBreakLocks ?? {};
   workspace.coverageRequirements = sourceState.coverageRequirements ?? [];
   workspace.updatedAt = sourceState.updatedAt ?? workspace.updatedAt;
   return workspace;
