@@ -1,5 +1,7 @@
 import { state, getShiftType, getBreaks, dayFromDate, dateDisplayName } from "./model.js";
 import { validateBreaks } from "./break-rules.js";
+import { roundToQuarterHour } from "./break-time-grid.js";
+import { isManualBreakLockedInData } from "./manual-break-locks.js";
 import { saveEmployeeBreaks } from "./actions/break-edit-actions.js";
 
 let controls = null;
@@ -15,41 +17,25 @@ function labeledControl(labelText, control) {
   return label;
 }
 
-// 15分単位に丸める。手入力やブラウザの挙動でグリッドから外れても、
-// 自動配置と同じ粒度で保存し、時間帯チャートの表示を一致させる。
-function roundToQuarterHour(value) {
-  if (!/^\d{1,2}:\d{2}$/.test(value)) return value;
-  const [hours, minutes] = value.split(":").map(Number);
-  const total = hours * 60 + minutes;
-  const rounded = Math.round(total / 15) * 15;
-  const normalized = ((rounded % 1440) + 1440) % 1440;
-  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
-}
-
 function createRow(breakItem = {}) {
   const row = document.createElement("div");
   row.className = "break-edit-row";
-
   const type = document.createElement("select");
-  const smallOption = document.createElement("option");
-  smallOption.value = "small";
-  smallOption.textContent = "小休憩";
-  const lunchOption = document.createElement("option");
-  lunchOption.value = "lunch";
-  lunchOption.textContent = "昼休憩";
-  type.append(smallOption, lunchOption);
+  for (const [value, label] of [["small", "小休憩"], ["lunch", "昼休憩"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    type.append(option);
+  }
   type.value = breakItem.type === "lunch" ? "lunch" : "small";
-
   const start = document.createElement("input");
   start.type = "time";
   start.step = "900";
   start.value = breakItem.start ?? "";
-
   const end = document.createElement("input");
   end.type = "time";
   end.step = "900";
   end.value = breakItem.end ?? "";
-
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "button danger-ghost compact break-edit-remove";
@@ -59,23 +45,15 @@ function createRow(breakItem = {}) {
     updateEmptyHint();
     updatePreview();
   });
-
-  for (const control of [type, start, end]) {
-    control.addEventListener("change", updatePreview);
-  }
-
-  row.append(
-    labeledControl("種類", type),
-    labeledControl("開始", start),
-    labeledControl("終了", end),
-    removeButton
-  );
+  for (const control of [type, start, end]) control.addEventListener("change", updatePreview);
+  row.append(labeledControl("種類", type), labeledControl("開始", start), labeledControl("終了", end), removeButton);
   row._readBreak = () => ({
     type: type.value,
     label: type.value === "lunch" ? "昼休憩" : "小休憩",
     start: start.value ? roundToQuarterHour(start.value) : "",
     end: end.value ? roundToQuarterHour(end.value) : ""
   });
+  row._focusInvalid = () => (!start.value ? start : end).focus();
   return row;
 }
 
@@ -85,22 +63,41 @@ function updateEmptyHint() {
 }
 
 function collectBreaks() {
-  return [...controls.list.querySelectorAll(".break-edit-row")]
-    .map((row) => row._readBreak())
-    .filter((item) => item.start && item.end);
+  const breaks = [];
+  const incompleteRows = [];
+  [...controls.list.querySelectorAll(".break-edit-row")].forEach((row, index) => {
+    const item = row._readBreak();
+    if (!item.start && !item.end) {
+      incompleteRows.push({ row, index, message: `${index + 1}件目の開始・終了時刻が未入力です。` });
+      return;
+    }
+    if (!item.start || !item.end) {
+      incompleteRows.push({ row, index, message: `${index + 1}件目の開始または終了時刻が未入力です。` });
+      return;
+    }
+    breaks.push(item);
+  });
+  return { breaks, incompleteRows };
 }
 
-function validationMessage(validation) {
-  const summary = `実働${validation.work}分 / 休憩${validation.actual}分 / 必要${validation.required}分`;
-  return [summary, ...validation.issues].join("\n");
+function currentValidation() {
+  const { breaks, incompleteRows } = collectBreaks();
+  const validation = validateBreaks(currentEmployee?.shiftType, breaks);
+  const issues = [...incompleteRows.map((item) => item.message), ...validation.issues];
+  return { breaks, incompleteRows, validation, issues, ok: incompleteRows.length === 0 && validation.ok };
+}
+
+function validationMessage(result) {
+  const summary = `実働${result.validation.work}分 / 休憩${result.validation.actual}分 / 必要${result.validation.required}分`;
+  return [summary, ...result.issues].join("\n");
 }
 
 function updatePreview() {
   if (!controls || !currentEmployee) return;
-  const breaks = collectBreaks();
-  const validation = validateBreaks(currentEmployee.shiftType, breaks);
-  controls.preview.textContent = validationMessage(validation);
-  controls.preview.classList.toggle("break-edit-preview-warning", !validation.ok);
+  const result = currentValidation();
+  controls.preview.textContent = validationMessage(result);
+  controls.preview.classList.toggle("break-edit-preview-warning", !result.ok);
+  controls.saveButton.disabled = !result.ok;
 }
 
 function createDialog() {
@@ -108,7 +105,6 @@ function createDialog() {
   dialog.className = "break-edit-dialog";
   const form = document.createElement("form");
   form.method = "dialog";
-
   const header = document.createElement("div");
   header.className = "dialog-header";
   const title = document.createElement("h2");
@@ -119,32 +115,33 @@ function createDialog() {
   closeButton.setAttribute("aria-label", "閉じる");
   closeButton.textContent = "×";
   header.append(title, closeButton);
-
   const subtitle = document.createElement("p");
   subtitle.className = "break-edit-subtitle";
-
   const list = document.createElement("div");
   list.className = "break-edit-list";
-
   const emptyHint = document.createElement("p");
   emptyHint.className = "break-edit-empty muted";
   emptyHint.textContent = "休憩が入力されていません。";
-
   const addButton = document.createElement("button");
   addButton.type = "button";
   addButton.className = "button secondary";
   addButton.textContent = "＋ 休憩を追加";
   addButton.addEventListener("click", () => {
-    controls.list.append(createRow());
+    list.append(createRow());
     updateEmptyHint();
     updatePreview();
   });
-
+  const protect = document.createElement("input");
+  protect.type = "checkbox";
+  const protectLabel = labeledControl("自動再配置から保護", protect);
+  protectLabel.classList.add("break-protect-field");
+  const protectHelp = document.createElement("p");
+  protectHelp.className = "muted";
+  protectHelp.textContent = "オンにすると、シフト全体の休憩再配置を実行してもこの人の手動時刻を維持します。";
   const preview = document.createElement("p");
   preview.className = "break-edit-preview";
   preview.setAttribute("role", "status");
   preview.setAttribute("aria-live", "polite");
-
   const actions = document.createElement("div");
   actions.className = "dialog-actions";
   const spacer = document.createElement("span");
@@ -158,31 +155,33 @@ function createDialog() {
   saveButton.className = "button primary";
   saveButton.textContent = "保存";
   actions.append(spacer, cancelButton, saveButton);
-
-  form.append(header, subtitle, list, emptyHint, addButton, preview, actions);
+  form.append(header, subtitle, list, emptyHint, addButton, protectLabel, protectHelp, preview, actions);
   dialog.append(form);
   document.body.append(dialog);
-
   closeButton.addEventListener("click", () => dialog.close());
   cancelButton.addEventListener("click", () => dialog.close());
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!currentEmployee) return;
-    const breaks = collectBreaks();
+    const result = currentValidation();
+    if (!result.ok) {
+      updatePreview();
+      result.incompleteRows[0]?.row._focusInvalid();
+      setStatus(`休憩を保存できません: ${result.issues[0] ?? "入力内容を確認してください。"}`, true);
+      return;
+    }
     saveEmployeeBreaks({
       employeeId: currentEmployee.id,
       employeeName: currentEmployee.name,
       day: currentEmployee.day,
       dateValue: currentEmployee.dateValue,
-      breaks
+      breaks: result.breaks,
+      protectedFromAuto: protect.checked
     });
     dialog.close();
-    setStatus(breaks.length
-      ? `${currentEmployee.name}さんの休憩を${breaks.length}件に更新しました`
-      : `${currentEmployee.name}さんの休憩をすべて削除しました`);
+    setStatus(`${currentEmployee.name}さんの休憩を${result.breaks.length}件に更新しました`);
   });
-
-  return { dialog, subtitle, list, emptyHint, preview };
+  return { dialog, subtitle, list, emptyHint, preview, protect, saveButton };
 }
 
 export function initializeBreakEditUi(options = {}) {
@@ -200,15 +199,14 @@ export function openBreakEditDialog({ employeeId, setStatus: setStatusOption } =
   const shiftCode = state.shifts[state.selectedMonth]?.[employeeId]?.[dateValue] ?? "";
   const shiftType = getShiftType(shiftCode);
   currentEmployee = { id: employee.id, name: employee.name, day, dateValue, shiftType };
-
   controls.subtitle.textContent = shiftType?.isWork
     ? `${employee.name}さん・${dateDisplayName(dateValue)}・${shiftType.name} ${shiftType.start}〜${shiftType.end}`
     : `${employee.name}さん・${dateDisplayName(dateValue)}`;
-
-  const existingBreaks = getBreaks(employeeId, dateValue);
   const fragment = document.createDocumentFragment();
-  for (const breakItem of existingBreaks) fragment.append(createRow(breakItem));
+  for (const breakItem of getBreaks(employeeId, dateValue)) fragment.append(createRow(breakItem));
   controls.list.replaceChildren(fragment);
+  controls.protect.checked = isManualBreakLockedInData(state.manualBreakLocks, dateValue, employeeId)
+    || getBreaks(employeeId, dateValue).length === 0;
   updateEmptyHint();
   updatePreview();
   controls.dialog.showModal();

@@ -1,12 +1,14 @@
 import {
   state,
+  workspaceState,
+  scheduleSave,
   getActiveWorkspace,
   getApplicationBackup,
   restoreApplicationState
 } from "./model.js";
 import { buildMonthOverview } from "./month-overview.js";
 
-function downloadFile(fileName, content, mimeType) {
+export function downloadFile(fileName, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -20,8 +22,6 @@ function downloadFile(fileName, content, mimeType) {
 
 function csvCell(value) {
   const text = String(value ?? "");
-  // Excelで式として解釈されうる先頭文字を無害化する。
-  // 「-2」のような負数（固定残業残など）は式ではないため対象外。
   const needsFormulaGuard = /^[=@\t\r]/.test(text) || /^[+-](?![\d.])/.test(text);
   const guarded = needsFormulaGuard ? `'${text}` : text;
   return /[",\r\n]/.test(guarded) ? `"${guarded.replaceAll('"', '""')}"` : guarded;
@@ -82,9 +82,14 @@ export async function downloadMasterWorkbookSample() {
 }
 
 export function backupJson() {
+  const createdAt = new Date().toISOString();
+  workspaceState.settings ??= {};
+  workspaceState.settings.lastBackupAt = createdAt;
   const backup = getApplicationBackup();
-  const fileName = `shift-assistant-all-workspaces-${new Date().toISOString().slice(0, 10)}.json`;
+  const fileName = `shift-assistant-all-workspaces-${createdAt.slice(0, 10)}.json`;
   downloadFile(fileName, JSON.stringify(backup, null, 2), "application/json");
+  scheduleSave();
+  globalThis.dispatchEvent(new CustomEvent("shift-assistant-backup-created", { detail: { createdAt } }));
 }
 
 export async function restoreJson(file) {

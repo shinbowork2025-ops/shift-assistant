@@ -1,13 +1,10 @@
 import { plannedBreakTemplates } from "./break-rules.js";
 import { scheduleBreaks } from "./break-scheduler.js";
-import {
-  activeRequirementsForWeekday,
-  evaluateCoverage
-} from "./coverage-requirements.js";
+import { activeRequirementsForWeekday, evaluateCoverage } from "./coverage-requirements.js";
 import { getDayInfo, timeToMinutes } from "./date-time.js";
 import { EMPLOYMENT_TYPES, normalizeEmploymentType } from "./employment-types.js";
 import { overtimeMinutesForShift, shiftDurationMinutes } from "./shift-metrics.js";
-import { normalizeAvoidLateEarly, normalizePreferredShiftCode } from "./work-shift-preferences.js";
+import { normalizePreferredShiftCode } from "./work-shift-preferences.js";
 import { restGapMinutes } from "./work-shift-planner-core.js";
 
 const SLOT_MINUTES = 15;
@@ -39,6 +36,10 @@ function breakCoversSlot(items, slot) {
   return items.some((item) => slotIsInside(item.startMinute, item.endMinute, slot));
 }
 
+function coverageMap(names) {
+  return Object.fromEntries([...new Set(names.filter(Boolean))].map((name) => [name, Array(SLOT_COUNT).fill(0)]));
+}
+
 export function evaluateSolverDay(plan, day, typeMap = null) {
   const shiftTypesByCode = typeMap ?? new Map(plan.shiftTypes.map((shiftType) => [shiftType.code, shiftType]));
   const assignments = [];
@@ -52,6 +53,8 @@ export function evaluateSolverDay(plan, day, typeMap = null) {
     assignments.push({
       id: employee.id,
       employmentType: normalizeEmploymentType(employee.employmentType),
+      department: employee.department ?? "",
+      qualifications: Array.isArray(employee.qualifications) ? employee.qualifications : [],
       shiftStart,
       shiftEnd,
       templates: plannedBreakTemplates(shiftDurationMinutes(shiftType)),
@@ -63,30 +66,35 @@ export function evaluateSolverDay(plan, day, typeMap = null) {
   const scheduled = scheduleBreaks(assignments);
   const slots = Array.from({ length: SLOT_COUNT }, (_, index) => index * SLOT_MINUTES);
   const coverage = Array(SLOT_COUNT).fill(0);
-  const coverageByType = Object.fromEntries(
-    EMPLOYMENT_TYPES.map((type) => [type.code, Array(SLOT_COUNT).fill(0)])
-  );
+  const coverageByType = Object.fromEntries(EMPLOYMENT_TYPES.map((type) => [type.code, Array(SLOT_COUNT).fill(0)]));
+  const weekday = getDayInfo(plan.monthValue, day).weekday;
+  const activeRequirements = activeRequirementsForWeekday(plan.coverageRequirements, weekday);
+  const coverageByDepartment = coverageMap(activeRequirements.map((item) => item.requiredDepartment));
+  const coverageByQualification = coverageMap(activeRequirements.map((item) => item.requiredQualification));
 
   for (const assignment of assignments) {
     const breaks = scheduled.get(assignment.id) ?? [];
     for (let index = 0; index < slots.length; index += 1) {
       const slot = slots[index];
-      if (!slotIsInside(assignment.shiftStart, assignment.shiftEnd, slot)) continue;
-      if (breakCoversSlot(breaks, slot)) continue;
+      if (!slotIsInside(assignment.shiftStart, assignment.shiftEnd, slot) || breakCoversSlot(breaks, slot)) continue;
       coverage[index] += 1;
       coverageByType[assignment.employmentType][index] += 1;
+      if (coverageByDepartment[assignment.department]) coverageByDepartment[assignment.department][index] += 1;
+      for (const qualification of assignment.qualifications) {
+        if (coverageByQualification[qualification]) coverageByQualification[qualification][index] += 1;
+      }
     }
   }
 
-  const weekday = getDayInfo(plan.monthValue, day).weekday;
-  const activeRequirements = activeRequirementsForWeekday(plan.coverageRequirements, weekday);
-  const evaluation = evaluateCoverage({ activeRequirements, slots, coverage, coverageByType });
-  let shortagePeople = 0;
-  for (const slot of evaluation.perSlot) {
-    shortagePeople += slot.totalShort;
-    for (const type of EMPLOYMENT_TYPES) shortagePeople += slot.byTypeShort[type.code] ?? 0;
-  }
-
+  const evaluation = evaluateCoverage({
+    activeRequirements,
+    slots,
+    coverage,
+    coverageByType,
+    coverageByDepartment,
+    coverageByQualification
+  });
+  const shortagePeople = evaluation.perSlot.reduce((sum, slot) => sum + slot.shortagePeople, 0);
   return {
     day,
     shortagePeople,
@@ -113,9 +121,27 @@ function longestWorkStreak(codes, typeMap) {
   return longest;
 }
 
+function trailingWorkCodes(codes, typeMap) {
+  const result = [];
+  for (let index = codes.length - 1; index >= 0; index -= 1) {
+    if (!typeMap.get(codes[index])?.isWork) break;
+    result.unshift(codes[index]);
+  }
+  return result;
+}
+
+function leadingWorkCodes(codes, typeMap) {
+  const result = [];
+  for (const code of codes) {
+    if (!typeMap.get(code)?.isWork) break;
+    result.push(code);
+  }
+  return result;
+}
+
 export function evaluateSolverEmployee(plan, employee, typeMap = null) {
   const shiftTypesByCode = typeMap ?? new Map(plan.shiftTypes.map((shiftType) => [shiftType.code, shiftType]));
-  const codes = [];
+  const currentCodes = [];
   const shiftCounts = new Map();
   let daysOff = 0;
   let weekendWorkDays = 0;
@@ -123,7 +149,11 @@ export function evaluateSolverEmployee(plan, employee, typeMap = null) {
   let overtimeMinutes = 0;
   let shortRestCount = 0;
   let preferencePenalty = 0;
-  let previousWorkShift = null;
+  const boundary = plan.boundaryAssignments?.[employee.id] ?? {};
+  let previousWorkShift = boundary.previousKnown
+    ? shiftTypesByCode.get(boundary.previousCodes?.at(-1)) ?? null
+    : null;
+  if (!previousWorkShift?.isWork) previousWorkShift = null;
   const allowedCodes = new Set(plan.allowedCodes?.[employee.id] ?? []);
   const configuredPreferredCode = normalizePreferredShiftCode(employee.preferredShiftCode);
   const preferredCode = allowedCodes.has(configuredPreferredCode) ? configuredPreferredCode : "";
@@ -134,7 +164,7 @@ export function evaluateSolverEmployee(plan, employee, typeMap = null) {
     const code = assignmentCode(plan, employee.id, day);
     const shiftType = shiftTypesByCode.get(code) ?? null;
     const originalCode = plan.originalAssignments?.[employee.id]?.[day] ?? "";
-    codes.push(code);
+    currentCodes.push(code);
     if (originalCode && originalCode !== code) preferencePenalty += 1;
     if (!shiftType?.isWork) {
       daysOff += 1;
@@ -147,20 +177,23 @@ export function evaluateSolverEmployee(plan, employee, typeMap = null) {
     const weekday = getDayInfo(plan.monthValue, day).weekday;
     if (weekday === 0 || weekday === 6) weekendWorkDays += 1;
     if (isLateShift(shiftType)) lateShiftDays += 1;
-    if (
-      previousWorkShift
-      && normalizeAvoidLateEarly(employee.avoidLateEarly)
-      && restGapMinutes(previousWorkShift, shiftType) < MINIMUM_REST_MINUTES
-    ) {
-      shortRestCount += 1;
-    }
+    if (previousWorkShift && restGapMinutes(previousWorkShift, shiftType) < MINIMUM_REST_MINUTES) shortRestCount += 1;
     previousWorkShift = shiftType;
-
     if (preferredCode && code !== preferredCode) preferencePenalty += 10;
     else if (!preferredCode && dominantCode && code !== dominantCode) preferencePenalty += 2;
   }
 
-  const maxConsecutive = longestWorkStreak(codes, shiftTypesByCode);
+  if (boundary.nextKnown && previousWorkShift) {
+    const firstNext = shiftTypesByCode.get(boundary.nextCodes?.[0]) ?? null;
+    if (firstNext?.isWork && restGapMinutes(previousWorkShift, firstNext) < MINIMUM_REST_MINUTES) shortRestCount += 1;
+  }
+
+  const combinedBoundaryCodes = [
+    ...(boundary.previousKnown ? trailingWorkCodes(boundary.previousCodes ?? [], shiftTypesByCode) : []),
+    ...currentCodes,
+    ...(boundary.nextKnown ? leadingWorkCodes(boundary.nextCodes ?? [], shiftTypesByCode) : [])
+  ];
+  const maxConsecutive = longestWorkStreak(combinedBoundaryCodes, shiftTypesByCode);
   const maxAllowed = Number(plan.maxConsecutiveByEmployee?.[employee.id] ?? 6) || 6;
   const consecutiveExcess = Math.max(0, maxConsecutive - maxAllowed);
   const hardViolations = shortRestCount + (consecutiveExcess * consecutiveExcess);
@@ -185,6 +218,8 @@ export function evaluateSolverEmployee(plan, employee, typeMap = null) {
     shortRestCount,
     maxConsecutive,
     maxAllowed,
+    boundaryPreviousKnown: Boolean(boundary.previousKnown),
+    boundaryNextKnown: Boolean(boundary.nextKnown),
     hardViolations,
     shiftConcentration,
     preferencePenalty
@@ -206,8 +241,6 @@ function composeObjective(dayMetrics, employeeMetrics, selectedEmployeeIds) {
     + variance(employees.map((metric) => metric.lateShiftDays)) * 20
     + employees.reduce((sum, metric) => sum + metric.shiftConcentration, 0);
   const preference = employees.reduce((sum, metric) => sum + metric.preferencePenalty, 0);
-  // 辞書式比較では不足人数→不足スロット→勤務違反→残業→公平性→嗜好の順を厳守する。
-  // scalarは焼きなましの受理確率専用で、安全な整数精度に収まる尺度へ圧縮する。
   const vector = [shortagePeople, shortageSlots, hard, overtime, fairness, preference];
   const scalar = shortagePeople * 1e7
     + shortageSlots * 1e5
@@ -215,17 +248,7 @@ function composeObjective(dayMetrics, employeeMetrics, selectedEmployeeIds) {
     + overtime * 10
     + fairness
     + preference * 0.1;
-  return {
-    vector,
-    scalar,
-    coverage,
-    shortagePeople,
-    shortageSlots,
-    hard,
-    overtime,
-    fairness,
-    preference
-  };
+  return { vector, scalar, coverage, shortagePeople, shortageSlots, hard, overtime, fairness, preference };
 }
 
 export function compareSolverObjectives(a, b) {
@@ -239,13 +262,9 @@ export function compareSolverObjectives(a, b) {
 export function createMonthSolverScoreContext(plan) {
   const typeMap = new Map(plan.shiftTypes.map((shiftType) => [shiftType.code, shiftType]));
   const dayMetrics = new Map();
-  for (let day = 1; day <= plan.daysInMonth; day += 1) {
-    dayMetrics.set(day, evaluateSolverDay(plan, day, typeMap));
-  }
+  for (let day = 1; day <= plan.daysInMonth; day += 1) dayMetrics.set(day, evaluateSolverDay(plan, day, typeMap));
   const employeeMetrics = new Map();
-  for (const employee of plan.employees) {
-    employeeMetrics.set(employee.id, evaluateSolverEmployee(plan, employee, typeMap));
-  }
+  for (const employee of plan.employees) employeeMetrics.set(employee.id, evaluateSolverEmployee(plan, employee, typeMap));
   return {
     plan,
     typeMap,
@@ -267,11 +286,9 @@ export function evaluateMonthSolverChanges(context, changes) {
   for (const change of changes) {
     const current = assignmentCode(context.plan, change.employeeId, change.day);
     if (context.plan.fixedValues?.[change.employeeId]?.[change.day] !== undefined) return null;
-    if (!isAllowed(context.plan, change.employeeId, change.after)) return null;
-    if (current === change.after) return null;
+    if (!isAllowed(context.plan, change.employeeId, change.after) || current === change.after) return null;
     normalized.push({ ...change, before: current });
   }
-
   for (const change of normalized) context.plan.assignments[change.employeeId][change.day] = change.after;
   const affectedDays = new Set(normalized.map((change) => change.day));
   const affectedEmployees = new Set(normalized.map((change) => change.employeeId));
@@ -284,14 +301,11 @@ export function evaluateMonthSolverChanges(context, changes) {
   }
   const objective = composeObjective(dayMetrics, employeeMetrics, context.plan.selectedEmployeeIds);
   for (const change of normalized) context.plan.assignments[change.employeeId][change.day] = change.before;
-
   return { changes: normalized, dayMetrics, employeeMetrics, objective };
 }
 
 export function applyMonthSolverEvaluation(context, evaluation) {
-  for (const change of evaluation.changes) {
-    context.plan.assignments[change.employeeId][change.day] = change.after;
-  }
+  for (const change of evaluation.changes) context.plan.assignments[change.employeeId][change.day] = change.after;
   context.dayMetrics = evaluation.dayMetrics;
   context.employeeMetrics = evaluation.employeeMetrics;
   context.objective = evaluation.objective;
@@ -308,9 +322,7 @@ export function validateMonthSolverPlan(plan) {
     for (let day = 1; day <= plan.daysInMonth; day += 1) {
       const code = assignmentCode(plan, employee.id, day);
       const fixed = plan.fixedValues?.[employee.id]?.[day];
-      if (fixed !== undefined && fixed !== code) {
-        issues.push(`${employee.name}・${day}日の固定セルが変更されています。`);
-      }
+      if (fixed !== undefined && fixed !== code) issues.push(`${employee.name}・${day}日の固定セルが変更されています。`);
       if (fixed === undefined && !(plan.allowedCodes?.[employee.id] ?? []).includes(code)) {
         issues.push(`${employee.name}・${day}日に使用不可のシフトがあります。`);
       }

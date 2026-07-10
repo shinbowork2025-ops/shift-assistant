@@ -15,7 +15,49 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Check JavaScript syntax
-        run: find js tests -name '*.js' -o -name '*.mjs' | xargs -n1 node --check
-      - name: Run automated tests
-        run: node --test tests/*.test.mjs
+        run: find js tests -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set +e
+          node --test tests/*.test.mjs 2>&1 | tee unit-test.log
+          exit ${PIPESTATUS[0]}
+      - name: Upload unit test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-log
+          path: unit-test.log
+          retention-days: 7
+
+  browser-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser test dependency
+        run: npm install --no-package-lock
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run browser integration test
+        shell: bash
+        run: |
+          set +e
+          npm run test:browser 2>&1 | tee browser-test.log
+          exit ${PIPESTATUS[0]}
+      - name: Upload browser test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-log
+          path: browser-test.log
+          retention-days: 7

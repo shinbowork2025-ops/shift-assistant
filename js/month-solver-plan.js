@@ -18,9 +18,7 @@ function setCode(shifts, monthValue, employeeId, day, code) {
     shifts[monthValue][employeeId][dateValue] = code;
   } else {
     delete shifts[monthValue]?.[employeeId]?.[dateValue];
-    if (shifts[monthValue]?.[employeeId] && Object.keys(shifts[monthValue][employeeId]).length === 0) {
-      delete shifts[monthValue][employeeId];
-    }
+    if (shifts[monthValue]?.[employeeId] && Object.keys(shifts[monthValue][employeeId]).length === 0) delete shifts[monthValue][employeeId];
     if (shifts[monthValue] && Object.keys(shifts[monthValue]).length === 0) delete shifts[monthValue];
   }
 }
@@ -42,8 +40,7 @@ function originalDominantCode(shifts, monthValue, employeeId, daysInMonth, typeM
     const code = codeAt(shifts, monthValue, employeeId, day);
     if (typeMap.get(code)?.isWork) counts.set(code, (counts.get(code) ?? 0) + 1);
   }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"))[0]?.[0] ?? "";
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"))[0]?.[0] ?? "";
 }
 
 function targetDaysOff(employee, daysInMonth, originalShifts, monthValue, typeMap) {
@@ -65,6 +62,16 @@ function targetDaysOff(employee, daysInMonth, originalShifts, monthValue, typeMa
 function maxConsecutive(employee) {
   const pattern = getRestPattern(employee.restPatternId);
   return pattern.maxConsecutiveWorkDays > 0 ? pattern.maxConsecutiveWorkDays : 6;
+}
+
+function adjacentMonth(monthValue, offset) {
+  const [year, month] = monthValue.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + offset, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthCodes(shifts, monthValue, employeeId) {
+  return Array.from({ length: getDaysInMonth(monthValue) }, (_, index) => codeAt(shifts, monthValue, employeeId, index + 1));
 }
 
 export function buildMonthSolverPlan(options = {}) {
@@ -97,7 +104,6 @@ export function buildMonthSolverPlan(options = {}) {
   const tempShifts = structuredClone(originalShifts);
   const solverLocks = structuredClone(originalLocks);
   const fixedValues = {};
-
   for (const employee of employees) {
     fixedValues[employee.id] = {};
     const selected = selectedEmployeeIds.has(employee.id);
@@ -124,7 +130,6 @@ export function buildMonthSolverPlan(options = {}) {
     mode: "replace-unlocked"
   });
   applyPlannerChanges(tempShifts, monthValue, daysOffPlan.changes);
-
   const workPlan = buildWorkShiftPlan({
     monthValue,
     employees: selectedEmployees,
@@ -143,38 +148,33 @@ export function buildMonthSolverPlan(options = {}) {
   const targetDaysOffByEmployee = {};
   const maxConsecutiveByEmployee = {};
   const dominantCodeByEmployee = {};
+  const boundaryAssignments = {};
   const mutableCells = [];
+  const previousMonth = adjacentMonth(monthValue, -1);
+  const nextMonth = adjacentMonth(monthValue, 1);
 
   for (const employee of employees) {
     assignments[employee.id] = {};
     originalAssignments[employee.id] = {};
     const allowedWork = availableWorkShiftCodes(employee, selectedWorkTypes);
-    allowedCodes[employee.id] = selectedEmployeeIds.has(employee.id)
-      ? [publicHolidayCode, ...allowedWork]
-      : [];
-    targetDaysOffByEmployee[employee.id] = targetDaysOff(
-      employee,
-      daysInMonth,
-      originalShifts,
-      monthValue,
-      typeMap
-    );
+    allowedCodes[employee.id] = selectedEmployeeIds.has(employee.id) ? [publicHolidayCode, ...allowedWork] : [];
+    targetDaysOffByEmployee[employee.id] = targetDaysOff(employee, daysInMonth, originalShifts, monthValue, typeMap);
     maxConsecutiveByEmployee[employee.id] = maxConsecutive(employee);
-    dominantCodeByEmployee[employee.id] = originalDominantCode(
-      originalShifts,
-      monthValue,
-      employee.id,
-      daysInMonth,
-      typeMap
-    );
+    dominantCodeByEmployee[employee.id] = originalDominantCode(originalShifts, monthValue, employee.id, daysInMonth, typeMap);
+    boundaryAssignments[employee.id] = {
+      previousMonth,
+      nextMonth,
+      previousKnown: Boolean(originalShifts?.[previousMonth]?.[employee.id]),
+      nextKnown: Boolean(originalShifts?.[nextMonth]?.[employee.id]),
+      previousCodes: monthCodes(originalShifts, previousMonth, employee.id),
+      nextCodes: monthCodes(originalShifts, nextMonth, employee.id)
+    };
 
     for (let day = 1; day <= daysInMonth; day += 1) {
       const original = codeAt(originalShifts, monthValue, employee.id, day);
       const planned = codeAt(tempShifts, monthValue, employee.id, day);
       originalAssignments[employee.id][day] = original;
-      assignments[employee.id][day] = fixedValues[employee.id][day] !== undefined
-        ? fixedValues[employee.id][day]
-        : planned;
+      assignments[employee.id][day] = fixedValues[employee.id][day] !== undefined ? fixedValues[employee.id][day] : planned;
       if (fixedValues[employee.id][day] === undefined) mutableCells.push({ employeeId: employee.id, day });
     }
   }
@@ -204,6 +204,7 @@ export function buildMonthSolverPlan(options = {}) {
     targetDaysOffByEmployee,
     maxConsecutiveByEmployee,
     dominantCodeByEmployee,
+    boundaryAssignments,
     mutableCells,
     initialWarnings: [...daysOffPlan.warnings, ...workPlan.warnings]
   };
