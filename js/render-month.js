@@ -1,6 +1,7 @@
-import { state, isShiftLocked } from "./model.js";
+import { state, isShiftLocked, dateKey } from "./model.js";
 import { buildMonthOverview } from "./month-overview.js";
 import { employmentTypeLabel } from "./employment-types.js";
+import { getRequestedDayOffInData } from "./requested-days-off.js";
 import {
   weekendClass,
   createHeaderCell,
@@ -28,7 +29,6 @@ export function renderMonthTable(elements) {
   elements.tableContainer.hidden = !hasEmployees;
   elements.exportCsvButton.disabled = !hasEmployees;
   elements.clearMonthButton.disabled = !state.shifts[state.selectedMonth];
-
   if (!hasEmployees) {
     elements.tableContainer.replaceChildren();
     return;
@@ -45,7 +45,6 @@ export function renderMonthTable(elements) {
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
   headerRow.append(createHeaderCell("従業員", "employee-column"));
-
   for (const dayInfo of overview.days) {
     const cell = document.createElement("th");
     cell.className = weekendClass(dayInfo.weekday);
@@ -77,10 +76,12 @@ export function renderMonthTable(elements) {
     employeeButton.dataset.employeeId = employee.id;
     employeeButton.append(document.createTextNode(employee.name));
     const fixedOvertimeLabel = `固定残業${formatHours(summary.fixedOvertimeHours)}`;
+    const qualificationLabel = employee.qualifications?.length ? `資格:${employee.qualifications.join("・")}` : "";
     const details = [
       employee.code,
       employee.department,
       employmentTypeLabel(employee.employmentType),
+      qualificationLabel,
       fixedOvertimeLabel
     ].filter(Boolean).join(" / ");
     const code = document.createElement("span");
@@ -93,11 +94,21 @@ export function renderMonthTable(elements) {
     cells.forEach((cellData, index) => {
       const dayInfo = overview.days[index];
       const locked = isShiftLocked(employee.id, dayInfo.day);
+      const dateValue = dateKey(state.selectedMonth, dayInfo.day);
+      const marker = getRequestedDayOffInData(state.requestedDaysOff, state.selectedMonth, employee.id, dateValue);
+      const requested = Boolean(marker && locked && marker.shiftCode === cellData.code);
       const cell = document.createElement("td");
-      cell.className = [weekendClass(dayInfo.weekday), "paint-cell", "shift-lock-cell", locked ? "shift-cell-locked" : ""].filter(Boolean).join(" ");
+      cell.className = [
+        weekendClass(dayInfo.weekday),
+        "paint-cell",
+        "shift-lock-cell",
+        locked ? "shift-cell-locked" : "",
+        requested ? "requested-off-cell" : ""
+      ].filter(Boolean).join(" ");
       cell.dataset.employeeId = employee.id;
       cell.dataset.day = String(dayInfo.day);
       cell.dataset.locked = String(locked);
+      cell.dataset.requestedOff = String(requested);
       const select = createShiftSelect(employee, dayInfo.day, cellData.code);
       select.disabled = locked;
       select.setAttribute("aria-disabled", String(locked));
@@ -108,9 +119,7 @@ export function renderMonthTable(elements) {
     const remainingText = summary.overtimeRemainingHours >= 0
       ? formatHours(summary.overtimeRemainingHours)
       : `超過${formatHours(Math.abs(summary.overtimeRemainingHours))}`;
-    const remainingClass = summary.overtimeRemainingHours < 0
-      ? "summary-column overtime-over"
-      : "summary-column";
+    const remainingClass = summary.overtimeRemainingHours < 0 ? "summary-column overtime-over" : "summary-column";
     row.append(createDataCell(`${summary.workDays}日`, "summary-column"));
     row.append(createDataCell(formatHours(summary.hours), "summary-column"));
     row.append(createDataCell(formatHours(summary.overtimeHours), "summary-column"));
@@ -122,20 +131,14 @@ export function renderMonthTable(elements) {
   const tfoot = document.createElement("tfoot");
   const workerRow = document.createElement("tr");
   workerRow.append(createHeaderCell("出勤人数", "employee-column"));
-  for (const summary of overview.daySummaries) {
-    workerRow.append(createDataCell(`${summary.workers}人`, weekendClass(summary.weekday)));
-  }
+  for (const summary of overview.daySummaries) workerRow.append(createDataCell(`${summary.workers}人`, weekendClass(summary.weekday)));
   for (let index = 0; index < 4; index += 1) workerRow.append(createDataCell("", "summary-column"));
   tfoot.append(workerRow);
-
   const overtimeRow = document.createElement("tr");
   overtimeRow.append(createHeaderCell("残業見込", "employee-column"));
-  for (const summary of overview.daySummaries) {
-    overtimeRow.append(createDataCell(formatHours(summary.overtimeMinutes / 60), weekendClass(summary.weekday)));
-  }
+  for (const summary of overview.daySummaries) overtimeRow.append(createDataCell(formatHours(summary.overtimeMinutes / 60), weekendClass(summary.weekday)));
   for (let index = 0; index < 4; index += 1) overtimeRow.append(createDataCell("", "summary-column"));
   tfoot.append(overtimeRow);
-
   table.append(tfoot);
   elements.tableContainer.replaceChildren(table);
 }
