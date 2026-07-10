@@ -6,9 +6,15 @@ import { initializeMonthSolverUi } from "./month-solver-ui.js";
 import { elements, setSaveStatus } from "./elements.js";
 import { initializeDailyLockSync } from "./daily-lock-sync.js";
 import { initializeLockInput } from "./lock-input.js";
+import { initializeOffRequestInput } from "./off-request-input.js";
 import { initializeMonthClearState } from "./month-clear-state.js";
 
 initializeLockInput({
+  tableContainer: elements.tableContainer,
+  onStrokeComplete: refresh,
+  setStatus: setSaveStatus
+});
+initializeOffRequestInput({
   tableContainer: elements.tableContainer,
   onStrokeComplete: refresh,
   setStatus: setSaveStatus
