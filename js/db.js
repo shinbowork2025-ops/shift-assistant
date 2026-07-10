@@ -6,7 +6,9 @@ const CHANNEL_NAME = "shift-assistant-storage";
 
 const writerId = globalThis.crypto?.randomUUID?.() ?? `tab-${Date.now()}-${Math.random()}`;
 const storageListeners = new Set();
-const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(CHANNEL_NAME) : null;
+const channel = typeof document !== "undefined" && typeof BroadcastChannel === "function"
+  ? new BroadcastChannel(CHANNEL_NAME)
+  : null;
 let databasePromise = null;
 let lastKnownRevision = 0;
 
@@ -37,15 +39,12 @@ export function getKnownStorageRevision() {
 
 function openDatabase() {
   if (databasePromise) return databasePromise;
-
   databasePromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-
     request.onupgradeneeded = () => {
       const database = request.result;
       if (!database.objectStoreNames.contains(STORE_NAME)) database.createObjectStore(STORE_NAME);
     };
-
     request.onsuccess = () => {
       const database = request.result;
       database.onversionchange = () => {
@@ -63,7 +62,6 @@ function openDatabase() {
       reject(new Error("別のタブがデータベース更新を妨げています。"));
     };
   });
-
   return databasePromise;
 }
 
@@ -90,14 +88,12 @@ export async function saveState(state) {
     const store = transaction.objectStore(STORE_NAME);
     let savedRevision = null;
     let settled = false;
-
     const fail = (error) => {
       if (settled) return;
       settled = true;
       try { transaction.abort(); } catch { /* transaction may already be inactive */ }
       reject(error);
     };
-
     const readRequest = store.get(STATE_KEY);
     readRequest.onerror = () => fail(readRequest.error ?? new Error("保存前の競合確認に失敗しました。"));
     readRequest.onsuccess = () => {
@@ -108,7 +104,6 @@ export async function saveState(state) {
         fail(new StorageConflictError());
         return;
       }
-
       savedRevision = currentRevision + 1;
       const nextState = structuredClone(state);
       nextState.storageRevision = savedRevision;
@@ -117,7 +112,6 @@ export async function saveState(state) {
       const putRequest = store.put(nextState, STATE_KEY);
       putRequest.onerror = () => fail(putRequest.error ?? new Error("保存処理に失敗しました。"));
     };
-
     transaction.oncomplete = () => {
       if (settled) return;
       settled = true;
