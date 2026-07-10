@@ -175,7 +175,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
   const timeLimitMs = Math.max(20, Math.floor(Number(config.timeLimitMs ?? 180000) || 180000));
   const iterationsPerRestart = Math.max(100, Math.floor(Number(config.iterationsPerRestart ?? 12000) || 12000));
   const chunkSize = Math.max(20, Math.floor(Number(config.chunkSize ?? 120) || 120));
-  const progressEvery = Math.max(chunkSize, Math.floor(Number(config.progressEvery ??? 360) || 360));
+  const progressEvery = Math.max(chunkSize, Math.floor(Number(config.progressEvery ?? 360) || 360));
   const configuredProgressInterval = Number(config.progressIntervalMs);
   const progressIntervalMs = Number.isFinite(configuredProgressInterval)
     ? Math.max(0, Math.floor(configuredProgressInterval))
@@ -224,7 +224,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
           elapsedMs: Math.max(0, currentTime - startedAt),
           timeLimitMs,
           restart: restartNumber,
-          restarts: restarts,
+          restarts,
           iteration: completedBeforeRestart + progress.iteration,
           currentObjective: progress.currentObjective,
           bestObjective: clone(globalBestObjective),
@@ -252,7 +252,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
         elapsedMs: Math.max(0, currentTime - startedAt),
         timeLimitMs,
         restart: restartNumber,
-        restarts: restarts,
+        restarts,
         iteration: totalIterations,
         currentObjective: candidate.objective,
         bestObjective: clone(bestResult.objective),
