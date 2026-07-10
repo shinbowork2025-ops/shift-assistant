@@ -13,7 +13,7 @@ import {
 } from "../js/manual-break-locks.js";
 import { evaluateCoverage, normalizeCoverageRequirements } from "../js/coverage-requirements.js";
 import { parseStaffingSettingsCsv, buildStaffingSettingsCsv } from "../js/staffing-settings-csv.js";
-import { roundToQuarterHour } from "../js/break-edit-ui.js";
+import { roundToQuarterHour } from "../js/break-time-grid.js";
 import { evaluateSolverEmployee, evaluateSolverDay } from "../js/month-solver-score.js";
 
 const emptyByType = { fulltime: [0], semi: [0], parttime: [0] };
