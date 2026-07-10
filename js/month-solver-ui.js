@@ -1,6 +1,9 @@
 import { monthDisplayName, state } from "./model.js";
 import { createCurrentMonthSolverPlan, applyMonthSolverResult } from "./month-solver-actions.js";
 
+const PRECISION_TIME_LIMIT_MS = 3 * 60 * 1000;
+const PRECISION_ITERATIONS_PER_RESTART = 12000;
+
 let ui = null;
 let worker = null;
 let currentResult = null;
@@ -26,12 +29,25 @@ function selectedValues(inputs) {
   return inputs.filter((input) => input.checked).map((input) => input.value);
 }
 
+function durationText(milliseconds) {
+  const seconds = Math.max(0, Math.floor(Number(milliseconds) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 function ensureStylesheet() {
   if (document.querySelector('link[href="./month-solver.css"]')) return;
   const link = document.createElement("link");
   link.rel = "stylesheet";
   link.href = "./month-solver.css";
   document.head.append(link);
+}
+
+function syncModeControls(controls) {
+  const precision = controls.mode.value === "precision";
+  controls.iterationsLabel.hidden = precision;
+  controls.modeNote.hidden = !precision;
+  controls.start.textContent = precision ? "3分間の精密最適化を開始" : "案を作成";
 }
 
 function createDialog() {
@@ -67,6 +83,14 @@ function createDialog() {
 
   const settings = document.createElement("div");
   settings.className = "month-solver-settings";
+  const mode = document.createElement("select");
+  const fastOption = document.createElement("option");
+  fastOption.value = "fast";
+  fastOption.textContent = "高速最適化（探索回数指定）";
+  const precisionOption = document.createElement("option");
+  precisionOption.value = "precision";
+  precisionOption.textContent = "精密最適化（最大3分）";
+  mode.append(fastOption, precisionOption);
   const seed = document.createElement("input");
   seed.type = "number";
   seed.step = "1";
@@ -77,7 +101,13 @@ function createDialog() {
   iterations.max = "50000";
   iterations.step = "500";
   iterations.value = "8000";
-  settings.append(labeled("案番号（シード）", seed), labeled("探索回数", iterations));
+  const iterationsLabel = labeled("探索回数", iterations);
+  settings.append(labeled("探索モード", mode), labeled("案番号（シード）", seed), iterationsLabel);
+
+  const modeNote = document.createElement("p");
+  modeNote.className = "month-solver-mode-note";
+  modeNote.textContent = "最大3分間、異なるシードで探索を繰り返し、その時間内に見つかった候補のうち最良案を採用候補として表示します。全体最適解である保証はありません。実行中でも中断できます。";
+  modeNote.hidden = true;
 
   const progressArea = document.createElement("div");
   progressArea.className = "month-solver-progress";
@@ -105,16 +135,17 @@ function createDialog() {
   const cancel = createButton("閉じる");
   actions.append(start, stop, another, apply, cancel);
 
-  form.append(header, target, explanation, fieldset, settings, progressArea, result, actions);
+  form.append(header, target, explanation, fieldset, settings, modeNote, progressArea, result, actions);
   dialog.append(form);
   document.body.append(dialog);
 
   const controls = {
-    dialog, target, shiftList, shiftInputs: [], seed, iterations,
+    dialog, target, shiftList, shiftInputs: [], mode, seed, iterations, iterationsLabel, modeNote,
     progressArea, progress, progressText, result, start, stop, another, apply, cancel
   };
   allShifts.addEventListener("click", () => controls.shiftInputs.forEach((input) => { input.checked = true; }));
   noShifts.addEventListener("click", () => controls.shiftInputs.forEach((input) => { input.checked = false; }));
+  mode.addEventListener("change", () => syncModeControls(controls));
   close.addEventListener("click", closeDialog);
   cancel.addEventListener("click", closeDialog);
   start.addEventListener("click", () => startSearch(false));
@@ -125,6 +156,7 @@ function createDialog() {
   });
   apply.addEventListener("click", applyResult);
   dialog.addEventListener("close", clearPreview);
+  syncModeControls(controls);
   return controls;
 }
 
@@ -155,6 +187,7 @@ function openDialog() {
   clearPreview();
   currentResult = null;
   populateShifts();
+  syncModeControls(ui.dialog);
   ui.dialog.target.textContent = `${monthDisplayName(state.selectedMonth)}・${state.employees.length}人を対象にします`;
   ui.dialog.result.textContent = state.coverageRequirements?.length
     ? "必要人数設定を最優先条件として案を作成します。"
@@ -179,6 +212,7 @@ function searchOptions() {
   if (!selectedShiftCodes.length) throw new Error("勤務シフトを1種類以上選択してください。");
   return {
     selectedShiftCodes,
+    mode: ui.dialog.mode.value === "precision" ? "precision" : "fast",
     seed: Number(ui.dialog.seed.value) || 1,
     iterations: Math.max(500, Number(ui.dialog.iterations.value) || 8000)
   };
@@ -190,6 +224,7 @@ function startSearch(alternative) {
     clearPreview();
     currentResult = null;
     const options = searchOptions();
+    const precision = options.mode === "precision";
     const plan = createCurrentMonthSolverPlan(options);
     worker = new Worker(new URL("./month-solver-worker.js", import.meta.url), { type: "module" });
     ui.dialog.start.hidden = true;
@@ -199,11 +234,29 @@ function startSearch(alternative) {
     ui.dialog.apply.hidden = true;
     ui.dialog.progressArea.hidden = false;
     ui.dialog.progress.value = 0;
+    ui.dialog.progressText.textContent = precision ? "0:00 / 3:00" : "0 / 0";
     ui.dialog.result.classList.remove("error");
-    ui.dialog.result.textContent = alternative ? "別シードで探索しています…" : "初期案を作成し、月全体を改善しています…";
+    if (precision) {
+      ui.dialog.result.textContent = alternative
+        ? "別シードで精密最適化を実行しています。最大3分間探索します…"
+        : "複数の独立探索を繰り返し、3分以内に見つかった最良案を探しています…";
+    } else {
+      ui.dialog.result.textContent = alternative ? "別シードで探索しています…" : "初期案を作成し、月全体を改善しています…";
+    }
     worker.onmessage = (event) => handleWorkerMessage(event.data);
     worker.onerror = (event) => showError(event.message || "月間ソルバーでエラーが発生しました。");
-    worker.postMessage({ type: "start", plan, config: { seed: options.seed, iterations: options.iterations } });
+    worker.postMessage({
+      type: "start",
+      mode: options.mode,
+      plan,
+      config: precision
+        ? {
+            seed: options.seed,
+            timeLimitMs: PRECISION_TIME_LIMIT_MS,
+            iterationsPerRestart: PRECISION_ITERATIONS_PER_RESTART
+          }
+        : { seed: options.seed, iterations: options.iterations }
+    });
   } catch (error) {
     showError(error.message);
   }
@@ -223,8 +276,15 @@ function objectiveText(objective) {
 function handleWorkerMessage(message) {
   if (message.type === "progress") {
     const progress = message.progress;
-    ui.dialog.progress.value = progress.iterations ? progress.iteration / progress.iterations : 0;
-    ui.dialog.progressText.textContent = `${progress.iteration.toLocaleString()} / ${progress.iterations.toLocaleString()}　${objectiveText(progress.bestObjective)}`;
+    if (progress.mode === "precision") {
+      ui.dialog.progress.value = progress.timeLimitMs
+        ? Math.min(1, progress.elapsedMs / progress.timeLimitMs)
+        : 0;
+      ui.dialog.progressText.textContent = `${durationText(progress.elapsedMs)} / ${durationText(progress.timeLimitMs)}　独立探索${progress.restart}回目・合計${progress.iteration.toLocaleString()}反復　${objectiveText(progress.bestObjective)}`;
+    } else {
+      ui.dialog.progress.value = progress.iterations ? progress.iteration / progress.iterations : 0;
+      ui.dialog.progressText.textContent = `${progress.iteration.toLocaleString()} / ${progress.iterations.toLocaleString()}　${objectiveText(progress.bestObjective)}`;
+    }
     return;
   }
   if (message.type === "error") {
@@ -313,16 +373,30 @@ function shortageReportSection(reports) {
 function showResult(result) {
   stopWorker();
   currentResult = result;
+  const precision = result.mode === "precision";
   ui.dialog.stop.hidden = true;
   ui.dialog.stop.disabled = false;
   ui.dialog.another.hidden = false;
+  ui.dialog.another.textContent = precision ? "別シードでもう一度3分探索" : "別の案";
   ui.dialog.apply.hidden = !result.validation?.ok;
-  ui.dialog.progress.value = 1;
-  ui.dialog.progressText.textContent = result.stopped ? "中断時点の最良案" : "探索完了";
+  ui.dialog.progress.value = precision && result.stopped
+    ? Math.min(1, result.elapsedMs / result.timeLimitMs)
+    : 1;
+  ui.dialog.progressText.textContent = precision
+    ? result.stopped
+      ? "中断時点で見つかった最良案"
+      : "3分間の精密最適化が完了"
+    : result.stopped
+      ? "中断時点の最良案"
+      : "探索完了";
   ui.dialog.result.classList.remove("error");
 
   const title = document.createElement("strong");
-  title.textContent = result.validation?.ok ? "有効な月間案を作成しました" : "固定条件に矛盾があります";
+  if (result.validation?.ok) {
+    title.textContent = precision ? "精密最適化で有効な最良案を見つけました" : "有効な月間案を作成しました";
+  } else {
+    title.textContent = "固定条件に矛盾があります";
+  }
   const stats = document.createElement("div");
   stats.className = "month-solver-metrics";
   stats.append(
@@ -334,7 +408,9 @@ function showResult(result) {
   );
   const changes = planChanges(result.plan);
   const details = document.createElement("p");
-  details.textContent = `${result.iterations.toLocaleString()}反復、候補採用率${(result.acceptanceRate * 100).toFixed(1)}%。${changes.length}セルを変更候補にしています。`;
+  details.textContent = precision
+    ? `探索時間${durationText(result.elapsedMs)}、${result.restarts.toLocaleString()}回の独立探索、合計${result.iterations.toLocaleString()}反復を実行しました。その時間内に見つかった候補のうち最良の案です。全体最適解である保証はありません。${changes.length}セルを変更候補にしています。`
+    : `${result.iterations.toLocaleString()}反復、候補採用率${(result.acceptanceRate * 100).toFixed(1)}%。${changes.length}セルを変更候補にしています。`;
   const changeList = changePreviewList(changes);
   const shortageSection = shortageReportSection(result.shortageReports);
   const issues = document.createElement("ul");

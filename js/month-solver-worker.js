@@ -1,4 +1,4 @@
-import { solveMonthScheduleAsync } from "./month-solver.js";
+import { solveMonthScheduleAsync, solveMonthSchedulePrecisionAsync } from "./month-solver.js";
 
 let stopRequested = false;
 let running = false;
@@ -14,7 +14,10 @@ self.addEventListener("message", async (event) => {
   running = true;
   stopRequested = false;
   try {
-    const result = await solveMonthScheduleAsync(message.plan, message.config ?? {}, {
+    const solve = message.mode === "precision"
+      ? solveMonthSchedulePrecisionAsync
+      : solveMonthScheduleAsync;
+    const result = await solve(message.plan, message.config ?? {}, {
       shouldStop: () => stopRequested,
       onProgress: (progress) => self.postMessage({ type: "progress", progress })
     });
