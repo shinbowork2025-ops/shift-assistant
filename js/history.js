@@ -29,6 +29,8 @@ function currentWorkspaceDocument() {
     shifts: state.shifts,
     breaks: state.breaks,
     shiftLocks: state.shiftLocks,
+    requestedDaysOff: state.requestedDaysOff ?? {},
+    manualBreakLocks: state.manualBreakLocks ?? {},
     coverageRequirements: state.coverageRequirements
   };
 }
@@ -55,6 +57,8 @@ function applySnapshot(snapshot) {
   state.shifts = structuredClone(snapshot.shifts);
   state.breaks = structuredClone(snapshot.breaks);
   state.shiftLocks = structuredClone(snapshot.shiftLocks ?? {});
+  state.requestedDaysOff = structuredClone(snapshot.requestedDaysOff ?? {});
+  state.manualBreakLocks = structuredClone(snapshot.manualBreakLocks ?? {});
   state.coverageRequirements = structuredClone(snapshot.coverageRequirements ?? []);
   scheduleSave();
 }
