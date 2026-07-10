@@ -57,13 +57,25 @@
 
 .month-solver-settings {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
 .month-solver-settings label {
   display: grid;
   gap: 5px;
+}
+
+.month-solver-mode-note {
+  margin: 0;
+  border: 1px solid #f59e0b;
+  border-left-width: 5px;
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: .84rem;
+  line-height: 1.6;
 }
 
 .month-solver-progress {
@@ -183,6 +195,10 @@
   .month-solver-settings,
   .month-solver-metrics,
   .month-solver-change-list {
+    grid-template-columns: 1fr;
+  }
+
+  .month-solver-progress {
     grid-template-columns: 1fr;
   }
 }
