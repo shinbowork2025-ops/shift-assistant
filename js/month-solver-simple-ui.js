@@ -94,7 +94,8 @@ function syncApplyGate(dialog) {
         result.append(note);
       }
       const detail = reasons.length ? reasons.join(" / ") : "固定セルまたは使用可能なシフト区分を確認してください。";
-      note.textContent = `この案は適用できません。${detail}`;
+      const message = `この案は適用できません。${detail}`;
+      if (note.textContent !== message) note.textContent = message;
     } else {
       note?.remove();
     }
