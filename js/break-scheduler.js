@@ -12,10 +12,10 @@
 export const BREAK_SLOT_MINUTES = 15;
 
 const MAX_IMPROVEMENT_SWEEPS = 4;
-// 始業から最初の休憩、および休憩同士に空ける最短間隔。
+// 始業後と終業前は、それぞれ最低60分を休憩禁止帯として確保する。
+const SHIFT_EDGE_BUFFER_MINUTES = 60;
+// 休憩同士に空ける最短間隔。
 const MINIMUM_GAP_MINUTES = 60;
-// 最後の休憩の終わりから終業までに残す最短間隔。
-const MINIMUM_TAIL_MINUTES = 45;
 
 function alignDown(minute) {
   return Math.floor(minute / BREAK_SLOT_MINUTES) * BREAK_SLOT_MINUTES;
@@ -46,7 +46,7 @@ function candidateStarts(earliest, latest, target) {
   const candidates = [];
   for (let slot = first; slot <= latest; slot += BREAK_SLOT_MINUTES) candidates.push(slot);
   if (!candidates.length) {
-    // 制約を満たすグリッド位置がない短い勤務では、目標へ最も近い位置に丸めて置く。
+    // 制約を満たすグリッド位置がない場合は、禁止帯を越えない範囲で目標へ寄せる。
     candidates.push(Math.max(earliest, Math.min(latest, alignRound(target))));
   }
   return candidates;
@@ -129,11 +129,13 @@ export function scheduleBreaks(assignments) {
         .reduce((sum, item) => sum + item.duration + MINIMUM_GAP_MINUTES, 0);
       const previousEnd = index > 0
         ? placed[index - 1].startMinute + assignment.templates[index - 1].duration
-        : assignment.shiftStart;
-      const earliest = Math.max(assignment.shiftStart, previousEnd) + MINIMUM_GAP_MINUTES;
+        : null;
+      const earliest = index > 0
+        ? previousEnd + MINIMUM_GAP_MINUTES
+        : assignment.shiftStart + SHIFT_EDGE_BUFFER_MINUTES;
       const latest = Math.max(
         earliest,
-        assignment.shiftEnd - template.duration - Math.max(MINIMUM_TAIL_MINUTES, reserved)
+        assignment.shiftEnd - template.duration - Math.max(SHIFT_EDGE_BUFFER_MINUTES, reserved)
       );
 
       const item = {
@@ -172,12 +174,14 @@ export function scheduleBreaks(assignments) {
       const placed = placements.get(assignment.id);
       const previousEnd = index > 0
         ? placed[index - 1].startMinute + assignment.templates[index - 1].duration
-        : assignment.shiftStart;
-      const earliest = Math.max(assignment.shiftStart, previousEnd) + MINIMUM_GAP_MINUTES;
+        : null;
+      const earliest = index > 0
+        ? previousEnd + MINIMUM_GAP_MINUTES
+        : assignment.shiftStart + SHIFT_EDGE_BUFFER_MINUTES;
       const nextStart = index < placed.length - 1 ? placed[index + 1].startMinute : null;
       const latest = Math.max(
         earliest,
-        (nextStart !== null ? nextStart - MINIMUM_GAP_MINUTES : assignment.shiftEnd - MINIMUM_TAIL_MINUTES) - duration
+        (nextStart !== null ? nextStart - MINIMUM_GAP_MINUTES : assignment.shiftEnd - SHIFT_EDGE_BUFFER_MINUTES) - duration
       );
 
       const current = placed[index].startMinute;

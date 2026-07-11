@@ -8,6 +8,19 @@ import { overtimeMinutesForShift } from "./shift-metrics.js";
 import { restGapMinutes } from "./work-shift-planner-core.js";
 
 const MINIMUM_REST_MINUTES = 11 * 60;
+const SEVERITY_PRIORITY = { error: 0, warning: 1, info: 2 };
+const CATEGORY_LABELS = {
+  master: "マスター",
+  shift: "シフト区分",
+  "requested-off": "希望休",
+  "break-lock": "休憩保護",
+  overtime: "残業",
+  rest: "勤務間隔",
+  consecutive: "連続勤務",
+  boundary: "月境界",
+  coverage: "必要人数",
+  break: "休憩"
+};
 
 function adjacentMonth(monthValue, offset) {
   const [year, month] = monthValue.split("-").map(Number);
@@ -21,6 +34,39 @@ function codeAt(shifts, monthValue, employeeId, day) {
 
 function issue(severity, category, message, detail = {}) {
   return { severity, category, message, ...detail };
+}
+
+function groupedIssueMessage(items) {
+  if (items.length === 1) return items[0].message;
+  const first = items[0];
+  const subject = [
+    first.employeeName ? `${first.employeeName}さん` : "",
+    first.day ? `${first.day}日` : "",
+    CATEGORY_LABELS[first.category] ?? "要確認"
+  ].filter(Boolean).join("・");
+  return `${subject}：${items.length}件`;
+}
+
+export function groupMonthValidationIssues(candidate) {
+  const groups = new Map();
+  for (const item of Array.isArray(candidate) ? candidate : []) {
+    const key = `${item.category ?? "other"}|${item.employeeId ?? ""}|${item.day ?? ""}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return [...groups.values()].map((items) => {
+    const sorted = [...items].sort((a, b) =>
+      (SEVERITY_PRIORITY[a.severity] ?? 9) - (SEVERITY_PRIORITY[b.severity] ?? 9)
+    );
+    const first = sorted[0];
+    return {
+      ...first,
+      severity: first.severity,
+      message: groupedIssueMessage(sorted),
+      groupedCount: sorted.length,
+      detailMessages: sorted.map((item) => item.message)
+    };
+  });
 }
 
 function trailingWorkCodes(codes, typeMap) {
@@ -65,6 +111,7 @@ function employeeBoundaryIssues({ monthValue, employee, shifts, typeMap }) {
   const previousCodes = Array.from({ length: getDaysInMonth(previousMonth) }, (_, index) => codeAt(shifts, previousMonth, employee.id, index + 1));
   const currentCodes = Array.from({ length: daysInMonth }, (_, index) => codeAt(shifts, monthValue, employee.id, index + 1));
   const nextCodes = Array.from({ length: getDaysInMonth(nextMonth) }, (_, index) => codeAt(shifts, nextMonth, employee.id, index + 1));
+  const employeeDetail = { employeeId: employee.id, employeeName: employee.name };
 
   let previousWork = previousKnown ? typeMap.get(previousCodes.at(-1)) ?? null : null;
   if (!previousWork?.isWork) previousWork = null;
@@ -75,14 +122,14 @@ function employeeBoundaryIssues({ monthValue, employee, shifts, typeMap }) {
       continue;
     }
     if (previousWork && restGapMinutes(previousWork, current) < MINIMUM_REST_MINUTES) {
-      issues.push(issue("error", "rest", `${employee.name}さんの${day}日前の休息が11時間未満です。`, { employeeId: employee.id, day }));
+      issues.push(issue("error", "rest", `${employee.name}さんの${day}日前の休息が11時間未満です。`, { ...employeeDetail, day }));
     }
     previousWork = current;
   }
   if (nextKnown && previousWork) {
     const next = typeMap.get(nextCodes[0]) ?? null;
     if (next?.isWork && restGapMinutes(previousWork, next) < MINIMUM_REST_MINUTES) {
-      issues.push(issue("error", "rest", `${employee.name}さんは翌月1日までの休息が11時間未満です。`, { employeeId: employee.id, day: daysInMonth }));
+      issues.push(issue("error", "rest", `${employee.name}さんは翌月1日までの休息が11時間未満です。`, { ...employeeDetail, day: daysInMonth }));
     }
   }
 
@@ -94,11 +141,11 @@ function employeeBoundaryIssues({ monthValue, employee, shifts, typeMap }) {
   const maxConsecutive = longestWorkStreak(combined, typeMap);
   const configuredMax = getRestPattern(employee.restPatternId).maxConsecutiveWorkDays || 6;
   if (maxConsecutive > configuredMax) {
-    issues.push(issue("error", "consecutive", `${employee.name}さんの連続勤務が${maxConsecutive}日です（上限${configuredMax}日）。`, { employeeId: employee.id }));
+    issues.push(issue("error", "consecutive", `${employee.name}さんの連続勤務が${maxConsecutive}日です（上限${configuredMax}日）。`, employeeDetail));
   }
   if (!previousKnown || !nextKnown) {
     const missing = [!previousKnown ? "前月末" : "", !nextKnown ? "翌月初" : ""].filter(Boolean).join("・");
-    issues.push(issue("info", "boundary", `${employee.name}さんは${missing}のシフトが未登録のため、月境界を完全には判定できません。`, { employeeId: employee.id }));
+    issues.push(issue("info", "boundary", `${employee.name}さんは${missing}のシフトが未登録のため、月境界を完全には判定できません。`, employeeDetail));
   }
   return issues;
 }
@@ -114,19 +161,27 @@ export function validateMonthReadiness({
   manualBreakLocks = {},
   coverageRequirements = []
 }) {
-  const issues = [];
+  const rawIssues = [];
+  const blankByEmployee = [];
+  let blankCount = 0;
   const daysInMonth = getDaysInMonth(monthValue);
   const typeMap = new Map(shiftTypes.map((shiftType) => [shiftType.code, shiftType]));
-  if (!employees.length) issues.push(issue("error", "master", "従業員が登録されていません。"));
+  if (!employees.length) rawIssues.push(issue("error", "master", "従業員が登録されていません。"));
 
   for (const employee of employees) {
     let overtimeMinutes = 0;
+    const blankDays = [];
+    const employeeDetail = { employeeId: employee.id, employeeName: employee.name };
     for (let day = 1; day <= daysInMonth; day += 1) {
       const dateValue = dateKey(monthValue, day);
       const code = codeAt(shifts, monthValue, employee.id, day);
       const shiftType = typeMap.get(code) ?? null;
-      if (!code) issues.push(issue("error", "blank", `${employee.name}さんの${day}日が空欄です。`, { employeeId: employee.id, day }));
-      else if (!shiftType) issues.push(issue("error", "shift", `${employee.name}さんの${day}日に不明なシフト「${code}」があります。`, { employeeId: employee.id, day }));
+      if (!code) {
+        blankCount += 1;
+        blankDays.push(day);
+      } else if (!shiftType) {
+        rawIssues.push(issue("error", "shift", `${employee.name}さんの${day}日に不明なシフト「${code}」があります。`, { ...employeeDetail, day }));
+      }
       if (shiftType?.isWork) overtimeMinutes += overtimeMinutesForShift(shiftType);
 
       const marker = getRequestedDayOffInData(requestedDaysOff, monthValue, employee.id, dateValue);
@@ -135,38 +190,49 @@ export function validateMonthReadiness({
           && marker.shiftCode === code
           && shiftType
           && !shiftType.isWork;
-        if (!valid) issues.push(issue("error", "requested-off", `${employee.name}さんの${day}日の希望休データがセルと一致しません。`, { employeeId: employee.id, day }));
+        if (!valid) rawIssues.push(issue("error", "requested-off", `${employee.name}さんの${day}日の希望休データがセルと一致しません。`, { ...employeeDetail, day }));
       }
       if (isManualBreakLockedInData(manualBreakLocks, dateValue, employee.id) && !(breaks?.[dateValue]?.[employee.id]?.length)) {
-        issues.push(issue("warning", "break-lock", `${employee.name}さんの${day}日に休憩保護だけが残っています。`, { employeeId: employee.id, day }));
+        rawIssues.push(issue("warning", "break-lock", `${employee.name}さんの${day}日に休憩保護だけが残っています。`, { ...employeeDetail, day }));
       }
+    }
+    if (blankDays.length) {
+      blankByEmployee.push({ employeeId: employee.id, employeeName: employee.name, count: blankDays.length, days: blankDays });
     }
     const fixedOvertime = Math.max(0, Number(employee.fixedOvertimeMinutes) || 0);
     if (overtimeMinutes > fixedOvertime) {
-      issues.push(issue("error", "overtime", `${employee.name}さんの残業見込が固定残業枠を${Math.round((overtimeMinutes - fixedOvertime) / 60 * 10) / 10}時間超えています。`, { employeeId: employee.id }));
+      rawIssues.push(issue("error", "overtime", `${employee.name}さんの残業見込が固定残業枠を${Math.round((overtimeMinutes - fixedOvertime) / 60 * 10) / 10}時間超えています。`, employeeDetail));
     }
-    issues.push(...employeeBoundaryIssues({ monthValue, employee, shifts, typeMap }));
+    rawIssues.push(...employeeBoundaryIssues({ monthValue, employee, shifts, typeMap }));
   }
 
   for (let day = 1; day <= daysInMonth; day += 1) {
     const dateValue = dateKey(monthValue, day);
     const overview = buildDailyOverview({ dateValue, employees, shiftTypes, shifts, breaks, coverageRequirements });
     for (const message of overview.requirementEvaluation.messages) {
-      issues.push(issue("error", "coverage", `${day}日 ${message}`, { day }));
+      rawIssues.push(issue("error", "coverage", `${day}日 ${message}`, { day }));
     }
     for (const row of overview.rows) {
       if (row.shiftType?.isWork && !row.validation.ok) {
-        issues.push(issue("error", "break", `${row.employee.name}さん・${day}日: ${row.validation.issues.join(" / ")}`, { employeeId: row.employee.id, day }));
+        rawIssues.push(issue("error", "break", `${row.employee.name}さん・${day}日: ${row.validation.issues.join(" / ")}`, {
+          employeeId: row.employee.id,
+          employeeName: row.employee.name,
+          day
+        }));
       }
     }
   }
 
+  const issues = groupMonthValidationIssues(rawIssues);
   const blockingCount = issues.filter((item) => item.severity === "error").length;
   return {
-    ready: blockingCount === 0,
+    ready: blankCount === 0 && blockingCount === 0,
+    blankCount,
+    blankByEmployee,
     blockingCount,
     warningCount: issues.filter((item) => item.severity === "warning").length,
     infoCount: issues.filter((item) => item.severity === "info").length,
+    rawIssueCount: rawIssues.length,
     issues
   };
 }

@@ -47,14 +47,30 @@ test("単独勤務でも制約内の位置に休憩を配置する", () => {
   const breaks = placements.get("e1");
 
   assert.equal(breaks.length, 3);
-  // 休憩は始業60分後以降・終業45分前まで、休憩同士は60分以上空く。
+  // 休憩は始業60分後以降・終業60分前まで、休憩同士は60分以上空く。
   let previousEnd = MINUTE.h9;
   for (const breakItem of breaks) {
     assert.ok(breakItem.startMinute >= previousEnd + 60, "休憩間隔が60分未満です");
     assert.equal(breakItem.startMinute % BREAK_SLOT_MINUTES, 0, "15分グリッドに整列していません");
     previousEnd = breakItem.endMinute;
   }
-  assert.ok(breaks.at(-1).endMinute <= MINUTE.h18 - 45, "終業直前に休憩があります");
+  assert.ok(breaks.at(-1).endMinute <= MINUTE.h18 - 60, "終業前1時間以内に休憩があります");
+});
+
+test("短時間・中時間・長時間シフトの休憩を始業後と終業前の1時間へ入れない", () => {
+  const input = [
+    assignment("short", MINUTE.h9, 13 * 60 + 15),
+    assignment("middle", MINUTE.h9, MINUTE.h15),
+    assignment("long", MINUTE.h9, MINUTE.h18)
+  ];
+  const placements = scheduleBreaks(input);
+
+  for (const item of input) {
+    for (const breakItem of placements.get(item.id) ?? []) {
+      assert.ok(breakItem.startMinute >= item.shiftStart + 60, `${item.id}の休憩が始業後1時間以内です`);
+      assert.ok(breakItem.endMinute <= item.shiftEnd - 60, `${item.id}の休憩が終業前1時間以内です`);
+    }
+  }
 });
 
 test("同一シフト2人の昼休憩をずらして実配置0を避ける", () => {

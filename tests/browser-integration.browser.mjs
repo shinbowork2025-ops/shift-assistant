@@ -43,8 +43,24 @@ test("実ブラウザで保存安全性・月間編集・配置条件画面が�
 
   await page.waitForSelector(".storage-safety-summary");
   assert.match(await page.locator(".storage-safety-summary").innerText(), /保存保護/);
-  await page.waitForSelector(".month-validation-panel");
-  assert.match(await page.locator(".month-validation-panel").innerText(), /転記準備OK|要確認/);
+  const validationPanel = page.locator(".month-validation-panel");
+  await validationPanel.waitFor();
+  assert.match(await validationPanel.innerText(), /転記準備OK|要確認|入力途中/);
+  assert.match(await validationPanel.innerText(), /未入力 \d+セル/);
+
+  const validationDetails = validationPanel.locator(".month-validation-details");
+  const issueCount = Number(await validationPanel.getAttribute("data-issue-count"));
+  const initiallyOpen = await validationDetails.evaluate((element) => element.open);
+  assert.equal(initiallyOpen, issueCount > 0 && issueCount <= 5);
+  const validationSummary = validationDetails.locator(":scope > summary");
+  if (!initiallyOpen) await validationSummary.click();
+  await validationSummary.click();
+  assert.equal(await validationDetails.evaluate((element) => element.open), false);
+  await page.evaluate(async () => {
+    const module = await import("/js/month-validation-ui.js");
+    module.renderMonthValidationDashboard();
+  });
+  assert.equal(await page.locator(".month-validation-details").evaluate((element) => element.open), false);
 
   await page.waitForSelector(".month-edit-toolbar");
   assert.match(await page.locator(".month-edit-toolbar").innerText(), /通常入力/);
