@@ -33,7 +33,7 @@ after(async () => {
   server?.kill("SIGTERM");
 });
 
-test("実ブラウザで保存安全性・月間検証・配置条件画面が動く", async () => {
+test("実ブラウザで保存安全性・月間編集・配置条件画面が動く", async () => {
   const context = await browser.newContext();
   const page = await context.newPage();
   const pageErrors = [];
@@ -45,8 +45,14 @@ test("実ブラウザで保存安全性・月間検証・配置条件画面が�
   assert.match(await page.locator(".storage-safety-summary").innerText(), /保存保護/);
   await page.waitForSelector(".month-validation-panel");
   assert.match(await page.locator(".month-validation-panel").innerText(), /転記準備OK|要確認/);
-  await page.waitForSelector(".off-request-panel");
-  assert.match(await page.locator(".off-request-panel").innerText(), /希望休だけ解除/);
+
+  await page.waitForSelector(".month-edit-toolbar");
+  assert.match(await page.locator(".month-edit-toolbar").innerText(), /通常入力/);
+  assert.match(await page.locator(".month-edit-toolbar").innerText(), /希望休/);
+  await page.waitForSelector(".month-view-controls");
+  await page.getByRole("button", { name: "コンパクト表示" }).click();
+  assert.equal(await page.locator("#tableContainer").evaluate((element) => element.classList.contains("month-compact")), true);
+  assert.match(await page.locator(".employee-filter").innerText(), /従業員を絞り込む/);
 
   await page.click("#dayViewButton");
   await page.click("#coverageRequirementButton");
