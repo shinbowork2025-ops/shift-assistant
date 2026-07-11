@@ -7,6 +7,17 @@ function pick(items, random) {
   return items[Math.floor(random() * items.length)];
 }
 
+function workState(typeMap, code) {
+  const shiftType = typeMap.get(code);
+  return shiftType ? Boolean(shiftType.isWork) : null;
+}
+
+function preservesDayOffCount(typeMap, before, after) {
+  const beforeState = workState(typeMap, before);
+  const afterState = workState(typeMap, after);
+  return beforeState !== null && beforeState === afterState;
+}
+
 export function createMonthSolverNeighborSource(plan) {
   const mutableCells = [...plan.mutableCells];
   const byDay = new Map();
@@ -21,6 +32,7 @@ export function createMonthSolverNeighborSource(plan) {
     mutableCells,
     byDay,
     byEmployee,
+    typeMap: new Map((plan.shiftTypes ?? []).map((shiftType) => [shiftType.code, shiftType])),
     pairDays: [...byDay.entries()].filter(([, cells]) => cells.length >= 2).map(([day]) => day),
     pairEmployees: [...byEmployee.entries()].filter(([, cells]) => cells.length >= 2).map(([id]) => id)
   };
@@ -31,7 +43,9 @@ function singleChange(plan, source, random) {
     const cell = pick(source.mutableCells, random);
     if (!cell) return null;
     const current = currentCode(plan, cell.employeeId, cell.day);
-    const candidates = (plan.allowedCodes?.[cell.employeeId] ?? []).filter((code) => code !== current);
+    const candidates = (plan.allowedCodes?.[cell.employeeId] ?? [])
+      .filter((code) => code !== current)
+      .filter((code) => preservesDayOffCount(source.typeMap, current, code));
     const after = pick(candidates, random);
     if (after) return [{ ...cell, after }];
   }
@@ -49,6 +63,7 @@ function sameDaySwap(plan, source, random) {
     const firstCode = currentCode(plan, first.employeeId, day);
     const secondCode = currentCode(plan, second.employeeId, day);
     if (!firstCode || !secondCode || firstCode === secondCode) continue;
+    if (!preservesDayOffCount(source.typeMap, firstCode, secondCode)) continue;
     if (!(plan.allowedCodes[first.employeeId] ?? []).includes(secondCode)) continue;
     if (!(plan.allowedCodes[second.employeeId] ?? []).includes(firstCode)) continue;
     return [
