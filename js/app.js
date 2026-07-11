@@ -27,7 +27,7 @@ function loadStylesheet(href) {
 async function initialize() {
   loadStylesheet("./print-page.css");
   loadStylesheet("./paint.css");
-  loadStylesheet("./enhancements.css?v=20260710");
+  loadStylesheet("./enhancements.css?v=20260711");
   setStatusHandler(setSaveStatus);
   initializeHistoryUi({ onUndo: undoLastAction, onRedo: redoLastAction });
   initializePaintInput({
