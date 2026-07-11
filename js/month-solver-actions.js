@@ -1,7 +1,8 @@
 import { generateBreaksForDate } from "./breaks.js";
 import { runWithHistory } from "./history.js";
+import { validateMonthSolverApplication } from "./month-solver-application.js";
 import { buildMonthSolverPlan, monthSolverChanges } from "./month-solver-plan.js";
-import { dateKey, scheduleSave, setShift, state } from "./model.js";
+import { dateKey, isShiftLocked, scheduleSave, setShift, state } from "./model.js";
 import { refresh } from "./actions/view-actions.js";
 
 export function createCurrentMonthSolverPlan(options = {}) {
@@ -18,9 +19,22 @@ export function createCurrentMonthSolverPlan(options = {}) {
 }
 
 export function applyMonthSolverResult(result) {
-  if (!result?.plan || !result.validation?.ok) throw new Error("有効な月間シフト案ではありません。");
+  if (!result?.plan) throw new Error("有効な月間シフト案ではありません。");
   if (result.plan.monthValue !== state.selectedMonth) throw new Error("表示月が探索開始時から変更されています。もう一度案を作成してください。");
+
+  const applicationValidation = validateMonthSolverApplication(result);
+  if (!applicationValidation.ok) {
+    const details = applicationValidation.issues.slice(0, 5).join(" / ");
+    throw new Error(`適用条件を満たしていません。${details}`);
+  }
+
   const changes = monthSolverChanges(result.plan, state.shifts);
+  const newlyLocked = changes.filter((change) => isShiftLocked(change.employeeId, change.day));
+  if (newlyLocked.length > 0) {
+    const examples = newlyLocked.slice(0, 5).map((change) => `${change.employeeName}・${change.day}日`).join("、");
+    throw new Error(`探索後にロックされたセルがあります（${examples}）。もう一度案を作成してください。`);
+  }
+
   const changedDates = new Set();
   let applied = 0;
   let skippedLocked = 0;
@@ -44,5 +58,5 @@ export function applyMonthSolverResult(result) {
     if (applied > 0) scheduleSave();
   });
   refresh();
-  return { applied, skippedLocked, changedDates: changedDates.size, changes };
+  return { applied, skippedLocked, changedDates: changedDates.size, changes, applicationValidation };
 }
