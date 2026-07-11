@@ -35,10 +35,12 @@ function currentErrorKeys(result) {
 function dashboardState(result) {
   const key = dashboardKey();
   const errorKeys = currentErrorKeys(result);
+  // 情報・警告だけなら折りたたんだままにし、エラーがあるときだけ自動で開く
+  const autoOpen = result.blockingCount > 0 && result.issues.length <= 5;
   let value = dashboardStates.get(key);
   if (!value) {
     value = {
-      open: result.issues.length > 0 && result.issues.length <= 5,
+      open: autoOpen,
       userChosen: false,
       acknowledgedErrorKeys: new Set(errorKeys),
       newErrorCount: 0
@@ -47,6 +49,8 @@ function dashboardState(result) {
     return value;
   }
 
+  // 手動で開閉した場合はその選択を保ち、それ以外はエラー有無に追従する
+  if (!value.userChosen) value.open = autoOpen;
   const newErrors = [...errorKeys].filter((item) => !value.acknowledgedErrorKeys.has(item));
   value.newErrorCount = value.open ? 0 : newErrors.length;
   if (value.open) value.acknowledgedErrorKeys = new Set(errorKeys);
@@ -156,6 +160,9 @@ export function renderMonthValidationDashboard() {
   }
   details.append(detailsSummary, list);
   details.addEventListener("toggle", () => {
+    // details.open への代入でも toggle は発火するため、
+    // 表示状態と一致している場合はユーザー操作とみなさない
+    if (details.open === viewState.open) return;
     viewState.open = details.open;
     viewState.userChosen = true;
     if (details.open) {
@@ -169,5 +176,6 @@ export function renderMonthValidationDashboard() {
   target.dataset.ready = String(result.ready);
   target.dataset.blankCount = String(result.blankCount);
   target.dataset.issueCount = String(result.issues.length);
+  target.dataset.blockingCount = String(result.blockingCount);
   return result;
 }

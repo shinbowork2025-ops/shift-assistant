@@ -50,8 +50,9 @@ test("実ブラウザで保存安全性・月間編集・配置条件画面が�
 
   const validationDetails = validationPanel.locator(".month-validation-details");
   const issueCount = Number(await validationPanel.getAttribute("data-issue-count"));
+  const blockingCount = Number(await validationPanel.getAttribute("data-blocking-count"));
   const initiallyOpen = await validationDetails.evaluate((element) => element.open);
-  assert.equal(initiallyOpen, issueCount > 0 && issueCount <= 5);
+  assert.equal(initiallyOpen, blockingCount > 0 && issueCount <= 5);
   const validationSummary = validationDetails.locator(":scope > summary");
   if (!initiallyOpen) await validationSummary.click();
   await validationSummary.click();

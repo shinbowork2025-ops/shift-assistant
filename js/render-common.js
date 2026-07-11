@@ -98,4 +98,6 @@ export function renderLegend(elements) {
     fragment.append(item);
   });
   elements.legend.replaceChildren(fragment);
+  const summaryNote = document.querySelector("#legendSummaryNote");
+  if (summaryNote) summaryNote.textContent = `全${state.shiftTypes.length}件・開くと色と時間を確認できます`;
 }

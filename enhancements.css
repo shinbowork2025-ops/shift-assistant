@@ -11,6 +11,9 @@
   border-radius: 999px;
 }
 .storage-warning { font-weight: 700; color: var(--danger-color, #b91c1c); }
+/* 濃紺のトップバー上では既定の暗赤色が読めないため、明るい配色に切り替える */
+.app-topbar .storage-safety-item { border-color: rgba(255, 255, 255, .45); color: rgba(255, 255, 255, .92); }
+.app-topbar .storage-warning { color: #ffd8a8; border-color: #ffd8a8; }
 .storage-external-warning {
   flex-basis: 100%;
   padding: .55rem .8rem;
@@ -24,8 +27,8 @@
 
 .off-request-panel,
 .month-validation-panel {
-  margin-block: .75rem;
-  padding: .8rem;
+  margin-block: .5rem;
+  padding: .6rem .75rem;
   border: 1px solid var(--border-color, #cbd5e1);
   border-radius: .75rem;
   background: var(--panel-bg, #fff);
@@ -101,8 +104,8 @@
 .month-validation-count {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: .2rem .5rem;
+  min-height: 24px;
+  padding: .1rem .5rem;
   border: 1px solid var(--border-color, #cbd5e1);
   border-radius: 999px;
   background: var(--surface-muted, #f8fafc);
@@ -124,14 +127,22 @@
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.04); }
 }
-.month-validation-details { margin-top: .5rem; }
-.month-validation-list { display: grid; gap: .35rem; margin-top: .55rem; }
+.month-validation-details { margin-top: .35rem; }
+.month-validation-details > summary { cursor: pointer; font-size: .86rem; }
+.month-validation-list {
+  display: grid;
+  gap: .3rem;
+  margin-top: .45rem;
+  max-height: 240px;
+  overflow: auto;
+}
 .month-validation-issue {
   width: 100%;
   text-align: left;
-  padding: .5rem .65rem;
+  padding: .35rem .55rem;
   border: 1px solid transparent;
   border-radius: .45rem;
+  font-size: .85rem;
 }
 .month-validation-issue:not(:disabled) { cursor: pointer; }
 .month-validation-issue:disabled { opacity: 1; }
@@ -145,12 +156,18 @@
 .month-edit-toolbar,
 .month-view-controls {
   display: grid;
-  gap: .65rem;
-  margin-block: .75rem;
-  padding: .8rem;
+  gap: .4rem;
+  margin-block: .5rem;
+  padding: .55rem .7rem;
   border: 1px solid var(--border-color, #cbd5e1);
   border-radius: .75rem;
   background: var(--panel-bg, #fff);
+}
+.month-edit-toolbar .button,
+.month-view-controls .button {
+  min-height: 34px;
+  padding: 5px 12px;
+  font-size: .88rem;
 }
 .month-edit-toolbar-heading,
 .month-view-controls-heading {
@@ -164,7 +181,7 @@
 .month-view-controls-status {
   margin: 0;
   color: var(--text-muted, #5b6874);
-  font-size: .86rem;
+  font-size: .78rem;
 }
 .month-edit-toolbar-actions,
 .month-view-controls-actions {
@@ -173,8 +190,7 @@
   gap: .5rem;
   align-items: center;
 }
-.month-edit-toolbar-note { color: var(--text-muted, #5b6874); }
-.month-edit-toolbar + .month-view-controls { margin-top: 0; }
+.month-edit-toolbar-note { color: var(--text-muted, #5b6874); font-size: .74rem; }
 
 .employee-filter {
   min-width: min(100%, 300px);
@@ -183,9 +199,10 @@
   background: var(--surface, #fff);
 }
 .employee-filter > summary {
-  min-height: 42px;
-  padding: .55rem .75rem;
+  min-height: 34px;
+  padding: .35rem .65rem;
   cursor: pointer;
+  font-size: .88rem;
   font-weight: 700;
 }
 .employee-filter-body {

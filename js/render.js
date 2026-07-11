@@ -58,7 +58,8 @@ export function renderShell(elements) {
   elements.printPanel.hidden = state.currentView !== "print";
   elements.monthControls.hidden = state.currentView !== "month";
   elements.dayControls.hidden = state.currentView !== "day";
-  elements.legend.hidden = state.currentView === "print";
+  const legendWrapper = elements.legend.closest(".legend-panel") ?? elements.legend;
+  legendWrapper.hidden = state.currentView === "print";
 }
 
 export function renderActiveView(elements) {

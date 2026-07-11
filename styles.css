@@ -154,8 +154,8 @@ input { padding: 8px 10px; }
 }
 
 .panel {
-  margin-bottom: 14px;
-  padding: 18px;
+  margin-bottom: 10px;
+  padding: 16px 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius-large);
   background: var(--surface);
@@ -279,10 +279,11 @@ input { padding: 8px 10px; }
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 14px;
-  padding: 10px 16px;
-  box-shadow: none;
+  gap: 6px 14px;
+  padding: 0;
 }
+.legend-panel > summary { padding: 10px 18px; }
+.legend-panel > summary .summary-title { font-size: .95rem; }
 .legend > div { display: flex; align-items: center; gap: 6px; font-size: .88rem; }
 .swatch { width: 18px; height: 18px; border: 1px solid rgba(0,0,0,.18); border-radius: 4px; }
 
@@ -832,9 +833,58 @@ dialog form { display: grid; gap: 16px; padding: 22px; }
    （印刷・転記ビューの専用スタイルは print.css / print-page.css）
    -------------------------------------------------------------------------- */
 
+/* --------------------------------------------------------------------------
+   コンパクトUI：月間表がファーストビューに入るよう、表より上の
+   補助パネル（ワークスペース・ナビ・履歴・見出し）の高さを圧縮する
+   -------------------------------------------------------------------------- */
+
+.workspace-panel { align-items: center; padding: 10px 16px; }
+.workspace-selector { gap: 2px; }
+.workspace-selector label { gap: 2px; }
+.workspace-selector label > span { font-size: .78rem; }
+#workspaceSelect { min-height: 38px; }
+.workspace-actions .button { min-height: 38px; padding: 6px 12px; }
+
+.step-nav { gap: 8px; margin-bottom: 10px; }
+.view-button { min-height: 50px; padding: 6px 14px; }
+.step-number { width: 26px; height: 26px; font-size: .9rem; }
+.step-text strong { font-size: .95rem; }
+.step-text small { font-size: .72rem; }
+
+.history-panel { padding: 8px 16px; border-left-width: 4px; }
+.history-panel > div:first-child {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  min-width: 0;
+}
+.history-panel strong { display: inline; margin-bottom: 0; }
+.history-actions .button { min-height: 36px; padding: 5px 12px; font-size: .9rem; }
+
+.schedule-heading { margin-bottom: 10px; }
+.schedule-heading p { font-size: .84rem; }
+.schedule-heading-actions .button,
+.month-generation-actions .button,
+.period-controls .button { min-height: 38px; padding: 6px 12px; }
+.period-controls input { min-height: 38px; }
+
+/* 編集モードと表示設定は横幅に余裕があれば横並びにする */
+.month-tools-slot {
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 0 10px;
+  align-items: start;
+}
+.month-tools-slot > .paint-panel,
+.month-tools-slot > .lock-panel,
+.month-tools-slot > .off-request-panel { grid-column: 1 / -1; }
+
+/* 月間表は画面内スクロールにして、ヘッダー行と従業員列を常に見せる */
+.schedule-panel .table-container { max-height: max(360px, calc(100vh - 200px)); }
+
 @media print {
   body { background: #fff; }
-  .app-topbar, .step-nav, .workspace-panel, .history-panel, .legend,
+  .app-topbar, .step-nav, .workspace-panel, .history-panel, .legend-panel,
   .paint-panel, .lock-panel, .data-panel, .notes-panel, details.panel,
   .month-tools-slot, .month-results-slot, .empty-state,
   .schedule-heading .period-controls, .schedule-heading-actions,
