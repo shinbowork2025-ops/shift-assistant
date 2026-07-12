@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>シフト作成補助ツール 説明用資料</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Yu Gothic","Meiryo",sans-serif;color:#222;line-height:1.55}body{max-width:900px;margin:0 auto;padding:24px;background:#eee}main{background:#fff;padding:18mm 16mm;box-shadow:0 2px 10px #999}h1{text-align:center;color:#1f4e79;font-size:25px;margin:0 0 4px}.subtitle{text-align:center;color:#666;font-weight:700;margin-bottom:18px}.lead{background:#d9eaf7;border:1px solid #9dc3e6;padding:12px;text-align:center;font-weight:700}.note{display:block;margin-top:5px}h2{color:#1f4e79;font-size:18px;border-bottom:2px solid #d9e2f3;padding-bottom:3px;margin:20px 0 8px}ul,ol{margin:6px 0;padding-left:1.5em}li{margin:3px 0}table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}th,td{border:1px solid #999;padding:6px 7px;vertical-align:top}th{background:#d9e2f3}.safe{background:#e2f0d9;border:1px solid #a9d18e;padding:8px 14px}.date{text-align:right;color:#666;font-size:12px;margin-top:18px}.page-break{break-before:page}@page{size:A4 portrait;margin:12mm}@media print{body{background:#fff;padding:0}main{box-shadow:none;padding:0;max-width:none}a{color:inherit;text-decoration:none}}
+</style>
+</head>
+<body><main>
+<h1>シフト作成補助ツール</h1><div class="subtitle">説明用資料</div>
+<div class="lead">店舗PCのブラウザ上で、月間シフト案の作成・確認・印刷を支援するツールです。<span class="note">正式なシフト確定・勤怠記録は、従来どおり社内システムで行います。</span></div>
+<h2>1. 導入目的</h2><ul><li>シフト作成時の手入力、人数確認、休憩配置、集計、転記前確認を一つの画面にまとめる。</li><li>必要人数・資格者・部門配置などの不足を、作成途中で確認できるようにする。</li><li>自動作成は最終決定ではなく、担当者が確認・修正するための案を作る。</li><li>社内システムへの登録前に、見落としや入力漏れを減らす。</li></ul>
+<h2>2. 主な機能</h2><table><tr><th>機能</th><th>内容</th></tr><tr><td><b>月間シフト編集</b></td><td>プルダウン入力、連続入力、希望休、確定セルのロック、従業員の絞り込み。</td></tr><tr><td><b>必要人数の確認</b></td><td>時間帯ごとに、合計人数、雇用区分、部門、資格者の必要数を設定し、不足を表示。</td></tr><tr><td><b>月間シフト案の自動作成</b></td><td>休日数、勤務間隔、連続勤務、残業見込み、偏りなどを考慮して案を作成。</td></tr><tr><td><b>休憩の自動配置</b></td><td>法定休憩を確認し、始業・終業直前や人員が手薄な時間を避けて配置。</td></tr><tr><td><b>要確認一覧</b></td><td>未入力とその他の問題を分け、転記前に確認すべき項目を一覧化。</td></tr><tr><td><b>集計・印刷</b></td><td>勤務日数、実働時間、残業見込みを集計し、A4月間表と転記一覧を出力。</td></tr></table>
+<h2>3. 基本的な使用手順</h2><ol><li>ExcelまたはComma-Separated Values（CSV）ファイルから、従業員とシフト区分を登録する。</li><li>勤務可能シフト、休み方、必要人数、必要資格などを設定する。</li><li>希望休や変更しないセルを入力・ロックする。</li><li>月間シフト案を自動作成し、不足・違反・変更内容を確認する。</li><li>必要に応じて手直しし、1日ごとの休憩と配置人数を確認する。</li><li>月間表または転記一覧を印刷し、社内システムへ登録する。</li></ol>
+<section class="page-break"><h2>4. 自動作成で優先する条件</h2><p>自動作成は、次の順番を重視してシフト案を改善します。</p><table><tr><th>優先</th><th>確認項目</th><th>内容</th></tr><tr><td>1</td><td>必要人数</td><td>合計人数、雇用区分、部門、資格者の不足をなくす。</td></tr><tr><td>2</td><td>勤務上の制約</td><td>勤務間隔11時間未満と、連続勤務上限超過を防ぐ。</td></tr><tr><td>3</td><td>残業</td><td>固定残業枠の超過を減らす。</td></tr><tr><td>4</td><td>偏り</td><td>休日数、土日勤務、遅番回数、シフト種別の偏りを減らす。</td></tr><tr><td>5</td><td>希望・既存傾向</td><td>優先シフトや、すでに入力された傾向をできるだけ尊重する。</td></tr></table>
+<h2>5. データの扱い</h2><div class="safe"><ul><li>入力したシフトデータは、店舗PCのブラウザ内に保存する。</li><li>シフトデータを外部サーバーへ送信しない。</li><li>別タブからの古い上書きを検知し、競合を防ぐ。</li><li>JavaScript Object Notation（JSON）形式でバックアップを作成・復元できる。</li></ul></div>
+<h2>6. 運用上の注意</h2><ul><li>本ツールはシフト編成の補助であり、正式な勤務命令・勤怠記録・給与計算には使用しない。</li><li>自動作成は条件を満たす案を探索するもので、唯一の最適解を保証しない。</li><li>必要人数や資格条件などの設定が誤っている場合、結果も正しくならないため、初期設定の確認が必要。</li><li>ブラウザの閲覧データを削除すると保存内容も消えるため、定期的なバックアップが必要。</li><li>最終的なシフト内容は担当者が確認し、社内ルールと実際の勤務条件に照らして判断する。</li></ul>
+<h2>7. 想定される作業上の変化</h2><table><tr><th>現状の作業</th><th>ツール使用後</th></tr><tr><td>人数不足を日ごと・時間帯ごとに目視確認</td><td>不足時間帯を画面上で表示</td></tr><tr><td>休憩を個別に配置して重なりを確認</td><td>条件に沿って自動配置し、必要箇所だけ修正</td></tr><tr><td>勤務日数・実働・残業を別途集計</td><td>月間表から自動集計</td></tr><tr><td>転記前に複数箇所を確認</td><td>未入力と問題項目を一覧で確認</td></tr></table></section>
+<div class="date">資料作成日：2026年7月12日</div>
+</main></body></html>
