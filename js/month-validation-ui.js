@@ -113,7 +113,9 @@ export function renderMonthValidationDashboard() {
     ? "ツール内検証OK"
     : result.blockingCount > 0
       ? `要確認 ${result.blockingCount}件`
-      : "入力途中";
+      : result.unverifiedCount > 0
+        ? `未確認 ${result.unverifiedCount}件`
+        : "入力途中";
   title.className = result.ready ? "readiness-ok" : "readiness-ng";
 
   const counts = document.createElement("div");
@@ -125,9 +127,10 @@ export function renderMonthValidationDashboard() {
     errorCount.textContent = `エラー ${result.blockingCount}件（新規+${viewState.newErrorCount}）`;
     errorCount.classList.add("has-new-errors");
   }
+  const unverifiedCount = countBadge("未確認 ", `${result.unverifiedCount}件`, "unverified-count");
   const warningCount = countBadge("警告 ", `${result.warningCount}件`, "warning-count");
   const infoCount = countBadge("情報 ", `${result.infoCount}件`, "info-count");
-  counts.append(blankCount, errorCount, warningCount, infoCount);
+  counts.append(blankCount, errorCount, unverifiedCount, warningCount, infoCount);
   header.append(title, counts);
 
   const details = document.createElement("details");
@@ -168,6 +171,7 @@ export function renderMonthValidationDashboard() {
   target.replaceChildren(header, details);
   target.dataset.ready = String(result.ready);
   target.dataset.blankCount = String(result.blankCount);
+  target.dataset.unverifiedCount = String(result.unverifiedCount);
   target.dataset.issueCount = String(result.issues.length);
   return result;
 }

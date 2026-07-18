@@ -4,11 +4,12 @@ import { getRestPattern } from "./rest-patterns.js";
 import { isShiftLockedInData } from "./shift-locks.js";
 import { getRequestedDayOffInData } from "./requested-days-off.js";
 import { isManualBreakLockedInData } from "./manual-break-locks.js";
-import { overtimeMinutesForShift } from "./shift-metrics.js";
+import { breakMinutesWithinShift, overtimeMinutesForShift, shiftDurationMinutes } from "./shift-metrics.js";
 import { restGapMinutes } from "./work-shift-planner-core.js";
 
 const MINIMUM_REST_MINUTES = 11 * 60;
 const SEVERITY_PRIORITY = { error: 0, warning: 1, info: 2 };
+const UNVERIFIED_CATEGORIES = new Set(["boundary", "paid-minutes"]);
 const CATEGORY_LABELS = {
   master: "マスター",
   shift: "シフト区分",
@@ -19,7 +20,8 @@ const CATEGORY_LABELS = {
   consecutive: "連続勤務",
   boundary: "月境界",
   coverage: "必要人数",
-  break: "休憩"
+  break: "休憩",
+  "paid-minutes": "実働差異"
 };
 
 function adjacentMonth(monthValue, offset) {
@@ -99,6 +101,21 @@ function longestWorkStreak(codes, typeMap) {
     }
   }
   return longest;
+}
+
+function fixedPaidMinuteIssue({ employee, day, shiftType, breaks }) {
+  if (!shiftType?.isWork || !Number.isFinite(Number(shiftType.paidMinutes)) || !Array.isArray(breaks) || !breaks.length) return null;
+  const fixedPaidMinutes = Math.max(0, Math.round(Number(shiftType.paidMinutes)));
+  const calculatedPaidMinutes = Math.max(0, shiftDurationMinutes(shiftType) - breakMinutesWithinShift(shiftType, breaks));
+  const difference = fixedPaidMinutes - calculatedPaidMinutes;
+  if (difference === 0) return null;
+  const direction = difference > 0 ? "多く" : "少なく";
+  return issue(
+    "warning",
+    "paid-minutes",
+    `${employee.name}さんの${day}日は、固定実働${fixedPaidMinutes}分が配置済み休憩からの計算値${calculatedPaidMinutes}分より${Math.abs(difference)}分${direction}設定されています。`,
+    { employeeId: employee.id, employeeName: employee.name, day, fixedPaidMinutes, calculatedPaidMinutes }
+  );
 }
 
 function employeeBoundaryIssues({ monthValue, employee, shifts, typeMap }) {
@@ -182,7 +199,11 @@ export function validateMonthReadiness({
       } else if (!shiftType) {
         rawIssues.push(issue("error", "shift", `${employee.name}さんの${day}日に不明なシフト「${code}」があります。`, { ...employeeDetail, day }));
       }
-      if (shiftType?.isWork) overtimeMinutes += overtimeMinutesForShift(shiftType);
+      if (shiftType?.isWork) {
+        overtimeMinutes += overtimeMinutesForShift(shiftType);
+        const paidMinuteIssue = fixedPaidMinuteIssue({ employee, day, shiftType, breaks: breaks?.[dateValue]?.[employee.id] ?? [] });
+        if (paidMinuteIssue) rawIssues.push(paidMinuteIssue);
+      }
 
       const marker = getRequestedDayOffInData(requestedDaysOff, monthValue, employee.id, dateValue);
       if (marker) {
@@ -225,11 +246,13 @@ export function validateMonthReadiness({
 
   const issues = groupMonthValidationIssues(rawIssues);
   const blockingCount = issues.filter((item) => item.severity === "error").length;
+  const unverifiedCount = issues.filter((item) => UNVERIFIED_CATEGORIES.has(item.category)).length;
   return {
-    ready: blankCount === 0 && blockingCount === 0,
+    ready: blankCount === 0 && blockingCount === 0 && unverifiedCount === 0,
     blankCount,
     blankByEmployee,
     blockingCount,
+    unverifiedCount,
     warningCount: issues.filter((item) => item.severity === "warning").length,
     infoCount: issues.filter((item) => item.severity === "info").length,
     rawIssueCount: rawIssues.length,
