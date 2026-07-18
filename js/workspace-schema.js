@@ -1,12 +1,55 @@
-export const APPLICATION_SCHEMA_VERSION = 4;
+export const APPLICATION_SCHEMA_VERSION = 5;
+export const OLDEST_WORKSPACE_ENVELOPE_VERSION = 4;
+
+function isObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 export function isWorkspaceEnvelope(candidate) {
   return Boolean(
-    candidate
-    && typeof candidate === "object"
-    && Number(candidate.applicationSchemaVersion) === APPLICATION_SCHEMA_VERSION
+    isObject(candidate)
+    && Number.isInteger(Number(candidate.applicationSchemaVersion))
     && Array.isArray(candidate.workspaces)
   );
+}
+
+function migrateVersion4To5(candidate) {
+  return {
+    ...candidate,
+    applicationSchemaVersion: 5,
+    settings: {
+      ...isObject(candidate.settings) ? candidate.settings : {},
+      lastBackupAt: candidate.settings?.lastBackupAt ?? null,
+      lastBackupExportId: candidate.settings?.lastBackupExportId ?? null
+    }
+  };
+}
+
+const ENVELOPE_MIGRATIONS = new Map([
+  [4, migrateVersion4To5]
+]);
+
+// 複数シフト表形式は、保存時の版から現在版まで1版ずつ変換する。
+// 未知の古い版を推測して読み込まず、新しい版を古いアプリで開くことも拒否する。
+export function migrateWorkspaceEnvelope(candidate) {
+  if (!isWorkspaceEnvelope(candidate)) throw new Error("バックアップの形式が正しくありません。");
+  const sourceVersion = Number(candidate.applicationSchemaVersion);
+  if (sourceVersion < OLDEST_WORKSPACE_ENVELOPE_VERSION) {
+    throw new Error(`保存形式の版${sourceVersion}には対応していません。対応版は${OLDEST_WORKSPACE_ENVELOPE_VERSION}以降です。`);
+  }
+  if (sourceVersion > APPLICATION_SCHEMA_VERSION) {
+    throw new Error(`このバックアップは新しい保存形式（版${sourceVersion}）です。ツールを更新してから復元してください。`);
+  }
+
+  let migrated = structuredClone(candidate);
+  let version = sourceVersion;
+  while (version < APPLICATION_SCHEMA_VERSION) {
+    const migration = ENVELOPE_MIGRATIONS.get(version);
+    if (!migration) throw new Error(`保存形式の版${version}から版${version + 1}への移行処理がありません。`);
+    migrated = migration(migrated);
+    version = Number(migrated.applicationSchemaVersion);
+  }
+  return migrated;
 }
 
 export function createBlankWorkspace({ id, name, targetMonth, now, shiftTypes }) {
@@ -68,7 +111,8 @@ export function wrapLegacyState(candidate, { id, now, defaultMonth, shiftTypes }
     activeWorkspaceId: id,
     workspaces: [workspace],
     settings: {
-      lastBackupAt: candidate?.lastBackupAt ?? null
+      lastBackupAt: candidate?.lastBackupAt ?? null,
+      lastBackupExportId: null
     }
   };
 }

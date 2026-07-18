@@ -241,7 +241,15 @@ function bindDataEvents() {
   elements.exportCsvButton.addEventListener("click", exportCsv);
   elements.exportIntegrationCsvButton.addEventListener("click", () => runIntegrationExport(exportIntegrationCsv, "連携用CSV"));
   elements.exportIntegrationJsonButton.addEventListener("click", () => runIntegrationExport(exportIntegrationJson, "連携用JSON"));
-  elements.backupButton.addEventListener("click", backupJson);
+  elements.backupButton.addEventListener("click", async () => {
+    try {
+      const result = await backupJson();
+      setSaveStatus(`バックアップを保存しました（識別子 ${result.exportId.slice(0, 8)}）`);
+    } catch (error) {
+      console.error(error);
+      setSaveStatus(`バックアップ作成失敗: ${error.message}`, true);
+    }
+  });
   elements.restoreButton.addEventListener("click", () => elements.restoreInput.click());
   elements.restoreInput.addEventListener("change", async () => {
     try {
