@@ -150,6 +150,8 @@ state
 
 月間画面、CSV出力、月間印刷で同じ計算を再利用します。似た集計ロジックを別ファイルへ複製しないでください。
 
+実働分は`shift-metrics.js`の`paidMinutesForShift()`を共通の優先順位として使用します。シフト区分の`paidMinutes`が設定済みなら固定値を最優先し、未設定時だけ休憩を差し引きます。月間集計は予定休憩、転記一覧と連携用出力は配置済み休憩を渡します。
+
 ### 1日集計
 
 `daily-overview.js`の`buildDailyOverview()`を使用します。
