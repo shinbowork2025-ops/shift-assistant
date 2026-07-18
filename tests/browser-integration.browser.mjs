@@ -73,7 +73,7 @@ test("実ブラウザで保存安全性・月間編集・配置条件画面が�
   await importPreview.getByRole("button", { name: "取込を中止" }).click();
   await importPreview.waitFor({ state: "hidden" });
   await page.waitForFunction(() => document.querySelector("#importStatus")?.textContent.includes("データは変更されていません"));
-  assert.match(await page.locator("#importStatus").innerText(), /データは変更されていません/);
+  assert.match(await page.locator("#importStatus").textContent(), /データは変更されていません/);
 
   await page.waitForSelector(".storage-safety-summary");
   assert.match(await page.locator(".storage-safety-summary").innerText(), /保存保護/);
