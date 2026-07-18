@@ -45,6 +45,48 @@ body {
   line-height: 1.55;
 }
 
+body.auth-pending > .app-topbar,
+body.auth-pending > .app-main,
+body.auth-pending > dialog {
+  display: none;
+}
+
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 24px;
+  background: linear-gradient(145deg, #e8f1fa, #eef1f5 55%, #dce7f1);
+}
+
+.auth-card {
+  width: min(100%, 420px);
+  padding: clamp(24px, 5vw, 40px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-large);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.auth-card h1 { margin-bottom: 8px; color: var(--primary-dark); font-size: 1.55rem; }
+.auth-environment {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--primary-dark);
+  background: var(--primary-soft);
+  font-size: .8rem;
+  font-weight: 700;
+}
+.auth-description { margin-bottom: 22px; color: var(--text-muted); }
+.auth-form { display: grid; gap: 16px; }
+.auth-error { min-height: 1.55em; margin: -4px 0 0; color: var(--danger); font-weight: 700; }
+.auth-note { margin: 18px 0 0; color: var(--text-muted); font-size: .82rem; text-align: center; }
+
 h1, h2, h3, p { margin-top: 0; }
 h2 { margin-bottom: 6px; font-size: 1.25rem; }
 h3 { margin-bottom: 6px; font-size: 1.05rem; }
@@ -143,6 +185,49 @@ input { padding: 8px 10px; }
   background: var(--danger);
   font-weight: 700;
 }
+
+.topbar-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.logout-button {
+  min-height: 36px;
+  padding: 5px 12px;
+  border: 1px solid rgba(255,255,255,.55);
+  border-radius: 7px;
+  color: #fff;
+  background: rgba(255,255,255,.1);
+  font-weight: 700;
+}
+.logout-button:hover { background: rgba(255,255,255,.2); }
+
+.master-import-preview-dialog { width: min(720px, calc(100% - 24px)); }
+.master-import-counts {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+}
+.master-import-count-row {
+  display: grid;
+  grid-template-columns: minmax(100px, .6fr) minmax(0, 2fr);
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+.master-import-count-row dt { font-weight: 700; }
+.master-import-count-row dd { margin: 0; }
+.master-import-warning {
+  padding: 12px;
+  border-left: 4px solid #c77800;
+  border-radius: 6px;
+  background: var(--warning-soft);
+  font-weight: 700;
+}
+.master-import-errors {
+  max-height: 240px;
+  overflow: auto;
+  padding-left: 24px;
+  color: var(--danger);
+}
+.master-import-errors li + li { margin-top: 6px; }
 
 /* --------------------------------------------------------------------------
    レイアウト・パネル

@@ -20,6 +20,10 @@ index.html / CSS
         ▼
 app.js ─ 初期化
         │
+        ├─ auth-ui.js ─ ログイン画面・ログアウト
+        │    └─ simple-auth.js ─ 資格情報照合・タブ内セッション
+        │         └─ auth-config.js ─ テスト環境用の認証設定
+        │
         ├─ events.js ─ DOMイベントの配線
         │
         ├─ actions.js ─ 公開アクションの互換ファサード
@@ -68,6 +72,14 @@ state
 `workspaceState`は、端末内に保存されている複数ワークスペースと選択中IDを持ちます。
 
 編集時は`state`を更新し、`scheduleSave()`を呼びます。`scheduleSave()`は選択中ワークスペースへ参照を同期し、短時間の連続変更をまとめてIndexedDBへ保存します。
+
+## 簡易認証
+
+`app.js`は最初に`requireSimpleAuthentication()`を待ち、成功後にだけ`initialize()`を実行します。これにより、未認証の状態では`loadSavedState()`を呼ばず、IndexedDBの保存データを画面へ読み込みません。
+
+テスト環境の資格情報は`auth-config.js`へ分離し、パスワードはPassword-Based Key Derivation Function 2（PBKDF2）で導出した値と照合します。認証済み状態は`sessionStorage`へ保存し、ログアウト時に削除します。正式採用時は`auth-ui.js`の呼出境界を維持したまま、`simple-auth.js`を社内認証方式へ置き換えます。
+
+この層は静的なクライアント内の簡易ゲートであり、権限分離や改ざん耐性のある監査記録を提供しません。
 
 保存形式は`workspace-schema.js`の`APPLICATION_SCHEMA_VERSION`で管理します。複数シフト表形式を変更する場合は、旧版から次版への変換関数を1つずつ追加し、`migrateWorkspaceEnvelope()`で現在版まで順番に適用します。未知の古い版を推測して変換したり、新しい版を古いアプリで読み込んだりしてはいけません。実在する最初の複数シフト表形式は版4です。
 
@@ -138,6 +150,8 @@ state
 
 月間画面、CSV出力、月間印刷で同じ計算を再利用します。似た集計ロジックを別ファイルへ複製しないでください。
 
+実働分は`shift-metrics.js`の`paidMinutesForShift()`を共通の優先順位として使用します。シフト区分の`paidMinutes`が設定済みなら固定値を最優先し、未設定時だけ休憩を差し引きます。月間集計は予定休憩、転記一覧と連携用出力は配置済み休憩を渡します。
+
 ### 1日集計
 
 `daily-overview.js`の`buildDailyOverview()`を使用します。
@@ -194,6 +208,7 @@ state
 ## CSV・Excel
 
 - CSV解析・マスター反映：`csv.js`
+- マスター取込プレビュー：`master-import-preview-ui.js`（全件検証後の追加・更新・変更なし・エラーを表示し、エラー時の部分適用を利用者へ明示確認する）
 - Excel展開：`xlsx-lite.js`
 - 読込アクション：`actions/file-actions.js`
 - 社内システム連携用エクスポート：`integration-export.js`（純粋モジュール。契約は`docs/integration.md`。コードの欠落・重複・未正規化、休憩ルール違反がある場合は出力を拒否する。`files.js`側でさらに`validateMonthReadiness()`のゲートを通し、ツール内検証OKの候補案だけ出力する）

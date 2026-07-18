@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { state } from "../js/model.js";
-import { importMasterRows } from "../js/csv.js";
+import { prepareMasterImport, importMasterRows } from "../js/csv.js";
 
 // scheduleSave()を呼ぶとIndexedDBアクセスの非同期タイマーが走るため、
 // { save: false }を指定してモデルの状態更新だけを検証する。
@@ -77,5 +77,58 @@ test("従業員はコードだけで照合し、同名でもコードが違え�
   assert.equal(state.employees.length, 2);
   assert.equal(state.employees.find((employee) => employee.code === "E001").department, "資材");
 
+  resetEmployees();
+});
+
+test("取込前検証では状態を変更せず、エラーがあれば既定で全件を中止する", () => {
+  resetEmployees();
+  const rows = [
+    HEADER,
+    ["従業員", "E001", "田中太郎", "", "", "園芸", "1", "", "", ""],
+    ["従業員", "", "佐藤花子", "", "", "資材", "2", "", "", ""]
+  ];
+
+  const plan = prepareMasterImport(rows);
+  assert.equal(state.employees.length, 0);
+  assert.equal(plan.summary.addedEmployees, 1);
+  assert.equal(plan.errors.length, 1);
+
+  const summary = importMasterRows(rows, { save: false });
+  assert.equal(summary.applied, false);
+  assert.equal(state.employees.length, 0);
+});
+
+test("エラー確認後に明示した場合だけ正常行を部分適用する", () => {
+  resetEmployees();
+  const summary = importMasterRows([
+    HEADER,
+    ["従業員", "E001", "田中太郎", "", "", "園芸", "1", "", "", ""],
+    ["従業員", "", "佐藤花子", "", "", "資材", "2", "", "", ""]
+  ], { save: false, allowPartial: true });
+
+  assert.equal(summary.applied, true);
+  assert.equal(summary.partial, true);
+  assert.equal(state.employees.length, 1);
+  assert.equal(state.employees[0].code, "E001");
+  resetEmployees();
+});
+
+test("ファイル内でIDが重複した場合は該当する全行を拒否する", () => {
+  resetEmployees();
+  importMasterRows([
+    HEADER,
+    ["従業員", "E001", "田中太郎", "", "", "園芸", "1", "", "", ""]
+  ], { save: false });
+
+  const plan = prepareMasterImport([
+    HEADER,
+    ["従業員", "E001", "田中太郎", "", "", "園芸", "1", "", "", ""],
+    ["従業員", "E001", "別名", "", "", "資材", "2", "", "", ""]
+  ]);
+  assert.equal(plan.summary.unchangedEmployees, 0);
+  assert.equal(plan.operations.length, 0);
+  assert.equal(plan.summary.errorRows, 2);
+  assert.equal(plan.errors.length, 2);
+  assert.ok(plan.errors.every((message) => /重複/.test(message)));
   resetEmployees();
 });

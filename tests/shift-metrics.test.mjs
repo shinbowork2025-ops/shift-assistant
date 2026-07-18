@@ -36,6 +36,12 @@ test("重複と勤務時間外を除いて実休憩を計算する", () => {
   assert.equal(paidMinutesForShift(fullShift, { breaks }), 420);
 });
 
+test("固定実働分は勤務時間と配置済み休憩からの計算より優先する", () => {
+  const fixedPaidShift = { ...fullShift, paidMinutes: 480 };
+  assert.equal(paidMinutesForShift(fixedPaidShift), 480);
+  assert.equal(paidMinutesForShift(fixedPaidShift, { breakMinutes: 120 }), 480);
+});
+
 test("固定実働の非勤務シフトと表示形式を維持する", () => {
   const paidLeave = { code: "paid", name: "有休", isWork: false, paidMinutes: 450 };
   assert.equal(paidMinutesForShift(paidLeave), 450);

@@ -42,7 +42,38 @@ test("実ブラウザで保存安全性・月間編集・配置条件画面が�
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto(`http://127.0.0.1:${PORT}/index.html`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#authGate");
+  assert.equal(await page.locator("html").getAttribute("data-app-ready"), null);
+  await page.locator("#authUserId").fill("99999");
+  await page.locator("#authPassword").fill("99998");
+  await page.locator("#authSubmitButton").click();
+  await page.waitForSelector("#authError:not(:empty)");
+  assert.match(await page.locator("#authError").innerText(), /違います/);
+
+  await page.locator("#authUserId").fill("99999");
+  await page.locator("#authPassword").fill("99999");
+  await page.locator("#authSubmitButton").click();
   await page.waitForSelector("html[data-app-ready='1']");
+  assert.equal(await page.locator("#authGate").isHidden(), true);
+
+  await page.locator("#importMasterInput").setInputFiles({
+    name: "master-with-error.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from([
+      "種別,コード,名称,開始時刻,終了時刻,所属,表示順,略称,固定残業時間,シフト残業時間",
+      "従業員,E999,取込確認用,,,園芸,1,,0,",
+      "従業員,,ID欠落,,,資材,2,,0,"
+    ].join("\r\n"), "utf8")
+  });
+  const importPreview = page.locator("#masterImportPreviewDialog");
+  await importPreview.waitFor({ state: "visible" });
+  assert.match(await importPreview.innerText(), /追加1名/);
+  assert.match(await importPreview.innerText(), /読込不可\s*1行/);
+  assert.match(await importPreview.innerText(), /正常な行だけ取り込む/);
+  await importPreview.getByRole("button", { name: "取込を中止" }).click();
+  await importPreview.waitFor({ state: "hidden" });
+  await page.waitForFunction(() => document.querySelector("#importStatus")?.textContent.includes("データは変更されていません"));
+  assert.match(await page.locator("#importStatus").textContent(), /データは変更されていません/);
 
   await page.waitForSelector(".storage-safety-summary");
   assert.match(await page.locator(".storage-safety-summary").innerText(), /保存保護/);
@@ -83,6 +114,13 @@ test("実ブラウザで保存安全性・月間編集・配置条件画面が�
   assert.match(dialogText, /配置条件CSVを読込/);
   assert.match(dialogText, /従業員の保有資格/);
   await dialog.getByRole("button", { name: "閉じる" }).click();
+
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForSelector("html[data-app-ready='1']");
+  assert.equal(await page.locator("#authGate").isHidden(), true, "同じタブの再読み込みでは認証済みセッションを維持する");
+  await page.locator("#logoutButton").click();
+  await page.waitForSelector("#authGate");
+  assert.equal(await page.locator("#authGate").isVisible(), true);
 
   assert.deepEqual(pageErrors, []);
   await context.close();
