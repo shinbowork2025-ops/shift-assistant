@@ -142,7 +142,7 @@ export function createInitialWorkspace(name = "無題のシフト表", targetMon
 }
 
 export function applyWorkspaceToState(targetState, workspace) {
-  targetState.schemaVersion = 4;
+  targetState.schemaVersion = 5;
   targetState.selectedMonth = workspace.selectedMonth;
   targetState.selectedDate = workspace.selectedDate;
   targetState.currentView = VALID_VIEWS.has(workspace.currentView) ? workspace.currentView : "month";

@@ -2,6 +2,7 @@ import { loadState, saveState } from "./db.js";
 import {
   APPLICATION_SCHEMA_VERSION,
   isWorkspaceEnvelope,
+  migrateWorkspaceEnvelope,
   wrapLegacyState,
   duplicateWorkspaceRecord
 } from "./workspace-schema.js";
@@ -65,7 +66,7 @@ export {
 };
 
 export const state = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   selectedMonth: currentMonthValue(),
   selectedDate: currentDateValue(),
   currentView: "month",
@@ -82,7 +83,7 @@ export const workspaceState = {
   applicationSchemaVersion: APPLICATION_SCHEMA_VERSION,
   activeWorkspaceId: null,
   workspaces: [],
-  settings: { lastBackupAt: null },
+  settings: { lastBackupAt: null, lastBackupExportId: null },
   migratedLegacyState: false
 };
 
@@ -117,18 +118,20 @@ function applicationEnvelope() {
 }
 
 function loadApplicationEnvelope(candidate) {
-  if (!isWorkspaceEnvelope(candidate)) throw new Error("バックアップの形式が正しくありません。");
-  const workspaces = candidate.workspaces.map((workspace, index) => normalizeWorkspace(workspace, index));
+  const migratedCandidate = migrateWorkspaceEnvelope(candidate);
+  const workspaces = migratedCandidate.workspaces.map((workspace, index) => normalizeWorkspace(workspace, index));
   if (!workspaces.length) throw new Error("バックアップにシフト表がありません。");
 
   workspaceState.workspaces = workspaces;
-  workspaceState.activeWorkspaceId = workspaces.some((item) => item.id === candidate.activeWorkspaceId)
-    ? candidate.activeWorkspaceId
+  workspaceState.activeWorkspaceId = workspaces.some((item) => item.id === migratedCandidate.activeWorkspaceId)
+    ? migratedCandidate.activeWorkspaceId
     : workspaces[0].id;
   workspaceState.settings = {
-    lastBackupAt: candidate.settings?.lastBackupAt ?? null
+    lastBackupAt: migratedCandidate.settings?.lastBackupAt ?? null,
+    lastBackupExportId: migratedCandidate.settings?.lastBackupExportId ?? null
   };
   applyWorkspaceToState(state, getActiveWorkspace());
+  return Number(candidate.applicationSchemaVersion) !== APPLICATION_SCHEMA_VERSION;
 }
 
 export function getWorkspaceList() {
@@ -414,14 +417,16 @@ export async function loadSavedState() {
     const workspace = createInitialWorkspace();
     workspaceState.workspaces = [workspace];
     workspaceState.activeWorkspaceId = workspace.id;
-    workspaceState.settings = { lastBackupAt: null };
+    workspaceState.settings = { lastBackupAt: null, lastBackupExportId: null };
     applyWorkspaceToState(state, workspace);
     await persistApplicationStateNow();
     return false;
   }
 
   if (isWorkspaceEnvelope(savedState)) {
-    loadApplicationEnvelope(savedState);
+    const migrated = loadApplicationEnvelope(savedState);
+    workspaceState.migratedLegacyState = migrated;
+    if (migrated) await persistApplicationStateNow();
   } else {
     const now = new Date().toISOString();
     const migrated = wrapLegacyState(savedState, {

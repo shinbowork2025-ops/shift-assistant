@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   APPLICATION_SCHEMA_VERSION,
+  OLDEST_WORKSPACE_ENVELOPE_VERSION,
   isWorkspaceEnvelope,
+  migrateWorkspaceEnvelope,
   createBlankWorkspace,
   wrapLegacyState,
   duplicateWorkspaceRecord
@@ -38,6 +40,56 @@ test("既存の単一シフト表を無題のワークスペースへ移行す�
   assert.equal(migrated.workspaces[0].employees[0].name, "田中");
   assert.equal(migrated.workspaces[0].shifts["2026-07"].e1["2026-07-15"], "01");
   assert.equal(migrated.workspaces[0].breaks["2026-07-15"].e1[0].start, "12:00");
+});
+
+test("版4の複数シフト表を版5へ移行し、全データを維持する", () => {
+  const version4 = {
+    application: "Shift Assistant",
+    applicationSchemaVersion: 4,
+    activeWorkspaceId: "workspace-2",
+    settings: { lastBackupAt: "2026-07-01T00:00:00.000Z" },
+    workspaces: [
+      {
+        id: "workspace-1",
+        name: "園芸",
+        selectedMonth: "2026-07",
+        employees: [{ id: "e1", name: "田中" }],
+        shiftTypes,
+        shifts: { "2026-07": { e1: { "2026-07-01": "01" } } }
+      },
+      {
+        id: "workspace-2",
+        name: "資材",
+        selectedMonth: "2026-08",
+        employees: [{ id: "e2", name: "佐藤" }],
+        shiftTypes,
+        shifts: { "2026-08": { e2: { "2026-08-01": "01" } } }
+      }
+    ]
+  };
+
+  assert.equal(isWorkspaceEnvelope(version4), true);
+  const migrated = migrateWorkspaceEnvelope(version4);
+  assert.equal(migrated.applicationSchemaVersion, APPLICATION_SCHEMA_VERSION);
+  assert.equal(migrated.activeWorkspaceId, "workspace-2");
+  assert.equal(migrated.workspaces.length, 2);
+  assert.equal(migrated.workspaces[0].employees[0].name, "田中");
+  assert.equal(migrated.workspaces[1].shifts["2026-08"].e2["2026-08-01"], "01");
+  assert.equal(migrated.settings.lastBackupAt, "2026-07-01T00:00:00.000Z");
+  assert.equal(migrated.settings.lastBackupExportId, null);
+  assert.equal(version4.applicationSchemaVersion, 4);
+});
+
+test("未対応の古い版と新しい版を推測して読み込まない", () => {
+  const envelope = { applicationSchemaVersion: OLDEST_WORKSPACE_ENVELOPE_VERSION, workspaces: [] };
+  assert.throws(
+    () => migrateWorkspaceEnvelope({ ...envelope, applicationSchemaVersion: OLDEST_WORKSPACE_ENVELOPE_VERSION - 1 }),
+    /対応していません/
+  );
+  assert.throws(
+    () => migrateWorkspaceEnvelope({ ...envelope, applicationSchemaVersion: APPLICATION_SCHEMA_VERSION + 1 }),
+    /ツールを更新/
+  );
 });
 
 test("新規ワークスペースは空の独立データを持つ", () => {

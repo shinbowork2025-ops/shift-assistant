@@ -9,6 +9,7 @@ import {
 import { buildMonthOverview } from "./month-overview.js";
 import { buildIntegrationExport, integrationAssignmentsToCsv } from "./integration-export.js";
 import { validateMonthReadiness } from "./month-validation.js";
+import { buildBackupExport, extractBackupPayload, isBackupExport } from "./backup-export.js";
 
 export function downloadFile(fileName, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
@@ -144,19 +145,31 @@ export async function downloadMasterWorkbookSample() {
   );
 }
 
-export function backupJson() {
+function backupFileTimestamp(createdAt) {
+  return createdAt.replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
+}
+
+export async function backupJson() {
   const createdAt = new Date().toISOString();
+  const exportId = globalThis.crypto?.randomUUID?.();
+  if (!exportId) throw new Error("バックアップ識別子を作成できません。");
   workspaceState.settings ??= {};
   workspaceState.settings.lastBackupAt = createdAt;
-  const backup = getApplicationBackup();
-  const fileName = `shift-assistant-all-workspaces-${createdAt.slice(0, 10)}.json`;
+  workspaceState.settings.lastBackupExportId = exportId;
+  const backup = await buildBackupExport(getApplicationBackup(), { createdAt, exportId });
+  const fileName = `shift-assistant-backup-${backupFileTimestamp(createdAt)}-${exportId.slice(0, 8)}.json`;
   downloadFile(fileName, JSON.stringify(backup, null, 2), "application/json");
   scheduleSave();
-  globalThis.dispatchEvent(new CustomEvent("shift-assistant-backup-created", { detail: { createdAt } }));
+  globalThis.dispatchEvent(new CustomEvent("shift-assistant-backup-created", {
+    detail: { createdAt, exportId, fileName, payloadSha256: backup.payloadSha256 }
+  }));
+  return { createdAt, exportId, fileName, payloadSha256: backup.payloadSha256 };
 }
 
 export async function restoreJson(file) {
   if (!file) return;
   const text = await file.text();
-  await restoreApplicationState(JSON.parse(text));
+  const parsed = JSON.parse(text);
+  const payload = isBackupExport(parsed) ? await extractBackupPayload(parsed) : parsed;
+  await restoreApplicationState(payload);
 }
