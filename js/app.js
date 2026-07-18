@@ -25,11 +25,47 @@ function loadStylesheet(href) {
   document.head.append(stylesheet);
 }
 
+function showStartupFailure(error) {
+  console.error(error);
+  document.querySelector("#authGate")?.setAttribute("hidden", "");
+  document.querySelector(".app-topbar")?.setAttribute("hidden", "");
+  document.querySelector(".app-main")?.setAttribute("hidden", "");
+  document.body.classList.remove("auth-pending");
+  document.body.classList.add("startup-failed");
+  document.documentElement.dataset.storageLoadFailed = "1";
+
+  const section = document.createElement("section");
+  section.id = "startupFailure";
+  section.className = "auth-gate";
+  section.setAttribute("role", "alert");
+  section.innerHTML = `
+    <div class="auth-card">
+      <p class="auth-environment">保存データを読み込めませんでした</p>
+      <h1>編集を開始できません</h1>
+      <p class="auth-description">既存データを誤って上書きしないため、編集と保存を停止しました。ページを再読み込みしてください。繰り返し発生する場合は、表示された内容を管理者へ伝えてください。</p>
+      <p class="auth-error"></p>
+      <button class="button primary" type="button">再読み込み</button>
+    </div>
+  `;
+  section.querySelector(".auth-error").textContent = error instanceof Error ? error.message : String(error);
+  section.querySelector("button").addEventListener("click", () => window.location.reload());
+  document.body.prepend(section);
+}
+
 async function initialize() {
   loadStylesheet("./print-page.css");
   loadStylesheet("./paint.css");
   loadStylesheet("./enhancements.css?v=20260711b");
   setStatusHandler(setSaveStatus);
+
+  let hadSavedState;
+  try {
+    hadSavedState = await loadSavedState();
+  } catch (error) {
+    showStartupFailure(error);
+    return false;
+  }
+
   initializeHistoryUi({ onUndo: undoLastAction, onRedo: redoLastAction });
   initializePaintInput({
     tableContainer: elements.tableContainer,
@@ -43,27 +79,24 @@ async function initialize() {
   globalThis.addEventListener("pagehide", () => {
     void flushPendingSave().catch(() => {});
   });
-  try {
-    const hadSavedState = await loadSavedState();
-    const shiftCatalogMigrated = consumeWorkspaceMigrationFlag();
-    ensureBreaksForDate(state.selectedDate);
-    if (shiftCatalogMigrated) {
-      scheduleSave();
-      setSaveStatus("旧シフト区分を整理し、公休を「休」へ統一しました");
-    } else if (workspaceState.migratedLegacyState) {
-      setSaveStatus("既存データを「無題のシフト表」へ移行しました");
-    } else {
-      setSaveStatus(hadSavedState ? "保存データを読み込みました" : "新しいシフト表を開始しました");
-    }
-  } catch (error) {
-    console.error(error);
-    setSaveStatus(`読込失敗: ${error.message}`, true);
+
+  const shiftCatalogMigrated = consumeWorkspaceMigrationFlag();
+  ensureBreaksForDate(state.selectedDate);
+  if (shiftCatalogMigrated) {
+    scheduleSave();
+    setSaveStatus("旧シフト区分を整理し、公休を「休」へ統一しました");
+  } else if (workspaceState.migratedLegacyState) {
+    setSaveStatus("既存データを「無題のシフト表」へ移行しました");
+  } else {
+    setSaveStatus(hadSavedState ? "保存データを読み込みました" : "新しいシフト表を開始しました");
   }
+
   initializeStorageSafetyUi();
   render(elements);
   document.documentElement.dataset.appReady = "1";
+  return true;
 }
 
 await requireSimpleAuthentication();
-await initialize();
-showAuthenticatedApplication();
+const initialized = await initialize();
+if (initialized) showAuthenticatedApplication();
