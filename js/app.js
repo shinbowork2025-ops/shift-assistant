@@ -15,6 +15,7 @@ import { initializeStorageSafetyUi } from "./storage-safety-ui.js";
 import { elements, setSaveStatus } from "./elements.js";
 import { render } from "./render.js";
 import { consumeWorkspaceMigrationFlag } from "./workspace-normalizer.js";
+import { requireSimpleAuthentication, showAuthenticatedApplication } from "./auth-ui.js";
 
 function loadStylesheet(href) {
   if (document.querySelector(`link[href="${href}"]`)) return;
@@ -63,4 +64,6 @@ async function initialize() {
   document.documentElement.dataset.appReady = "1";
 }
 
-initialize();
+await requireSimpleAuthentication();
+await initialize();
+showAuthenticatedApplication();

@@ -9,6 +9,7 @@
 
   function showRecoveryBanner() {
     if (document.documentElement.dataset.appReady === "1") return;
+    if (document.documentElement.dataset.appBooted === "1") return;
     if (document.getElementById("bootRecovery")) return;
 
     var banner = document.createElement("div");

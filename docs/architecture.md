@@ -20,6 +20,10 @@ index.html / CSS
         ▼
 app.js ─ 初期化
         │
+        ├─ auth-ui.js ─ ログイン画面・ログアウト
+        │    └─ simple-auth.js ─ 資格情報照合・タブ内セッション
+        │         └─ auth-config.js ─ テスト環境用の認証設定
+        │
         ├─ events.js ─ DOMイベントの配線
         │
         ├─ actions.js ─ 公開アクションの互換ファサード
@@ -68,6 +72,14 @@ state
 `workspaceState`は、端末内に保存されている複数ワークスペースと選択中IDを持ちます。
 
 編集時は`state`を更新し、`scheduleSave()`を呼びます。`scheduleSave()`は選択中ワークスペースへ参照を同期し、短時間の連続変更をまとめてIndexedDBへ保存します。
+
+## 簡易認証
+
+`app.js`は最初に`requireSimpleAuthentication()`を待ち、成功後にだけ`initialize()`を実行します。これにより、未認証の状態では`loadSavedState()`を呼ばず、IndexedDBの保存データを画面へ読み込みません。
+
+テスト環境の資格情報は`auth-config.js`へ分離し、パスワードはPassword-Based Key Derivation Function 2（PBKDF2）で導出した値と照合します。認証済み状態は`sessionStorage`へ保存し、ログアウト時に削除します。正式採用時は`auth-ui.js`の呼出境界を維持したまま、`simple-auth.js`を社内認証方式へ置き換えます。
+
+この層は静的なクライアント内の簡易ゲートであり、権限分離や改ざん耐性のある監査記録を提供しません。
 
 保存形式は`workspace-schema.js`の`APPLICATION_SCHEMA_VERSION`で管理します。複数シフト表形式を変更する場合は、旧版から次版への変換関数を1つずつ追加し、`migrateWorkspaceEnvelope()`で現在版まで順番に適用します。未知の古い版を推測して変換したり、新しい版を古いアプリで読み込んだりしてはいけません。実在する最初の複数シフト表形式は版4です。
 
