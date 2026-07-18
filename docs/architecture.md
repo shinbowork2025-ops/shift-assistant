@@ -196,7 +196,8 @@ state
 - CSV解析・マスター反映：`csv.js`
 - Excel展開：`xlsx-lite.js`
 - 読込アクション：`actions/file-actions.js`
-- 社内システム連携用エクスポート：`integration-export.js`（純粋モジュール。契約は`docs/integration.md`。コードの欠落・重複・未正規化、休憩ルール違反がある場合は出力を拒否する。`files.js`側でさらに`validateMonthReadiness()`のゲートを通し、転記準備OKの月だけ出力する）
+- 社内システム連携用エクスポート：`integration-export.js`（純粋モジュール。契約は`docs/integration.md`。コードの欠落・重複・未正規化、休憩ルール違反がある場合は出力を拒否する。`files.js`側でさらに`validateMonthReadiness()`のゲートを通し、ツール内検証OKの候補案だけ出力する）
+- 検証範囲の記録：`validation-profile.js`（検査プロファイルとその版、実施項目、未検査項目、人による承認が必要なことを定義する。会社固有の検査を追加するときは既存プロファイルの意味を変更せず、新しいプロファイルまたは新版として追加する）
 - 従業員コードの正規化：`master-codes.js`（NFKC＋大文字化。入力境界＝ダイアログ・CSV取込で適用）
 - 休憩と割当の整合性検査：`break-integrity.js`（純粋モジュール。勤務枠に収まらない休憩・勤務でない日の残留休憩を列挙。`breaks.js`の`repairBrokenBreaks()`がマスター取込後に再配置する）
 

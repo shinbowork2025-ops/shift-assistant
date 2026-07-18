@@ -39,6 +39,6 @@ test("空欄はエラー件数から除外し、未入力セル数として返�
   assert.equal(result.blankCount, 31);
   assert.equal(result.blankByEmployee[0].count, 31);
   assert.equal(result.blockingCount, 0);
-  assert.equal(result.ready, false, "未入力が残る月を転記準備OKにしてはいけません");
+  assert.equal(result.ready, false, "未入力が残る月をツール内検証OKにしてはいけません");
   assert.equal(result.issues.some((item) => item.category === "blank"), false);
 });

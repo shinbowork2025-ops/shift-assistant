@@ -8,6 +8,21 @@ import {
   buildIntegrationExport,
   integrationAssignmentsToCsv
 } from "../js/integration-export.js";
+import {
+  VALIDATION_PROFILE,
+  VALIDATION_PROFILE_VERSION,
+  buildValidationRecord
+} from "../js/validation-profile.js";
+
+function sampleValidation(checkedAt = "2026-07-18T00:00:00.000Z") {
+  return buildValidationRecord({
+    ready: true,
+    blankCount: 0,
+    blockingCount: 0,
+    warningCount: 0,
+    infoCount: 2
+  }, { checkedAt });
+}
 
 function sampleWorkspace() {
   return {
@@ -43,6 +58,7 @@ test("正常なワークスペースから連携用データを構築する", ()
   const { data } = result;
   assert.equal(data.format, INTEGRATION_EXPORT_FORMAT);
   assert.equal(data.formatVersion, INTEGRATION_EXPORT_VERSION);
+  assert.equal(data.documentStatus, "candidate");
   assert.equal(data.month, "2026-07");
   assert.equal(data.workspaceName, "園芸売場");
 
@@ -120,10 +136,15 @@ test("休憩ルールを満たさない勤務シフトは出力を拒否する",
 });
 
 test("検証サマリーを渡すとJSONへvalidationとして埋め込む", () => {
-  const validation = { ready: true, blankCount: 0, errorCount: 0, warningCount: 0, infoCount: 2 };
+  const validation = sampleValidation();
   const result = buildIntegrationExport(sampleWorkspace(), { validation });
   assert.equal(result.ok, true);
   assert.deepEqual(result.data.validation, validation);
+  assert.equal(result.data.validation.profile, VALIDATION_PROFILE);
+  assert.equal(result.data.validation.profileVersion, VALIDATION_PROFILE_VERSION);
+  assert.equal(result.data.validation.toolChecksPassed, true);
+  assert.equal(result.data.validation.humanReview.approvalRecordedByTool, false);
+  assert.ok(result.data.validation.notChecked.includes("human_approval_and_registration_result"));
 
   const withoutValidation = buildIntegrationExport(sampleWorkspace());
   assert.equal("validation" in withoutValidation.data, false);
@@ -145,13 +166,16 @@ test("validateIntegrationMasterはシフトコードの重複も検出する", (
 });
 
 test("連携用CSVは縦持ちでRFC 4180に従う", () => {
-  const { data } = buildIntegrationExport(sampleWorkspace(), { generatedAt: "2026-07-18T00:00:00.000Z" });
+  const { data } = buildIntegrationExport(sampleWorkspace(), {
+    generatedAt: "2026-07-18T00:00:00.000Z",
+    validation: sampleValidation()
+  });
   const csv = integrationAssignmentsToCsv(data);
   const lines = csv.split("\r\n");
 
   assert.equal(lines[0], INTEGRATION_CSV_HEADER.join(","));
-  assert.equal(lines[1], "2026-07-01,E001,01,1,06:45,16:15,60,510,0,12:00-13:00");
-  assert.equal(lines[3], "2026-07-02,E001,休,0,,,0,0,0,");
+  assert.equal(lines[1], "2,candidate,shift-assistant-standard,1,2026-07-01,E001,01,1,06:45,16:15,60,510,0,12:00-13:00");
+  assert.equal(lines[3], "2,candidate,shift-assistant-standard,1,2026-07-02,E001,休,0,,,0,0,0,");
   assert.equal(lines.at(-1), "");
   // BOMを付けない（機械連携用のため）
   assert.notEqual(csv.charCodeAt(0), 0xfeff);
