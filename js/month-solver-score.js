@@ -1,8 +1,9 @@
-import { plannedBreakTemplates } from "./break-rules.js";
+import { breaksFitShiftWindow, plannedBreakTemplates } from "./break-rules.js";
 import { scheduleBreaks } from "./break-scheduler.js";
 import { activeRequirementsForWeekday, evaluateCoverage } from "./coverage-requirements.js";
-import { getDayInfo, timeToMinutes } from "./date-time.js";
+import { dateKey, getDayInfo, timeToMinutes } from "./date-time.js";
 import { EMPLOYMENT_TYPES, normalizeEmploymentType } from "./employment-types.js";
+import { isManualBreakLockedInData } from "./manual-break-locks.js";
 import { overtimeMinutesForShift, shiftDurationMinutes } from "./shift-metrics.js";
 import { normalizePreferredShiftCode } from "./work-shift-preferences.js";
 import { restGapMinutes } from "./work-shift-planner-core.js";
@@ -22,10 +23,22 @@ function variance(values) {
 }
 
 function isLateShift(shiftType) {
+  // 公平性指標専用の便宜的な区分。開始12時以降または終了20時以降を遅番として数える。
   if (!shiftType?.isWork) return false;
   const start = timeToMinutes(shiftType.start) ?? 0;
   const end = timeToMinutes(shiftType.end) ?? 0;
   return start >= 12 * 60 || end >= 20 * 60;
+}
+
+function minuteIntervals(items) {
+  return (Array.isArray(items) ? items : []).map((item) => ({
+    startMinute: timeToMinutes(item?.start),
+    endMinute: timeToMinutes(item?.end)
+  })).filter((item) => (
+    item.startMinute !== null
+    && item.endMinute !== null
+    && item.endMinute > item.startMinute
+  ));
 }
 
 function slotIsInside(start, end, slot) {
@@ -42,6 +55,7 @@ function coverageMap(names) {
 
 export function evaluateSolverDay(plan, day, typeMap = null) {
   const shiftTypesByCode = typeMap ?? new Map(plan.shiftTypes.map((shiftType) => [shiftType.code, shiftType]));
+  const dateValue = dateKey(plan.monthValue, day);
   const assignments = [];
   for (const employee of plan.employees) {
     const code = assignmentCode(plan, employee.id, day);
@@ -50,6 +64,10 @@ export function evaluateSolverDay(plan, day, typeMap = null) {
     const shiftStart = timeToMinutes(shiftType.start);
     const shiftEnd = timeToMinutes(shiftType.end);
     if (shiftStart === null || shiftEnd === null || shiftEnd <= shiftStart) continue;
+    const existingBreaks = plan.breaks?.[dateValue]?.[employee.id] ?? [];
+    const protectedBreak = existingBreaks.length > 0
+      && isManualBreakLockedInData(plan.manualBreakLocks, dateValue, employee.id)
+      && breaksFitShiftWindow(shiftType, existingBreaks);
     assignments.push({
       id: employee.id,
       employmentType: normalizeEmploymentType(employee.employmentType),
@@ -57,9 +75,9 @@ export function evaluateSolverDay(plan, day, typeMap = null) {
       qualifications: Array.isArray(employee.qualifications) ? employee.qualifications : [],
       shiftStart,
       shiftEnd,
-      templates: plannedBreakTemplates(shiftDurationMinutes(shiftType)),
-      movable: true,
-      existingBreaks: []
+      templates: protectedBreak ? [] : plannedBreakTemplates(shiftDurationMinutes(shiftType)),
+      movable: !protectedBreak,
+      existingBreaks: protectedBreak ? minuteIntervals(existingBreaks) : []
     });
   }
 
@@ -73,7 +91,9 @@ export function evaluateSolverDay(plan, day, typeMap = null) {
   const coverageByQualification = coverageMap(activeRequirements.map((item) => item.requiredQualification));
 
   for (const assignment of assignments) {
-    const breaks = scheduled.get(assignment.id) ?? [];
+    const breaks = assignment.movable
+      ? scheduled.get(assignment.id) ?? []
+      : assignment.existingBreaks;
     for (let index = 0; index < slots.length; index += 1) {
       const slot = slots[index];
       if (!slotIsInside(assignment.shiftStart, assignment.shiftEnd, slot) || breakCoversSlot(breaks, slot)) continue;
@@ -102,7 +122,12 @@ export function evaluateSolverDay(plan, day, typeMap = null) {
     coveragePenalty: shortagePeople * 1000 + evaluation.shortageSlotCount,
     requirementMessages: evaluation.messages,
     breaksByEmployee: Object.fromEntries(
-      [...scheduled.entries()].map(([employeeId, items]) => [employeeId, items.map((item) => ({ ...item }))])
+      assignments.map((assignment) => {
+        const items = assignment.movable
+          ? scheduled.get(assignment.id) ?? []
+          : assignment.existingBreaks;
+        return [assignment.id, items.map((item) => ({ ...item }))];
+      })
     )
   };
 }

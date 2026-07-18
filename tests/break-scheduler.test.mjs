@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { BREAK_SLOT_MINUTES, scheduleBreaks } from "../js/break-scheduler.js";
-import { plannedBreakTemplates } from "../js/break-rules.js";
+import { breaksFitShiftWindow, plannedBreakTemplates, validateBreaks } from "../js/break-rules.js";
+import { minutesToTime } from "../js/date-time.js";
 
 const MINUTE = { h9: 9 * 60, h15: 15 * 60, h18: 18 * 60 };
 
@@ -142,4 +143,33 @@ test("5時間超の短いシフトにも昼休憩が入る", () => {
   assert.equal(breaks.length, 1);
   assert.equal(breaks[0].type, "lunch");
   assert.equal(breaks[0].endMinute - breaks[0].startMinute, 45);
+});
+
+test("固定休憩に強く圧迫されても勤務枠外や禁止帯へ配置しない", () => {
+  const input = [
+    assignment("A", MINUTE.h9, MINUTE.h18),
+    assignment("B", MINUTE.h9, MINUTE.h18, {
+      movable: false,
+      templates: [],
+      existingBreaks: [{ startMinute: 10 * 60, endMinute: 16 * 60 }]
+    })
+  ];
+  const placements = scheduleBreaks(input).get("A");
+  const shiftType = { isWork: true, start: "09:00", end: "18:00" };
+  const formatted = placements.map((item) => ({
+    start: minutesToTime(item.startMinute),
+    end: minutesToTime(item.endMinute)
+  }));
+
+  assert.equal(breaksFitShiftWindow(shiftType, formatted), true);
+  assert.equal(validateBreaks(shiftType, formatted).ok, true);
+  assert.ok(placements.every((item) => item.startMinute >= 10 * 60));
+  assert.ok(placements.every((item) => item.endMinute <= 17 * 60));
+});
+
+test("可行域がないテンプレートは違法配置せず未配置にする", () => {
+  const placements = scheduleBreaks([assignment("A", 9 * 60, 10 * 60, {
+    templates: [{ type: "lunch", label: "昼休憩", duration: 90, targetOffset: 0 }]
+  })]).get("A");
+  assert.deepEqual(placements, []);
 });

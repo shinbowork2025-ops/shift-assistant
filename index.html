@@ -185,6 +185,14 @@
           </div>
         </div>
         <div class="data-card">
+          <h3>社内システム連携用の出力</h3>
+          <p>従業員コードとシフトコードを照合キーにした機械連携用データを保存します。月間の要確認一覧が「転記準備OK」の場合のみ出力できます。形式は<code>docs/integration.md</code>で定義しています。</p>
+          <div class="data-card-actions">
+            <button id="exportIntegrationCsvButton" class="button secondary" type="button">連携用CSVを保存</button>
+            <button id="exportIntegrationJsonButton" class="button secondary" type="button">連携用JSONを保存</button>
+          </div>
+        </div>
+        <div class="data-card">
           <h3>バックアップ・復元</h3>
           <p>端末内の全シフト表を1つのファイルに保存します。ブラウザの閲覧データを消すと入力内容も消えるため、定期的に保存してください。</p>
           <div class="data-card-actions">
@@ -206,6 +214,7 @@
       <p>シフト表ごとに従業員、シフト定義、月間シフト、休憩を分離して保存します。共用端末では、編集前に上部の名称と更新日時を確認してください。</p>
       <h3>CSV・Excelの基本形式</h3>
       <p><code>種別,コード,名称,開始時刻,終了時刻,所属,表示順,略称,固定残業時間,シフト残業時間</code>の見出しで、従業員行とシフト行をまとめて読み込めます。</p>
+      <p>従業員コードは必須です。社内システムとの照合キーになるため、社員番号など全員で重複しない値を使用してください。同じ従業員コードの行は既存従業員の更新として扱います。</p>
       <p>「Excel見本」には通常シフトと休日区分を収録しています。シート名に「休日区分」または「特殊シフト」を含む補助シートも読み込みますが、<code>Yシフト</code>などの複合入力例は説明行として自動取込しません。古い<code>.xls</code>形式は未対応です。</p>
       <p class="muted">このツールは編成案の作成用です。入力データは外部へ送信せず、端末内にだけ保存します。正式な登録と確定は社内システムで行ってください。</p>
     </details>
@@ -247,9 +256,10 @@
         <input id="employeeNameInput" type="text" maxlength="40" required autocomplete="off">
       </label>
       <label>
-        <span>従業員コード（任意）</span>
-        <input id="employeeCodeInput" type="text" maxlength="20" autocomplete="off" placeholder="例：E001">
+        <span>従業員コード</span>
+        <input id="employeeCodeInput" type="text" maxlength="20" required autocomplete="off" placeholder="例：E001">
       </label>
+      <p class="muted">従業員コードは社内システムとの照合キーです。全員で重複しない値を入力してください。</p>
       <label>
         <span>所属（任意）</span>
         <input id="employeeDepartmentInput" type="text" maxlength="30" autocomplete="off" placeholder="例：園芸">

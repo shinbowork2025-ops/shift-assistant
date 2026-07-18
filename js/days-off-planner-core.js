@@ -55,7 +55,21 @@ function nearestDistance(day, preferredDays, daysInMonth) {
   return distance;
 }
 
-function scoreCandidate(candidate, context, selectedDays) {
+function minimumAdditionalDaysOff(daysInMonth, offDays, maximum) {
+  let required = 0;
+  let streak = 0;
+  for (let day = 1; day <= daysInMonth + 1; day += 1) {
+    if (day <= daysInMonth && !offDays.has(day)) {
+      streak += 1;
+      continue;
+    }
+    required += Math.floor(streak / (maximum + 1));
+    streak = 0;
+  }
+  return required;
+}
+
+function scoreCandidate(candidate, context, selectedDays, needed) {
   const day = candidate.day;
   const tier = context.fixedDays.has(day) ? 0 : context.patternDays.has(day) ? 1 : 2;
   const staffing = (context.dailyOffCounts[day] ?? 0) * 18;
@@ -64,14 +78,33 @@ function scoreCandidate(candidate, context, selectedDays) {
   const adjacent = [day - 1, day + 1]
     .filter((value) => value >= 1 && value <= context.daysInMonth)
     .filter((value) => selectedDays.has(value) || context.preservedOffDays.has(value)).length;
-  return tier * 1000 + staffing + distance + (tier === 2 ? adjacent * 5 : 0) + changeCost + day / 100;
+  let streakScore = 0;
+  const maximum = Number(context.maxConsecutiveWorkDays) || 0;
+  if (maximum > 0) {
+    const currentOffDays = new Set([...context.preservedOffDays, ...selectedDays]);
+    const currentLongest = longestWorkStreak(context.daysInMonth, currentOffDays);
+    const candidateOffDays = new Set([...currentOffDays, day]);
+    const candidateLongest = longestWorkStreak(context.daysInMonth, candidateOffDays);
+    const currentExcess = Math.max(0, currentLongest - maximum);
+    const candidateExcess = Math.max(0, candidateLongest - maximum);
+    const remainingSelections = Math.max(0, needed - selectedDays.size - 1);
+    const additionalNeeded = minimumAdditionalDaysOff(context.daysInMonth, candidateOffDays, maximum);
+    const impossibleWithRemaining = Math.max(0, additionalNeeded - remainingSelections);
+    // 上限超過を減らす候補を最優先し、同じ超過量なら最長連勤が短い候補を選ぶ。
+    // 残りの公休数だけでは上限を解消できなくなる選択は、先読みして避ける。
+    streakScore = impossibleWithRemaining * 10000000
+      + (candidateExcess - currentExcess) * 100000
+      + additionalNeeded * 10000
+      + candidateLongest * 100;
+  }
+  return streakScore + tier * 1000 + staffing + distance + (tier === 2 ? adjacent * 5 : 0) + changeCost + day / 100;
 }
 
 export function chooseDays(candidates, needed, context) {
   const remaining = [...candidates];
   const selectedDays = new Set();
   while (selectedDays.size < needed && remaining.length) {
-    remaining.sort((a, b) => scoreCandidate(a, context, selectedDays) - scoreCandidate(b, context, selectedDays));
+    remaining.sort((a, b) => scoreCandidate(a, context, selectedDays, needed) - scoreCandidate(b, context, selectedDays, needed));
     const chosen = remaining.shift();
     selectedDays.add(chosen.day);
     context.dailyOffCounts[chosen.day] = (context.dailyOffCounts[chosen.day] ?? 0) + 1;

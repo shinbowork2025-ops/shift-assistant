@@ -21,11 +21,14 @@ async function waitForServer() {
 }
 
 before(async () => {
-  server = spawn("python3", ["-m", "http.server", String(PORT), "--bind", "127.0.0.1"], {
+  server = spawn(process.env.PYTHON_EXECUTABLE || "python3", ["-m", "http.server", String(PORT), "--bind", "127.0.0.1"], {
     stdio: "ignore"
   });
   await waitForServer();
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+  });
 });
 
 after(async () => {

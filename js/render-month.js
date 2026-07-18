@@ -28,6 +28,8 @@ export function renderMonthTable(elements) {
   elements.emptyState.hidden = hasEmployees;
   elements.tableContainer.hidden = !hasEmployees;
   elements.exportCsvButton.disabled = !hasEmployees;
+  elements.exportIntegrationCsvButton.disabled = !hasEmployees;
+  elements.exportIntegrationJsonButton.disabled = !hasEmployees;
   elements.clearMonthButton.disabled = !state.shifts[state.selectedMonth];
   if (!hasEmployees) {
     elements.tableContainer.replaceChildren();

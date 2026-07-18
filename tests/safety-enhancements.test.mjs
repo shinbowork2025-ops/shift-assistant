@@ -151,3 +151,32 @@ test("ソルバー日次評価に部門・資格不足を含める", () => {
   assert.ok(metric.shortagePeople > 0);
   assert.match(metric.requirementMessages.join(" "), /農薬アドバイザー/);
 });
+
+test("ソルバー日次評価は保護された手動休憩を固定負荷として扱う", () => {
+  const basePlan = {
+    monthValue: "2026-07",
+    employees: [{ id: "e1", employmentType: "fulltime" }],
+    shiftTypes: [{ code: "A", isWork: true, start: "09:00", end: "15:00" }],
+    assignments: { e1: { 1: "A" } },
+    coverageRequirements: [{
+      scope: "everyday",
+      start: "10:00",
+      end: "10:45",
+      requiredTotal: 1
+    }],
+    breaks: {
+      "2026-07-01": {
+        e1: [{ type: "lunch", label: "昼休憩", start: "10:00", end: "10:45" }]
+      }
+    }
+  };
+  const movable = evaluateSolverDay({ ...basePlan, manualBreakLocks: {} }, 1);
+  const protectedMetric = evaluateSolverDay({
+    ...basePlan,
+    manualBreakLocks: { "2026-07-01": { e1: true } }
+  }, 1);
+
+  assert.equal(movable.shortagePeople, 0);
+  assert.ok(protectedMetric.shortagePeople > 0);
+  assert.deepEqual(protectedMetric.breaksByEmployee.e1, [{ startMinute: 600, endMinute: 645 }]);
+});

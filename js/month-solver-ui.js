@@ -1,5 +1,6 @@
 import { monthDisplayName, state } from "./model.js";
 import { createCurrentMonthSolverPlan, applyMonthSolverResult } from "./month-solver-actions.js";
+import { validateMonthSolverApplication } from "./month-solver-application.js";
 
 const PRECISION_TIME_LIMIT_MS = 3 * 60 * 1000;
 const PRECISION_ITERATIONS_PER_RESTART = 12000;
@@ -373,12 +374,13 @@ function shortageReportSection(reports) {
 function showResult(result) {
   stopWorker();
   currentResult = result;
+  const applicationValidation = validateMonthSolverApplication(result);
   const precision = result.mode === "precision";
   ui.dialog.stop.hidden = true;
   ui.dialog.stop.disabled = false;
   ui.dialog.another.hidden = false;
   ui.dialog.another.textContent = precision ? "別シードでもう一度3分探索" : "別の案";
-  ui.dialog.apply.hidden = !result.validation?.ok;
+  ui.dialog.apply.hidden = !applicationValidation.ok;
   ui.dialog.progress.value = precision && result.stopped
     ? Math.min(1, result.elapsedMs / result.timeLimitMs)
     : 1;
@@ -392,10 +394,10 @@ function showResult(result) {
   ui.dialog.result.classList.remove("error");
 
   const title = document.createElement("strong");
-  if (result.validation?.ok) {
+  if (applicationValidation.ok) {
     title.textContent = precision ? "精密最適化で有効な最良案を見つけました" : "有効な月間案を作成しました";
   } else {
-    title.textContent = "固定条件に矛盾があります";
+    title.textContent = "適用条件を満たしていません";
   }
   const stats = document.createElement("div");
   stats.className = "month-solver-metrics";
@@ -414,17 +416,7 @@ function showResult(result) {
   const changeList = changePreviewList(changes);
   const shortageSection = shortageReportSection(result.shortageReports);
   const issues = document.createElement("ul");
-  if (result.objective.shortagePeople > 0) {
-    const item = document.createElement("li");
-    item.textContent = `必要人数不足が${result.objective.shortagePeople}人枠残っています。内訳を確認し、必要なら1日チャートで休憩配置も見直してください。`;
-    issues.append(item);
-  }
-  if (result.objective.hard > 0) {
-    const item = document.createElement("li");
-    item.textContent = `勤務間隔・連勤違反が${result.objective.hard}残っています。ソルバーは初期案より違反を増やしていません。`;
-    issues.append(item);
-  }
-  for (const issue of result.validation?.issues ?? []) {
+  for (const issue of applicationValidation.issues) {
     const item = document.createElement("li");
     item.textContent = issue;
     issues.append(item);

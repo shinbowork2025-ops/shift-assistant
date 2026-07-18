@@ -1,7 +1,3 @@
-import { getDaysInMonth } from "./date-time.js";
-import { state } from "./model.js";
-import { getRestPattern } from "./rest-patterns.js";
-
 let initialized = false;
 let syncing = false;
 
@@ -11,47 +7,6 @@ function labeled(text, control) {
   span.textContent = text;
   label.append(span, control);
   return label;
-}
-
-function currentDaysOff(employee, typeMap) {
-  const row = [...document.querySelectorAll("#tableContainer .schedule-table tbody tr")]
-    .find((candidate) => candidate.querySelector(".employee-button")?.dataset.employeeId === employee.id);
-  if (!row) return null;
-  return [...row.querySelectorAll(".shift-select")]
-    .filter((select) => {
-      const shiftType = typeMap.get(select.value);
-      return shiftType && !shiftType.isWork;
-    }).length;
-}
-
-function targetDaysOff(employee, typeMap) {
-  const explicit = Math.max(0, Number(employee.targetDaysOff) || 0);
-  if (explicit > 0) return explicit;
-  const pattern = getRestPattern(employee.restPatternId);
-  if (pattern.cycle.length) {
-    const offItems = pattern.cycle.filter((item) => item === "off").length;
-    return Math.round(getDaysInMonth(state.selectedMonth) * offItems / pattern.cycle.length);
-  }
-  let existing = 0;
-  for (let day = 1; day <= getDaysInMonth(state.selectedMonth); day += 1) {
-    const dateValue = `${state.selectedMonth}-${String(day).padStart(2, "0")}`;
-    const code = state.shifts?.[state.selectedMonth]?.[employee.id]?.[dateValue] ?? "";
-    const shiftType = typeMap.get(code);
-    if (shiftType && !shiftType.isWork) existing += 1;
-  }
-  return existing;
-}
-
-function previewDaysOffIssues() {
-  const typeMap = new Map(state.shiftTypes.map((shiftType) => [shiftType.code, shiftType]));
-  const issues = [];
-  for (const employee of state.employees) {
-    const actual = currentDaysOff(employee, typeMap);
-    if (actual === null) continue;
-    const target = targetDaysOff(employee, typeMap);
-    if (actual !== target) issues.push(`${employee.name}さん：休日${actual}日（目標${target}日）`);
-  }
-  return issues;
 }
 
 function metricAfter(result, label) {
@@ -82,8 +37,6 @@ function syncApplyGate(dialog) {
     const hard = metricAfter(result, "勤務間隔・連勤違反");
     if (shortage !== null && shortage > 0) reasons.push(`必要人数不足 ${shortage}人枠`);
     if (hard !== null && hard > 0) reasons.push(`勤務間隔・連勤違反 ${hard}件`);
-    reasons.push(...previewDaysOffIssues());
-
     const blocked = structuralBlocked || reasons.length > 0;
     apply.hidden = blocked;
     let note = result.querySelector(".month-solver-apply-gate");

@@ -12,6 +12,8 @@ export function createCurrentMonthSolverPlan(options = {}) {
     shiftTypes: state.shiftTypes,
     shifts: state.shifts,
     shiftLocks: state.shiftLocks,
+    breaks: state.breaks,
+    manualBreakLocks: state.manualBreakLocks,
     coverageRequirements: state.coverageRequirements,
     selectedEmployeeIds: options.selectedEmployeeIds,
     selectedShiftCodes: options.selectedShiftCodes

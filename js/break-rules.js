@@ -73,6 +73,20 @@ export function validateBreakTotals(spanMinutes, actualBreakMinutes) {
   };
 }
 
+// すべての休憩が勤務時間の途中（境界に接しない内側）に収まっているかを判定する。
+// validateBreaksの窓判定と同じ基準。シフト変更・マスター再取込後の残留休憩の検出に使う。
+export function breaksFitShiftWindow(shiftType, breaks = []) {
+  if (!shiftType?.isWork) return false;
+  const shiftStart = timeToMinutes(shiftType.start);
+  const shiftEnd = timeToMinutes(shiftType.end);
+  if (shiftStart === null || shiftEnd === null || shiftEnd <= shiftStart || shiftEnd > MINUTES_PER_DAY) return false;
+  return (Array.isArray(breaks) ? breaks : []).every((breakItem) => {
+    const start = timeToMinutes(breakItem?.start);
+    const end = timeToMinutes(breakItem?.end);
+    return start !== null && end !== null && end > start && start > shiftStart && end < shiftEnd;
+  });
+}
+
 export function validateBreaks(shiftType, breaks = []) {
   if (!shiftType?.isWork) {
     return { ok: true, span: 0, work: 0, required: 0, actual: 0, shortage: 0, issues: [] };

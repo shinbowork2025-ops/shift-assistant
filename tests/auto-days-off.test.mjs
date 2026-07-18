@@ -117,3 +117,17 @@ test("休み方未設定の従業員は変更しない", () => {
   assert.equal(plan.changes.length, 0);
   assert.equal(plan.summary.skippedEmployees, 1);
 });
+
+test("公休候補の選択時点で5連勤上限を超えないよう分散する", () => {
+  const plan = buildDaysOffPlan({
+    monthValue: "2026-07",
+    employees: [{ ...employee("e1", 1, "5on2off", 5), restPatternOffset: 0 }],
+    shiftTypes,
+    shifts: {},
+    shiftLocks: {},
+    offShiftCode: "休",
+    mode: "empty-only"
+  });
+  assert.equal(plan.employeeResults[0].actualDaysOff, 5);
+  assert.ok(plan.employeeResults[0].longestWorkStreak <= 5);
+});
