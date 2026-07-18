@@ -110,7 +110,7 @@ export function renderMonthValidationDashboard() {
   header.className = "month-validation-header";
   const title = document.createElement("strong");
   title.textContent = result.ready
-    ? "転記準備OK"
+    ? "ツール内検証OK"
     : result.blockingCount > 0
       ? `要確認 ${result.blockingCount}件`
       : "入力途中";
@@ -151,7 +151,7 @@ export function renderMonthValidationDashboard() {
     empty.className = "muted";
     empty.textContent = result.blankCount > 0
       ? "現在は未入力セルだけが残っています。"
-      : "必要人数・休憩・休息・連勤・残業・希望休を確認済みです。";
+      : "ツールに設定された必要人数・休憩・休息・連勤・残業・希望休の検査を通過しました。正式登録には担当者の確認が必要です。";
     list.append(empty);
   }
   details.append(detailsSummary, list);

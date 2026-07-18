@@ -9,6 +9,7 @@ import {
 import { buildMonthOverview } from "./month-overview.js";
 import { buildIntegrationExport, integrationAssignmentsToCsv } from "./integration-export.js";
 import { validateMonthReadiness } from "./month-validation.js";
+import { buildValidationRecord } from "./validation-profile.js";
 import { buildBackupExport, extractBackupPayload, isBackupExport } from "./backup-export.js";
 
 export function downloadFile(fileName, content, mimeType) {
@@ -72,8 +73,8 @@ export function exportCsv() {
 }
 
 // 社内システム連携用の出力。契約はdocs/integration.mdを参照。
-// 月間の要確認一覧が「転記準備OK」（未入力ゼロ・エラーゼロ）でない限り出力しない。
-// 作りかけの月や検証違反を含むデータを下流のパイプラインへ流さないためのゲート。
+// 月間の要確認一覧が「ツール内検証OK」（未入力ゼロ・エラーゼロ）でない限り出力しない。
+// これは候補案の品質ゲートであり、会社規則への完全適合や人による承認を表すものではない。
 function buildIntegrationExportOrThrow() {
   const readiness = validateMonthReadiness({
     monthValue: state.selectedMonth,
@@ -94,9 +95,10 @@ function buildIntegrationExportOrThrow() {
       .filter((item) => item.severity === "error")
       .slice(0, 3)
       .map((item) => item.message);
-    throw new Error(`転記準備OKではないため出力できません（${reasons.join("・")}）。${firstIssues.join(" / ")}`);
+    throw new Error(`ツール内検証OKではないため出力できません（${reasons.join("・")}）。${firstIssues.join(" / ")}`);
   }
 
+  const checkedAt = new Date().toISOString();
   const result = buildIntegrationExport({
     name: getActiveWorkspace()?.name ?? "",
     selectedMonth: state.selectedMonth,
@@ -105,13 +107,8 @@ function buildIntegrationExportOrThrow() {
     shifts: state.shifts,
     breaks: state.breaks
   }, {
-    validation: {
-      ready: true,
-      blankCount: readiness.blankCount,
-      errorCount: readiness.blockingCount,
-      warningCount: readiness.warningCount,
-      infoCount: readiness.infoCount
-    }
+    generatedAt: checkedAt,
+    validation: buildValidationRecord(readiness, { checkedAt })
   });
   if (!result.ok) throw new Error(result.errors.join(" / "));
   return result.data;

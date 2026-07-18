@@ -21,7 +21,7 @@
 - **日をまたぐシフト**（終了時刻≦開始時刻）には対応していません。マスター取込時にエラーとして拒否します。
 - 文字コードはUTF-8。日付は`YYYY-MM-DD`、月は`YYYY-MM`、時刻は`HH:MM`（24時間表記）。
 - 時間量はすべて**分単位の整数**（例：実働450 = 7時間30分）。
-- 出力形式には`formatVersion`（現在は`1`）を含めます。フィールドの追加は同一バージョンで行うことがありますが、既存フィールドの削除・意味変更時は必ずバージョンを上げます。取り込み側は未知のフィールドを無視してください。
+- 出力形式には`formatVersion`（現在は`2`）を含めます。フィールドの追加は同一バージョンで行うことがありますが、既存フィールドの削除・意味変更時は必ずバージョンを上げます。取り込み側は未知のフィールドを無視してください。
 
 ## 入力契約：マスターCSV・Excel
 
@@ -56,15 +56,17 @@
 
 画面の「社内システム連携用の出力」から保存します。
 
-### 出力条件（完全性の保証）
+### 出力条件（ツール内検証の範囲）
 
 不完全なデータを下流に流さないため、次を**すべて**満たす場合のみ出力できます。満たさない場合は理由（未入力セル数・エラー件数・先頭の問題）を表示してエラーになります。
 
-1. 月間の要確認一覧が「転記準備OK」であること：未入力セルがゼロ、かつエラー（必要人数不足、11時間未満の勤務間隔、連続勤務上限超過、固定残業枠超過、休憩ルール違反など）がゼロ
+1. 月間の要確認一覧が「ツール内検証OK」であること：未入力セルがゼロ、かつエラー（必要人数不足、11時間未満の勤務間隔、連続勤務上限超過、固定残業枠超過、休憩ルール違反など）がゼロ
 2. 従業員コード・シフトコードに欠落・重複・未正規化（全角や小文字）がないこと
-3. すべての勤務シフトの休憩が、勤務時間の内側に配置され、法定・店舗ルールの必要時間を満たしていること
+3. すべての勤務シフトの休憩が、勤務時間の内側に配置され、ツールに実装された休憩ルールの必要時間を満たしていること
 
-このため、**出力に成功したファイルは「そのまま登録できる完成度」を満たしたシフト**であることが保証されます。警告・情報レベルの指摘（月境界の未登録など）は出力を妨げませんが、JSONの`validation`に件数として記録されます。
+出力成功が示すのは、`shift-assistant-standard`検査プロファイルの実装済み検査を通過した候補案であることだけです。就業規則全体、元マスターの正確性、個別の労働契約や勤務制限、接続先固有の入力条件、担当者の確認・承認、実際の登録結果は検査しません。正式登録前に担当者または接続先の承認工程で確認してください。
+
+警告・情報レベルの指摘（月境界の未登録など）は出力を妨げませんが、JSONの`validation.counts`に件数として記録します。会社固有の検査を追加するときは既存プロファイルの意味を変更せず、別の`profile`または新しい`profileVersion`として定義します。
 
 ### 連携用JSON（全量：マスター＋割当）
 
@@ -73,16 +75,46 @@
 ```json
 {
   "format": "shift-assistant-integration",
-  "formatVersion": 1,
+  "formatVersion": 2,
+  "documentStatus": "candidate",
   "generatedAt": "2026-07-18T09:00:00.000Z",
   "workspaceName": "園芸売場",
   "month": "2026-07",
   "validation": {
-    "ready": true,
-    "blankCount": 0,
-    "errorCount": 0,
-    "warningCount": 0,
-    "infoCount": 1
+    "profile": "shift-assistant-standard",
+    "profileVersion": 1,
+    "toolChecksPassed": true,
+    "checkedAt": "2026-07-18T09:00:00.000Z",
+    "counts": {
+      "blank": 0,
+      "error": 0,
+      "warning": 0,
+      "info": 1
+    },
+    "checksPerformed": [
+      "assignment_completeness",
+      "shift_code_reference",
+      "requested_day_off_consistency",
+      "break_and_lock_consistency",
+      "configured_break_rules",
+      "minimum_rest_interval_11h",
+      "configured_consecutive_work_limit",
+      "configured_coverage_requirements",
+      "configured_fixed_overtime_limit",
+      "adjacent_month_boundaries_when_available",
+      "integration_master_codes"
+    ],
+    "notChecked": [
+      "source_master_accuracy",
+      "all_company_work_rules",
+      "individual_contracts_and_restrictions",
+      "target_system_schema_and_mapping",
+      "human_approval_and_registration_result"
+    ],
+    "humanReview": {
+      "requiredBeforeRegistration": true,
+      "approvalRecordedByTool": false
+    }
   },
   "employees": [
     {
@@ -123,13 +155,20 @@
 
 | フィールド | 説明 |
 | --- | --- |
-| `validation` | 出力時点の月間検証サマリー。`ready`は常に`true`（trueでないと出力できない）。`infoCount`は情報レベルの指摘（月境界の未登録など）の件数 |
+| `documentStatus` | 常に`candidate`。担当者が確認・承認する前の候補案であり、正式登録済み・承認済みを示さない |
+| `validation.profile` | 実施した検査集合の安定した識別子。現在は`shift-assistant-standard` |
+| `validation.profileVersion` | 検査プロファイルの版。検査の意味や必須項目を変更するときに上げる |
+| `validation.toolChecksPassed` | 実装済みの出力必須検査を通過したこと。出力ファイルでは常に`true` |
+| `validation.counts` | 未入力、エラー、警告、情報の件数。警告と情報は出力を妨げない |
+| `validation.checksPerformed` | ツールが実施した検査の識別子一覧 |
+| `validation.notChecked` | ツールが検査していない事項の識別子一覧 |
+| `validation.humanReview` | 正式登録前の担当者確認が必要であり、このツールは承認を記録しないことを示す |
 | `employmentType` | `fulltime`（社員）／`semi`（準社員）／`parttime`（パート・アルバイト） |
 | `isWork` | `true`＝勤務シフト、`false`＝公休・有給などの休日区分 |
 | `paidMinutes` | シフト区分に固定の実働分が設定されている場合のみ数値。未設定は`null`（勤務時間−休憩から算出） |
 | `breaks` | シフトに**実際に配置された**休憩の開始・終了時刻の配列。出力条件により、すべて勤務時間の内側に収まっていることが保証される。休日区分では常に空配列 |
 | `breakMinutes` | 配置された休憩の合計分 |
-| `workMinutes` | 勤務時間から配置済み休憩を差し引いた実働分。出力条件により休憩は法定・店舗ルールを満たした状態で確定している |
+| `workMinutes` | 勤務時間から配置済み休憩を差し引いた実働分。出力条件により休憩はツールに実装された休憩ルールを通過している |
 | `overtimeMinutes` | そのシフト1回あたりの残業見込み分 |
 
 `assignments`には入力済みのセルだけが含まれます（空欄セルは出力されません）。
@@ -138,16 +177,18 @@
 
 ファイル名：`（シフト表名）-（YYYY-MM）-integration.csv`
 
-1行＝1従業員×1日。JSONの`assignments`と同じ内容です。区切りはカンマ、改行はCRLF、引用符はRFC 4180準拠。BOMなし。値の書き換え（Excel向け数式ガードなど）は行いません。
+1行＝1従業員×1日。JSONの候補状態、検査プロファイル、`assignments`と同じ内容です。区切りはカンマ、改行はCRLF、引用符はRFC 4180準拠。BOMなし。値の書き換え（Excel向け数式ガードなど）は行いません。
 
 ```csv
-date,employee_code,shift_code,is_work,start,end,break_minutes,work_minutes,overtime_minutes,breaks
-2026-07-01,E001,01,1,06:45,16:15,60,510,0,12:00-13:00
-2026-07-02,E001,休,0,,,0,0,0,
+format_version,document_status,validation_profile,validation_profile_version,date,employee_code,shift_code,is_work,start,end,break_minutes,work_minutes,overtime_minutes,breaks
+2,candidate,shift-assistant-standard,1,2026-07-01,E001,01,1,06:45,16:15,60,510,0,12:00-13:00
+2,candidate,shift-assistant-standard,1,2026-07-02,E001,休,0,,,0,0,0,
 ```
 
 - `is_work`：`1`＝勤務、`0`＝休日区分
 - `breaks`：`HH:MM-HH:MM`を`/`で連結（例：`10:00-10:15/12:00-13:00`）
+- `document_status`：常に`candidate`。承認済み・登録済みを示さない
+- `validation_profile`と`validation_profile_version`：JSONの同名情報と同じ。検査範囲の識別に使用する
 
 ## 参考：バックアップJSONとの違い
 

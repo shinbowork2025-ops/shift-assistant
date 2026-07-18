@@ -15,9 +15,13 @@ import {
 } from "./shift-metrics.js";
 
 export const INTEGRATION_EXPORT_FORMAT = "shift-assistant-integration";
-export const INTEGRATION_EXPORT_VERSION = 1;
+export const INTEGRATION_EXPORT_VERSION = 2;
 
 export const INTEGRATION_CSV_HEADER = [
+  "format_version",
+  "document_status",
+  "validation_profile",
+  "validation_profile_version",
   "date",
   "employee_code",
   "shift_code",
@@ -98,7 +102,7 @@ export function buildIntegrationExport(workspace, { generatedAt = new Date().toI
         continue;
       }
       const breaks = shiftType.isWork ? validBreaks(workspace.breaks?.[dayInfo.dateValue]?.[employee.id]) : [];
-      // 勤務シフトは休憩の法定・店舗ルール（勤務枠内・重複なし・必要時間充足）を
+      // 勤務シフトはツールに実装した休憩ルール（勤務枠内・重複なし・必要時間充足）を
       // 満たしていない限り出力しない。不完全な実働時間を下流へ流さないための防壁。
       if (shiftType.isWork) {
         const breakValidation = validateBreaks(shiftType, breaks);
@@ -130,6 +134,7 @@ export function buildIntegrationExport(workspace, { generatedAt = new Date().toI
     data: {
       format: INTEGRATION_EXPORT_FORMAT,
       formatVersion: INTEGRATION_EXPORT_VERSION,
+      documentStatus: "candidate",
       generatedAt,
       workspaceName: workspace.name ?? "",
       month: monthValue,
@@ -165,6 +170,10 @@ export function integrationAssignmentsToCsv(data) {
   const rows = [INTEGRATION_CSV_HEADER];
   for (const assignment of data.assignments) {
     rows.push([
+      data.formatVersion,
+      data.documentStatus,
+      data.validation?.profile ?? "",
+      data.validation?.profileVersion ?? "",
       assignment.date,
       assignment.employeeCode,
       assignment.shiftCode,

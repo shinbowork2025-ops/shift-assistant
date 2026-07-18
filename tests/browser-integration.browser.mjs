@@ -48,7 +48,7 @@ test("実ブラウザで保存安全性・月間編集・配置条件画面が�
   assert.match(await page.locator(".storage-safety-summary").innerText(), /保存保護/);
   const validationPanel = page.locator(".month-validation-panel");
   await validationPanel.waitFor();
-  assert.match(await validationPanel.innerText(), /転記準備OK|要確認|入力途中/);
+  assert.match(await validationPanel.innerText(), /ツール内検証OK|要確認|入力途中/);
   assert.match(await validationPanel.innerText(), /未入力 \d+セル/);
 
   const validationDetails = validationPanel.locator(".month-validation-details");
