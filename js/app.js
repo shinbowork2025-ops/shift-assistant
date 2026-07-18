@@ -16,6 +16,7 @@ import { elements, setSaveStatus } from "./elements.js";
 import { render } from "./render.js";
 import { consumeWorkspaceMigrationFlag } from "./workspace-normalizer.js";
 import { requireSimpleAuthentication, showAuthenticatedApplication } from "./auth-ui.js";
+import { showFatalStorageLoadError } from "./fatal-storage-ui.js";
 
 function loadStylesheet(href) {
   if (document.querySelector(`link[href="${href}"]`)) return;
@@ -25,11 +26,32 @@ function loadStylesheet(href) {
   document.head.append(stylesheet);
 }
 
+function bindSaveFlushHandlers() {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") void flushPendingSave().catch(() => {});
+  });
+  globalThis.addEventListener("pagehide", () => {
+    void flushPendingSave().catch(() => {});
+  });
+}
+
 async function initialize() {
   loadStylesheet("./print-page.css");
   loadStylesheet("./paint.css");
   loadStylesheet("./enhancements.css?v=20260711b");
   setStatusHandler(setSaveStatus);
+
+  let hadSavedState;
+  try {
+    hadSavedState = await loadSavedState();
+  } catch (error) {
+    console.error(error);
+    setSaveStatus(`読込失敗: ${error.message}`, true);
+    showAuthenticatedApplication();
+    showFatalStorageLoadError(error);
+    return false;
+  }
+
   initializeHistoryUi({ onUndo: undoLastAction, onRedo: redoLastAction });
   initializePaintInput({
     tableContainer: elements.tableContainer,
@@ -37,33 +59,25 @@ async function initialize() {
     setStatus: setSaveStatus
   });
   bindEvents();
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") void flushPendingSave().catch(() => {});
-  });
-  globalThis.addEventListener("pagehide", () => {
-    void flushPendingSave().catch(() => {});
-  });
-  try {
-    const hadSavedState = await loadSavedState();
-    const shiftCatalogMigrated = consumeWorkspaceMigrationFlag();
-    ensureBreaksForDate(state.selectedDate);
-    if (shiftCatalogMigrated) {
-      scheduleSave();
-      setSaveStatus("旧シフト区分を整理し、公休を「休」へ統一しました");
-    } else if (workspaceState.migratedLegacyState) {
-      setSaveStatus("既存データを「無題のシフト表」へ移行しました");
-    } else {
-      setSaveStatus(hadSavedState ? "保存データを読み込みました" : "新しいシフト表を開始しました");
-    }
-  } catch (error) {
-    console.error(error);
-    setSaveStatus(`読込失敗: ${error.message}`, true);
+  bindSaveFlushHandlers();
+
+  const shiftCatalogMigrated = consumeWorkspaceMigrationFlag();
+  ensureBreaksForDate(state.selectedDate);
+  if (shiftCatalogMigrated) {
+    scheduleSave();
+    setSaveStatus("旧シフト区分を整理し、公休を「休」へ統一しました");
+  } else if (workspaceState.migratedLegacyState) {
+    setSaveStatus("既存データを「無題のシフト表」へ移行しました");
+  } else {
+    setSaveStatus(hadSavedState ? "保存データを読み込みました" : "新しいシフト表を開始しました");
   }
+
   initializeStorageSafetyUi();
   render(elements);
   document.documentElement.dataset.appReady = "1";
+  return true;
 }
 
 await requireSimpleAuthentication();
-await initialize();
-showAuthenticatedApplication();
+const initialized = await initialize();
+if (initialized) showAuthenticatedApplication();
