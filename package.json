@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "test:browser": "node --test tests/browser-integration.browser.mjs"
+    "test:browser": "node --test tests/*.browser.mjs"
   },
   "devDependencies": {
     "playwright": "latest"
