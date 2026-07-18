@@ -56,6 +56,24 @@ test("実ブラウザで保存安全性・月間編集・配置条件画面が�
   await page.waitForSelector("html[data-app-ready='1']");
   assert.equal(await page.locator("#authGate").isHidden(), true);
 
+  await page.locator("#importMasterInput").setInputFiles({
+    name: "master-with-error.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from([
+      "種別,コード,名称,開始時刻,終了時刻,所属,表示順,略称,固定残業時間,シフト残業時間",
+      "従業員,E999,取込確認用,,,園芸,1,,0,",
+      "従業員,,ID欠落,,,資材,2,,0,"
+    ].join("\r\n"), "utf8")
+  });
+  const importPreview = page.locator("#masterImportPreviewDialog");
+  await importPreview.waitFor({ state: "visible" });
+  assert.match(await importPreview.innerText(), /追加1名/);
+  assert.match(await importPreview.innerText(), /読込不可\s*1行/);
+  assert.match(await importPreview.innerText(), /正常な行だけ取り込む/);
+  await importPreview.getByRole("button", { name: "取込を中止" }).click();
+  await importPreview.waitFor({ state: "hidden" });
+  assert.match(await page.locator("#importStatus").innerText(), /データは変更されていません/);
+
   await page.waitForSelector(".storage-safety-summary");
   assert.match(await page.locator(".storage-safety-summary").innerText(), /保存保護/);
   const validationPanel = page.locator(".month-validation-panel");

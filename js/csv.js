@@ -86,71 +86,117 @@ function durationToMinutes(hoursValue, minutesValue, label, line, errors) {
   return null;
 }
 
-function importEmployee(record, summary) {
+function duplicateCodes(rows, columns, hasEmployeeHeader, hasShiftHeader) {
+  const employeeLines = new Map();
+  const shiftLines = new Map();
+
+  rows.slice(1).forEach((row, index) => {
+    const line = index + 2;
+    const type = inferRowType(valueAt(row, columns.type), hasEmployeeHeader, hasShiftHeader);
+    if (type === "employee") {
+      const code = normalizeEmployeeCode(valueAt(row, columns.code));
+      if (code) employeeLines.set(code, [...(employeeLines.get(code) ?? []), line]);
+    } else if (type === "shift") {
+      const rawCode = valueAt(row, columns.code);
+      const name = valueAt(row, columns.shiftName) || valueAt(row, columns.commonName) || rawCode;
+      const code = rawCode || (name ? `shift-${name}` : "");
+      if (code) shiftLines.set(code, [...(shiftLines.get(code) ?? []), line]);
+    }
+  });
+
+  return {
+    employees: new Map([...employeeLines].filter(([, lines]) => lines.length > 1)),
+    shifts: new Map([...shiftLines].filter(([, lines]) => lines.length > 1))
+  };
+}
+
+function duplicateMessage(kind, code, line, lines) {
+  const otherLines = lines.filter((candidate) => candidate !== line).join("・");
+  return `${line}行目: ${kind}「${code}」がファイル内の${otherLines}行目と重複しています。`;
+}
+
+function employeeOperation(record, context) {
+  const { summary, operations, duplicateEmployeeCodes } = context;
+  const rowErrors = [];
   if (!record.name) {
-    summary.errors.push(`${record.line}行目: 従業員名がありません。`);
-    return;
+    rowErrors.push(`${record.line}行目: 従業員名がありません。`);
   }
 
-  // 従業員コードは社内システム連携の照合キーのため必須。照合はコードだけで行う。
-  // 全角・小文字の揺れを吸収するため、半角・大文字へ正規化して保存する。
   const code = normalizeEmployeeCode(record.code);
   if (!code) {
-    summary.errors.push(`${record.line}行目: 従業員コードがありません。社員番号など重複しない値を入力してください。`);
-    return;
+    rowErrors.push(`${record.line}行目: 従業員コードがありません。社員番号など重複しない値を入力してください。`);
+  } else if (duplicateEmployeeCodes.has(code)) {
+    rowErrors.push(duplicateMessage("従業員コード", code, record.line, duplicateEmployeeCodes.get(code)));
   }
 
   let employmentType = null;
   if (record.employmentTypeText) {
     employmentType = matchEmploymentType(record.employmentTypeText);
     if (!employmentType) {
-      summary.errors.push(`${record.line}行目: 雇用区分は社員、準社員、パート・アルバイトのいずれかで入力してください。`);
+      rowErrors.push(`${record.line}行目: 雇用区分は社員、準社員、パート・アルバイトのいずれかで入力してください。`);
     }
   }
-
-  const existing = state.employees.find((employee) => normalizeEmployeeCode(employee.code) === code);
-
-  if (existing) {
-    existing.name = record.name;
-    existing.code = code;
-    existing.department = record.department;
-    existing.order = record.order || existing.order;
-    if (employmentType) existing.employmentType = employmentType;
-    if (record.fixedOvertimeMinutes !== null) existing.fixedOvertimeMinutes = record.fixedOvertimeMinutes;
-    summary.updatedEmployees += 1;
+  if (rowErrors.length) {
+    summary.errors.push(...rowErrors);
     return;
   }
 
-  state.employees.push({
-    id: createId("employee"),
-    name: record.name,
-    code,
-    department: record.department,
-    order: record.order || state.employees.length + 1,
-    employmentType: employmentType ?? DEFAULT_EMPLOYMENT_TYPE,
-    fixedOvertimeMinutes: record.fixedOvertimeMinutes ?? 0
+  // 従業員コードは社内システム連携の照合キーのため必須。照合はコードだけで行う。
+  // 全角・小文字の揺れを吸収するため、半角・大文字へ正規化して保存する。
+  const existing = state.employees.find((employee) => normalizeEmployeeCode(employee.code) === code);
+
+  if (existing) {
+    const changes = {
+      name: record.name,
+      code,
+      department: record.department,
+      order: record.order || existing.order,
+      ...(employmentType ? { employmentType } : {}),
+      ...(record.fixedOvertimeMinutes !== null ? { fixedOvertimeMinutes: record.fixedOvertimeMinutes } : {})
+    };
+    const changed = Object.entries(changes).some(([key, value]) => existing[key] !== value);
+    operations.push({ entity: "employee", action: changed ? "update" : "unchanged", existingId: existing.id, changes, line: record.line });
+    if (changed) summary.updatedEmployees += 1;
+    else summary.unchangedEmployees += 1;
+    return;
+  }
+
+  operations.push({
+    entity: "employee",
+    action: "add",
+    value: {
+      name: record.name,
+      code,
+      department: record.department,
+      order: record.order || state.employees.length + summary.addedEmployees + 1,
+      employmentType: employmentType ?? DEFAULT_EMPLOYMENT_TYPE,
+      fixedOvertimeMinutes: record.fixedOvertimeMinutes ?? 0
+    },
+    line: record.line
   });
   summary.addedEmployees += 1;
 }
 
-function importShift(record, summary) {
+function shiftOperation(record, context) {
+  const { summary, operations, duplicateShiftCodes } = context;
+  const rowErrors = [];
   const name = record.name || record.code;
   if (!name) {
-    summary.errors.push(`${record.line}行目: シフト名またはシフトコードがありません。`);
-    return;
+    rowErrors.push(`${record.line}行目: シフト名またはシフトコードがありません。`);
   }
   const hasTimes = Boolean(record.start || record.end);
   if (hasTimes && (!isValidTime(record.start) || !isValidTime(record.end))) {
-    summary.errors.push(`${record.line}行目: 開始時刻または終了時刻がHH:MM形式ではありません。`);
-    return;
+    rowErrors.push(`${record.line}行目: 開始時刻または終了時刻がHH:MM形式ではありません。`);
   }
   // 日をまたぐシフトは時間計算（実働・休憩・勤務間隔）が扱えないため登録を拒否する。
-  if (hasTimes && timeToMinutes(record.end) <= timeToMinutes(record.start)) {
-    summary.errors.push(`${record.line}行目: 終了時刻は開始時刻より後にしてください（日をまたぐシフトは登録できません）。`);
-    return;
+  if (hasTimes && isValidTime(record.start) && isValidTime(record.end) && timeToMinutes(record.end) <= timeToMinutes(record.start)) {
+    rowErrors.push(`${record.line}行目: 終了時刻は開始時刻より後にしてください（日をまたぐシフトは登録できません）。`);
   }
 
   const code = record.code || `shift-${name}`;
+  if (duplicateShiftCodes.has(code)) {
+    rowErrors.push(duplicateMessage("シフトコード", code, record.line, duplicateShiftCodes.get(code)));
+  }
   const existing = state.shiftTypes.find((shift) => shift.code === code)
     ?? (!record.code ? state.shiftTypes.find((shift) => shift.name === name) : null);
 
@@ -160,10 +206,13 @@ function importShift(record, summary) {
     if (Number.isFinite(parsed) && parsed >= 0) {
       paidMinutes = Math.round(parsed);
     } else {
-      summary.errors.push(`${record.line}行目: 実働分は0以上の数値で入力してください。`);
+      rowErrors.push(`${record.line}行目: 実働分は0以上の数値で入力してください。`);
     }
   }
-
+  if (rowErrors.length) {
+    summary.errors.push(...rowErrors);
+    return;
+  }
   const shiftValue = {
     code: existing?.code ?? code,
     name,
@@ -176,16 +225,18 @@ function importShift(record, summary) {
   };
 
   if (existing) {
-    Object.assign(existing, shiftValue);
-    summary.updatedShifts += 1;
+    const changed = Object.entries(shiftValue).some(([key, value]) => existing[key] !== value);
+    operations.push({ entity: "shift", action: changed ? "update" : "unchanged", existingCode: existing.code, changes: shiftValue, line: record.line });
+    if (changed) summary.updatedShifts += 1;
+    else summary.unchangedShifts += 1;
   } else {
-    state.shiftTypes.push(shiftValue);
+    operations.push({ entity: "shift", action: "add", value: shiftValue, line: record.line });
     summary.addedShifts += 1;
   }
 }
 
-// options.save: falseにするとIndexedDB保存を予約しない（Nodeテスト用）。
-export function importMasterRows(rows, { save = true } = {}) {
+// 全行を検証し、stateを変更せずに適用計画を返す。
+export function prepareMasterImport(rows) {
   if (!Array.isArray(rows) || rows.length < 2) throw new Error("見出し行とデータ行が必要です。");
 
   const headers = rows[0];
@@ -218,9 +269,19 @@ export function importMasterRows(rows, { save = true } = {}) {
   const summary = {
     addedEmployees: 0,
     updatedEmployees: 0,
+    unchangedEmployees: 0,
     addedShifts: 0,
     updatedShifts: 0,
+    unchangedShifts: 0,
     errors: []
+  };
+  const operations = [];
+  const duplicates = duplicateCodes(rows, columns, hasEmployeeHeader, hasShiftHeader);
+  const context = {
+    summary,
+    operations,
+    duplicateEmployeeCodes: duplicates.employees,
+    duplicateShiftCodes: duplicates.shifts
   };
 
   rows.slice(1).forEach((row, index) => {
@@ -228,6 +289,7 @@ export function importMasterRows(rows, { save = true } = {}) {
     const type = inferRowType(valueAt(row, columns.type), hasEmployeeHeader, hasShiftHeader);
     const commonName = valueAt(row, columns.commonName);
     if (type === "employee") {
+      const errorCountBefore = summary.errors.length;
       const fixedOvertimeMinutes = durationToMinutes(
         valueAt(row, columns.fixedOvertimeHours),
         valueAt(row, columns.fixedOvertimeMinutes),
@@ -235,7 +297,8 @@ export function importMasterRows(rows, { save = true } = {}) {
         line,
         summary.errors
       );
-      importEmployee({
+      if (summary.errors.length > errorCountBefore) return;
+      employeeOperation({
         line,
         code: valueAt(row, columns.code),
         name: valueAt(row, columns.employeeName) || commonName,
@@ -243,8 +306,9 @@ export function importMasterRows(rows, { save = true } = {}) {
         employmentTypeText: valueAt(row, columns.employmentType),
         order: Number(valueAt(row, columns.order)) || 0,
         fixedOvertimeMinutes
-      }, summary);
+      }, context);
     } else if (type === "shift") {
+      const errorCountBefore = summary.errors.length;
       const overtimeMinutes = durationToMinutes(
         valueAt(row, columns.overtimeHours),
         valueAt(row, columns.overtimeMinutes),
@@ -252,7 +316,8 @@ export function importMasterRows(rows, { save = true } = {}) {
         line,
         summary.errors
       );
-      importShift({
+      if (summary.errors.length > errorCountBefore) return;
+      shiftOperation({
         line,
         code: valueAt(row, columns.code),
         name: valueAt(row, columns.shiftName) || commonName,
@@ -261,15 +326,65 @@ export function importMasterRows(rows, { save = true } = {}) {
         shortLabel: valueAt(row, columns.shortLabel),
         paidMinutes: valueAt(row, columns.paidMinutes),
         overtimeMinutes
-      }, summary);
+      }, context);
     } else {
       summary.errors.push(`${line}行目: 種別を判定できません。`);
     }
   });
 
+  summary.errorRows = new Set(summary.errors.map((message) => message.match(/^(\d+)行目:/)?.[1]).filter(Boolean)).size;
+  return { operations, errors: summary.errors, summary };
+}
+
+// 検証済み計画を1回で適用する。エラーを含む計画は明示的なallowPartialが必要。
+export function applyMasterImport(plan, { save = true, allowPartial = false } = {}) {
+  if (!plan || !Array.isArray(plan.operations) || !Array.isArray(plan.errors)) {
+    throw new Error("マスター取込計画が不正です。");
+  }
+  if (plan.errors.length && !allowPartial) {
+    return { ...plan.summary, errors: [...plan.errors], applied: false, partial: false };
+  }
+
+  // 更新対象がプレビュー後も存在することを、1件も変更する前に確認する。
+  for (const operation of plan.operations) {
+    if (operation.action !== "update") continue;
+    if (operation.entity === "employee" && !state.employees.some((employee) => employee.id === operation.existingId)) {
+      throw new Error(`${operation.line}行目の更新対象従業員が見つかりません。再度ファイルを読み込んでください。`);
+    }
+    if (operation.entity === "shift" && !state.shiftTypes.some((shift) => shift.code === operation.existingCode)) {
+      throw new Error(`${operation.line}行目の更新対象シフトが見つかりません。再度ファイルを読み込んでください。`);
+    }
+  }
+
+  for (const operation of plan.operations) {
+    if (operation.action === "unchanged") continue;
+    if (operation.entity === "employee" && operation.action === "add") {
+      state.employees.push({ id: createId("employee"), ...operation.value });
+    } else if (operation.entity === "employee") {
+      const existing = state.employees.find((employee) => employee.id === operation.existingId);
+      Object.assign(existing, operation.changes);
+    } else if (operation.entity === "shift" && operation.action === "add") {
+      state.shiftTypes.push({ ...operation.value });
+    } else if (operation.entity === "shift") {
+      const existing = state.shiftTypes.find((shift) => shift.code === operation.existingCode);
+      Object.assign(existing, operation.changes);
+    }
+  }
+
   state.employees.sort(compareEmployeeOrder);
   if (save) scheduleSave();
-  return summary;
+  return {
+    ...plan.summary,
+    errors: [...plan.errors],
+    applied: true,
+    partial: plan.errors.length > 0
+  };
+}
+
+// options.save: falseにするとIndexedDB保存を予約しない（Nodeテスト用）。
+// エラー行がある場合、allowPartial: trueを明示しない限りstateを変更しない。
+export function importMasterRows(rows, { save = true, allowPartial = false } = {}) {
+  return applyMasterImport(prepareMasterImport(rows), { save, allowPartial });
 }
 
 export function importMasterCsvText(text) {
@@ -279,8 +394,8 @@ export function importMasterCsvText(text) {
 export function formatImportSummary(summary, sourceLabel = "") {
   const parts = [
     sourceLabel,
-    `従業員 追加${summary.addedEmployees}名・更新${summary.updatedEmployees}名`,
-    `シフト 追加${summary.addedShifts}件・更新${summary.updatedShifts}件`
+    `従業員 追加${summary.addedEmployees}名・更新${summary.updatedEmployees}名・変更なし${summary.unchangedEmployees ?? 0}名`,
+    `シフト 追加${summary.addedShifts}件・更新${summary.updatedShifts}件・変更なし${summary.unchangedShifts ?? 0}件`
   ].filter(Boolean);
   if (summary.filledShiftNames) {
     parts.push(`名称空欄${summary.filledShiftNames}件はコードを使用`);
@@ -291,7 +406,7 @@ export function formatImportSummary(summary, sourceLabel = "") {
   if (summary.repairedBreakDates) {
     parts.push(`シフト時刻変更に伴い休憩を${summary.repairedBreakDates}日分再配置`);
   }
-  if (summary.errors.length) parts.push(`読込不可${summary.errors.length}行`);
+  if (summary.errors.length) parts.push(`読込不可${summary.errorRows ?? summary.errors.length}行${summary.partial ? "（正常行のみ反映）" : ""}`);
   return parts.join(" / ");
 }
 

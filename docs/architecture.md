@@ -206,6 +206,7 @@ state
 ## CSV・Excel
 
 - CSV解析・マスター反映：`csv.js`
+- マスター取込プレビュー：`master-import-preview-ui.js`（全件検証後の追加・更新・変更なし・エラーを表示し、エラー時の部分適用を利用者へ明示確認する）
 - Excel展開：`xlsx-lite.js`
 - 読込アクション：`actions/file-actions.js`
 - 社内システム連携用エクスポート：`integration-export.js`（純粋モジュール。契約は`docs/integration.md`。コードの欠落・重複・未正規化、休憩ルール違反がある場合は出力を拒否する。`files.js`側でさらに`validateMonthReadiness()`のゲートを通し、ツール内検証OKの候補案だけ出力する）

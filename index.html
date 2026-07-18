@@ -8,7 +8,7 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Shift Assistant</title>
-  <link rel="stylesheet" href="./styles.css?v=20260718-auth1">
+  <link rel="stylesheet" href="./styles.css?v=20260718-master1">
   <link rel="stylesheet" href="./print.css?v=20260703">
   <script src="./js/boot-guard.js?v=20260718-auth1" defer></script>
 </head>
@@ -193,7 +193,7 @@
       <div class="data-cards">
         <div class="data-card">
           <h3>従業員・シフトの登録</h3>
-          <p>ExcelまたはCSVのマスターから、従業員とシフト区分をまとめて登録・更新します。</p>
+          <p>ExcelまたはCSVの全行を先に検証し、追加・更新・エラーを確認してから従業員とシフト区分を登録します。</p>
           <div class="data-card-actions">
             <button id="importMasterButton" class="button primary" type="button">Excel・CSVから登録</button>
             <button id="downloadSampleButton" class="button secondary" type="button">Excel見本を保存</button>
@@ -324,6 +324,22 @@
     </form>
   </dialog>
 
-  <script type="module" src="./js/app.js?v=20260718-auth1"></script>
+  <dialog id="masterImportPreviewDialog" class="master-import-preview-dialog">
+    <form method="dialog">
+      <h2>マスター取込前の確認</h2>
+      <p id="masterImportPreviewSource"></p>
+      <dl id="masterImportPreviewCounts" class="master-import-counts"></dl>
+      <p id="masterImportPreviewWarning" class="master-import-warning" role="alert"></p>
+      <ul id="masterImportPreviewErrors" class="master-import-errors"></ul>
+      <div class="dialog-actions">
+        <button id="masterImportErrorDownloadButton" class="button secondary" type="button">エラー一覧CSVを保存</button>
+        <span class="spacer"></span>
+        <button class="button secondary" value="cancel">取込を中止</button>
+        <button id="masterImportApplyButton" class="button primary" value="apply">すべて取り込む</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./js/app.js?v=20260718-master1"></script>
 </body>
 </html>
