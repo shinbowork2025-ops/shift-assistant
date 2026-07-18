@@ -8,17 +8,40 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Shift Assistant</title>
-  <link rel="stylesheet" href="./styles.css?v=20260706-2">
+  <link rel="stylesheet" href="./styles.css?v=20260718-auth1">
   <link rel="stylesheet" href="./print.css?v=20260703">
-  <script src="./js/boot-guard.js" defer></script>
+  <script src="./js/boot-guard.js?v=20260718-auth1" defer></script>
 </head>
-<body>
+<body class="auth-pending">
+  <section id="authGate" class="auth-gate" aria-labelledby="authTitle">
+    <div class="auth-card">
+      <p id="authEnvironmentLabel" class="auth-environment">テスト環境</p>
+      <h1 id="authTitle">Shift Assistant</h1>
+      <p class="auth-description">従業員IDとパスワードを入力してください。</p>
+      <form id="authForm" class="auth-form">
+        <label for="authUserId">
+          <span>従業員ID</span>
+          <input id="authUserId" name="userId" type="text" inputmode="numeric" autocomplete="username" required>
+        </label>
+        <label for="authPassword">
+          <span>パスワード</span>
+          <input id="authPassword" name="password" type="password" inputmode="numeric" autocomplete="current-password" required>
+        </label>
+        <p id="authError" class="auth-error" role="alert" aria-live="polite"></p>
+        <button id="authSubmitButton" class="button primary" type="submit">ログイン</button>
+      </form>
+      <p class="auth-note">この画面はテスト環境用の簡易認証です。</p>
+    </div>
+  </section>
   <header class="app-topbar">
     <div class="topbar-brand">
       <h1>Shift Assistant</h1>
       <span class="privacy-badge" title="入力データを外部へ送信しません">端末内保存</span>
     </div>
-    <p id="saveStatus" class="save-status" role="status">保存準備中</p>
+    <div class="topbar-actions">
+      <p id="saveStatus" class="save-status" role="status">保存準備中</p>
+      <button id="logoutButton" class="logout-button" type="button">ログアウト</button>
+    </div>
   </header>
 
   <main class="app-main">
@@ -301,6 +324,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="./js/app.js"></script>
+  <script type="module" src="./js/app.js?v=20260718-auth1"></script>
 </body>
 </html>
