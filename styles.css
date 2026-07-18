@@ -198,6 +198,37 @@ input { padding: 8px 10px; }
 }
 .logout-button:hover { background: rgba(255,255,255,.2); }
 
+.master-import-preview-dialog { width: min(720px, calc(100% - 24px)); }
+.master-import-counts {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+}
+.master-import-count-row {
+  display: grid;
+  grid-template-columns: minmax(100px, .6fr) minmax(0, 2fr);
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+.master-import-count-row dt { font-weight: 700; }
+.master-import-count-row dd { margin: 0; }
+.master-import-warning {
+  padding: 12px;
+  border-left: 4px solid #c77800;
+  border-radius: 6px;
+  background: var(--warning-soft);
+  font-weight: 700;
+}
+.master-import-errors {
+  max-height: 240px;
+  overflow: auto;
+  padding-left: 24px;
+  color: var(--danger);
+}
+.master-import-errors li + li { margin-top: 6px; }
+
 /* --------------------------------------------------------------------------
    レイアウト・パネル
    -------------------------------------------------------------------------- */
