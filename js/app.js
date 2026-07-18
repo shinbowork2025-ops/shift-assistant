@@ -17,6 +17,10 @@ import { render } from "./render.js";
 import { consumeWorkspaceMigrationFlag } from "./workspace-normalizer.js";
 import { requireSimpleAuthentication, showAuthenticatedApplication } from "./auth-ui.js";
 import { showFatalStorageLoadError } from "./fatal-storage-ui.js";
+import { RELEASE_ID } from "./release-version.js";
+import { assertReleaseIntegrity, showFatalReleaseMismatch } from "./release-integrity.js";
+
+const EXPECTED_RELEASE_ID = "2026.07.18.2";
 
 function loadStylesheet(href) {
   if (document.querySelector(`link[href="${href}"]`)) return;
@@ -33,6 +37,18 @@ function bindSaveFlushHandlers() {
   globalThis.addEventListener("pagehide", () => {
     void flushPendingSave().catch(() => {});
   });
+}
+
+function verifyRelease() {
+  try {
+    const releaseId = assertReleaseIntegrity(EXPECTED_RELEASE_ID, RELEASE_ID);
+    document.documentElement.dataset.releaseId = releaseId;
+    return true;
+  } catch (error) {
+    console.error(error);
+    showFatalReleaseMismatch(error);
+    return false;
+  }
 }
 
 async function initialize() {
@@ -78,6 +94,8 @@ async function initialize() {
   return true;
 }
 
-await requireSimpleAuthentication();
-const initialized = await initialize();
-if (initialized) showAuthenticatedApplication();
+if (verifyRelease()) {
+  await requireSimpleAuthentication();
+  const initialized = await initialize();
+  if (initialized) showAuthenticatedApplication();
+}
