@@ -1,7 +1,7 @@
 import { buildDaysOffPlan, findDefaultDaysOffShiftCode } from "./auto-days-off.js";
 import { buildWorkShiftPlan } from "./auto-work-shifts.js";
 import { dateKey, getDaysInMonth } from "./date-time.js";
-import { getRestPattern, normalizeTargetDaysOff } from "./rest-patterns.js";
+import { getRestPattern } from "./rest-patterns.js";
 import { isShiftLockedInData } from "./shift-locks.js";
 import { availableWorkShiftCodes } from "./work-shift-preferences.js";
 import { validWorkShiftTypes } from "./work-shift-planner-core.js";
@@ -43,17 +43,10 @@ function originalDominantCode(shifts, monthValue, employeeId, daysInMonth, typeM
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"))[0]?.[0] ?? "";
 }
 
-function targetDaysOff(employee, daysInMonth, originalShifts, monthValue, typeMap) {
-  const explicit = normalizeTargetDaysOff(employee.targetDaysOff);
-  if (explicit > 0) return explicit;
-  const pattern = getRestPattern(employee.restPatternId);
-  if (pattern.cycle.length) {
-    const offItems = pattern.cycle.filter((item) => item === "off").length;
-    return Math.round(daysInMonth * offItems / pattern.cycle.length);
-  }
+function existingDaysOff(employee, daysInMonth, shifts, monthValue, typeMap) {
   let existing = 0;
   for (let day = 1; day <= daysInMonth; day += 1) {
-    const code = codeAt(originalShifts, monthValue, employee.id, day);
+    const code = codeAt(shifts, monthValue, employee.id, day);
     if (code && typeMap.get(code) && !typeMap.get(code).isWork) existing += 1;
   }
   return existing;
@@ -80,6 +73,10 @@ export function buildMonthSolverPlan(options = {}) {
   const shiftTypes = Array.isArray(options.shiftTypes) ? structuredClone(options.shiftTypes) : [];
   const originalShifts = options.shifts && typeof options.shifts === "object" ? structuredClone(options.shifts) : {};
   const originalLocks = options.shiftLocks && typeof options.shiftLocks === "object" ? structuredClone(options.shiftLocks) : {};
+  const breaks = options.breaks && typeof options.breaks === "object" ? structuredClone(options.breaks) : {};
+  const manualBreakLocks = options.manualBreakLocks && typeof options.manualBreakLocks === "object"
+    ? structuredClone(options.manualBreakLocks)
+    : {};
   const daysInMonth = getDaysInMonth(monthValue);
   const typeMap = new Map(shiftTypes.map((shiftType) => [shiftType.code, shiftType]));
   const publicHolidayCode = options.publicHolidayCode || findDefaultDaysOffShiftCode(shiftTypes);
@@ -130,6 +127,9 @@ export function buildMonthSolverPlan(options = {}) {
     mode: "replace-unlocked"
   });
   applyPlannerChanges(tempShifts, monthValue, daysOffPlan.changes);
+  const daysOffResultByEmployee = new Map(
+    daysOffPlan.employeeResults.map((result) => [result.employeeId, result])
+  );
   const workPlan = buildWorkShiftPlan({
     monthValue,
     employees: selectedEmployees,
@@ -158,7 +158,10 @@ export function buildMonthSolverPlan(options = {}) {
     originalAssignments[employee.id] = {};
     const allowedWork = availableWorkShiftCodes(employee, selectedWorkTypes);
     allowedCodes[employee.id] = selectedEmployeeIds.has(employee.id) ? [publicHolidayCode, ...allowedWork] : [];
-    targetDaysOffByEmployee[employee.id] = targetDaysOff(employee, daysInMonth, originalShifts, monthValue, typeMap);
+    const daysOffResult = daysOffResultByEmployee.get(employee.id);
+    targetDaysOffByEmployee[employee.id] = daysOffResult && !daysOffResult.skipped
+      ? daysOffResult.actualDaysOff
+      : existingDaysOff(employee, daysInMonth, originalShifts, monthValue, typeMap);
     maxConsecutiveByEmployee[employee.id] = maxConsecutive(employee);
     dominantCodeByEmployee[employee.id] = originalDominantCode(originalShifts, monthValue, employee.id, daysInMonth, typeMap);
     boundaryAssignments[employee.id] = {
@@ -193,6 +196,8 @@ export function buildMonthSolverPlan(options = {}) {
     daysInMonth,
     employees,
     shiftTypes,
+    breaks,
+    manualBreakLocks,
     coverageRequirements: structuredClone(options.coverageRequirements ?? []),
     selectedEmployeeIds: [...selectedEmployeeIds],
     selectedShiftCodes: [...selectedShiftCodes],

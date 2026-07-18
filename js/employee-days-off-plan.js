@@ -104,7 +104,8 @@ export function planEmployeeDaysOff(options) {
     dailyOffCounts,
     preservedOffDays,
     daysInMonth,
-    offShiftCode
+    offShiftCode,
+    maxConsecutiveWorkDays: pattern.maxConsecutiveWorkDays
   });
   if (selectedDays.size < needed) {
     warnings.push(`配置可能なセルが不足し、公休を${needed - selectedDays.size}日分配置できませんでした。`);

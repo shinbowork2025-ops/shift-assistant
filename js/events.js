@@ -1,5 +1,11 @@
 import { state, scheduleViewStateSave } from "./model.js";
-import { exportCsv, backupJson, downloadMasterWorkbookSample } from "./files.js";
+import {
+  exportCsv,
+  exportIntegrationCsv,
+  exportIntegrationJson,
+  backupJson,
+  downloadMasterWorkbookSample
+} from "./files.js";
 import {
   elements,
   openWorkspaceDialog,
@@ -183,6 +189,7 @@ function bindEmployeeDialogEvents() {
   elements.addEmployeeButton.addEventListener("click", () => openEmployeeDialog());
   elements.closeEmployeeDialogButton.addEventListener("click", closeEmployeeDialog);
   elements.cancelEmployeeButton.addEventListener("click", closeEmployeeDialog);
+  elements.employeeCodeInput.addEventListener("input", () => elements.employeeCodeInput.setCustomValidity(""));
   elements.employeeForm.addEventListener("submit", (event) => {
     event.preventDefault();
     saveEmployeeFromDialog();
@@ -205,6 +212,17 @@ async function downloadSampleWorkbook() {
   }
 }
 
+// 連携キーの欠落・重複などで出力できない場合は、理由を保存状態欄へ表示する。
+function runIntegrationExport(exportAction, label) {
+  try {
+    exportAction();
+    setSaveStatus(`${label}を保存しました`);
+  } catch (error) {
+    console.error(error);
+    setSaveStatus(`${label}の出力失敗: ${error.message}`, true);
+  }
+}
+
 function bindDataEvents() {
   elements.importMasterButton.addEventListener("click", () => elements.importMasterInput.click());
   elements.importMasterInput.addEventListener("change", async () => {
@@ -221,6 +239,8 @@ function bindDataEvents() {
   elements.downloadSampleButton.addEventListener("click", downloadSampleWorkbook);
 
   elements.exportCsvButton.addEventListener("click", exportCsv);
+  elements.exportIntegrationCsvButton.addEventListener("click", () => runIntegrationExport(exportIntegrationCsv, "連携用CSV"));
+  elements.exportIntegrationJsonButton.addEventListener("click", () => runIntegrationExport(exportIntegrationJson, "連携用JSON"));
   elements.backupButton.addEventListener("click", backupJson);
   elements.restoreButton.addEventListener("click", () => elements.restoreInput.click());
   elements.restoreInput.addEventListener("change", async () => {

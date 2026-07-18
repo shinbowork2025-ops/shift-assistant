@@ -22,6 +22,7 @@ import {
   setManualBreakLockInData,
   removeManualBreakLocksForEmployee
 } from "../manual-break-locks.js";
+import { normalizeEmployeeCode } from "../master-codes.js";
 import { readEmployeeRestForm } from "../employee-rest-form.js";
 import { readEmployeeWorkShiftForm } from "../employee-work-shift-form.js";
 import { runWithHistory } from "../history.js";
@@ -58,10 +59,10 @@ export function handleShiftChange(select) {
 
 export function saveEmployeeFromDialog() {
   const name = elements.employeeNameInput.value.trim();
-  const code = elements.employeeCodeInput.value.trim();
+  const code = normalizeEmployeeCode(elements.employeeCodeInput.value);
   const department = elements.employeeDepartmentInput.value.trim();
   const fixedOvertimeHours = Number(elements.employeeFixedOvertimeInput.value || 0);
-  if (!name || !Number.isFinite(fixedOvertimeHours) || fixedOvertimeHours < 0) return;
+  if (!name || !code || !Number.isFinite(fixedOvertimeHours) || fixedOvertimeHours < 0) return;
   const fixedOvertimeMinutes = Math.round(fixedOvertimeHours * 60);
   const employmentType = normalizeEmploymentType(elements.employeeEmploymentTypeInput.value);
   const restSettings = readEmployeeRestForm();
@@ -70,6 +71,17 @@ export function saveEmployeeFromDialog() {
   const hasValidOrder = Number.isFinite(orderValue) && orderValue > 0;
   const employeeId = elements.employeeIdInput.value;
   const label = employeeId ? "従業員情報を編集" : "従業員を追加";
+
+  // 従業員コードは社内システム連携の照合キーのため、重複を保存前に拒否する。
+  // 全角・小文字も正規化して比較し、見た目違いの実質重複も弾く。
+  const duplicated = state.employees.some(
+    (item) => item.id !== employeeId && normalizeEmployeeCode(item.code) === code
+  );
+  if (duplicated) {
+    elements.employeeCodeInput.setCustomValidity("この従業員コードは他の従業員が使用しています。");
+    elements.employeeCodeInput.reportValidity();
+    return;
+  }
 
   runWithHistory(label, () => {
     if (employeeId) {

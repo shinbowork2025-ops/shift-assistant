@@ -7,6 +7,8 @@ import {
   restoreApplicationState
 } from "./model.js";
 import { buildMonthOverview } from "./month-overview.js";
+import { buildIntegrationExport, integrationAssignmentsToCsv } from "./integration-export.js";
+import { validateMonthReadiness } from "./month-validation.js";
 
 export function downloadFile(fileName, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
@@ -66,6 +68,67 @@ export function exportCsv() {
   const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
   const workspaceName = safeFilePart(getActiveWorkspace()?.name);
   downloadFile(`${workspaceName}-${state.selectedMonth}.csv`, csv, "text/csv;charset=utf-8");
+}
+
+// 社内システム連携用の出力。契約はdocs/integration.mdを参照。
+// 月間の要確認一覧が「転記準備OK」（未入力ゼロ・エラーゼロ）でない限り出力しない。
+// 作りかけの月や検証違反を含むデータを下流のパイプラインへ流さないためのゲート。
+function buildIntegrationExportOrThrow() {
+  const readiness = validateMonthReadiness({
+    monthValue: state.selectedMonth,
+    employees: state.employees,
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts,
+    breaks: state.breaks,
+    shiftLocks: state.shiftLocks,
+    requestedDaysOff: state.requestedDaysOff ?? {},
+    manualBreakLocks: state.manualBreakLocks ?? {},
+    coverageRequirements: state.coverageRequirements ?? []
+  });
+  if (!readiness.ready) {
+    const reasons = [];
+    if (readiness.blankCount > 0) reasons.push(`未入力${readiness.blankCount}セル`);
+    if (readiness.blockingCount > 0) reasons.push(`エラー${readiness.blockingCount}件`);
+    const firstIssues = readiness.issues
+      .filter((item) => item.severity === "error")
+      .slice(0, 3)
+      .map((item) => item.message);
+    throw new Error(`転記準備OKではないため出力できません（${reasons.join("・")}）。${firstIssues.join(" / ")}`);
+  }
+
+  const result = buildIntegrationExport({
+    name: getActiveWorkspace()?.name ?? "",
+    selectedMonth: state.selectedMonth,
+    employees: state.employees,
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts,
+    breaks: state.breaks
+  }, {
+    validation: {
+      ready: true,
+      blankCount: readiness.blankCount,
+      errorCount: readiness.blockingCount,
+      warningCount: readiness.warningCount,
+      infoCount: readiness.infoCount
+    }
+  });
+  if (!result.ok) throw new Error(result.errors.join(" / "));
+  return result.data;
+}
+
+function integrationFileName(extension) {
+  const workspaceName = safeFilePart(getActiveWorkspace()?.name);
+  return `${workspaceName}-${state.selectedMonth}-integration.${extension}`;
+}
+
+export function exportIntegrationJson() {
+  const data = buildIntegrationExportOrThrow();
+  downloadFile(integrationFileName("json"), JSON.stringify(data, null, 2), "application/json");
+}
+
+export function exportIntegrationCsv() {
+  const data = buildIntegrationExportOrThrow();
+  downloadFile(integrationFileName("csv"), integrationAssignmentsToCsv(data), "text/csv;charset=utf-8");
 }
 
 export async function downloadMasterWorkbookSample() {

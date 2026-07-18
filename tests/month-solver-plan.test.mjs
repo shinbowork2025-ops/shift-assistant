@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildMonthSolverPlan, monthSolverChanges } from "../js/month-solver-plan.js";
+import { validateMonthSolverApplication } from "../js/month-solver-application.js";
+import { solveMonthSchedule } from "../js/month-solver.js";
 
 const shiftTypes = [
   { code: "A", name: "勤務A", shortLabel: "A", start: "09:00", end: "18:00", isWork: true, overtimeMinutes: 0 },
@@ -63,4 +65,59 @@ test("現在の表との差分だけを返す", () => {
   const changes = monthSolverChanges(plan, shifts);
   assert.equal(changes.some((change) => change.day === 1), false);
   assert.ok(changes.length > 0);
+});
+
+test("5勤2休の全位相で初期案と適用目標の休日数が一致する", () => {
+  for (let phase = 0; phase < 7; phase += 1) {
+    const phaseEmployee = {
+      ...employees[0],
+      targetDaysOff: 0,
+      restPatternOffset: phase
+    };
+    const plan = buildMonthSolverPlan({
+      monthValue: "2026-07",
+      employees: [phaseEmployee],
+      shiftTypes,
+      shifts: {},
+      shiftLocks: {},
+      selectedShiftCodes: ["A", "B"]
+    });
+    const typeMap = new Map(shiftTypes.map((item) => [item.code, item]));
+    const actual = Object.values(plan.assignments.e1)
+      .filter((code) => typeMap.get(code)?.isWork === false).length;
+    assert.equal(actual, plan.targetDaysOffByEmployee.e1, `位相${phase}の休日数が不一致です`);
+    assert.equal(validateMonthSolverApplication({ plan }).daysOffOk, true, `位相${phase}が適用不可です`);
+  }
+});
+
+test("有休が公休目標を超える場合は維持した実休日数を適用目標にする", () => {
+  const paidLeaveRow = Object.fromEntries(
+    Array.from({ length: 10 }, (_, index) => [`2026-07-${String(index + 1).padStart(2, "0")}`, "Y"])
+  );
+  const plan = buildMonthSolverPlan({
+    monthValue: "2026-07",
+    employees,
+    shiftTypes,
+    shifts: { "2026-07": { e1: paidLeaveRow } },
+    shiftLocks: {},
+    selectedShiftCodes: ["A", "B"]
+  });
+  assert.equal(plan.targetDaysOffByEmployee.e1, 10);
+  assert.equal(validateMonthSolverApplication({ plan }).daysOffOk, true);
+});
+
+test("31日月の5勤2休を探索した案が休日数の不一致で適用不可にならない", () => {
+  const plan = buildMonthSolverPlan({
+    monthValue: "2026-07",
+    employees: [{ ...employees[0], targetDaysOff: 0, restPatternOffset: 0 }],
+    shiftTypes,
+    shifts: {},
+    shiftLocks: {},
+    coverageRequirements: [],
+    selectedShiftCodes: ["A", "B"]
+  });
+  const result = solveMonthSchedule(plan, { iterations: 300, seed: 1 });
+  const validation = validateMonthSolverApplication(result);
+  assert.equal(validation.daysOffOk, true);
+  assert.equal(validation.ok, true);
 });

@@ -1,6 +1,7 @@
-import { state, createId, isValidTime, scheduleSave } from "./model.js";
+import { state, createId, isValidTime, timeToMinutes, scheduleSave } from "./model.js";
 import { DEFAULT_EMPLOYMENT_TYPE, matchEmploymentType } from "./employment-types.js";
 import { compareEmployeeOrder } from "./workspace-normalizer.js";
+import { normalizeEmployeeCode } from "./master-codes.js";
 
 export function parseCsv(text) {
   const rows = [];
@@ -91,6 +92,14 @@ function importEmployee(record, summary) {
     return;
   }
 
+  // 従業員コードは社内システム連携の照合キーのため必須。照合はコードだけで行う。
+  // 全角・小文字の揺れを吸収するため、半角・大文字へ正規化して保存する。
+  const code = normalizeEmployeeCode(record.code);
+  if (!code) {
+    summary.errors.push(`${record.line}行目: 従業員コードがありません。社員番号など重複しない値を入力してください。`);
+    return;
+  }
+
   let employmentType = null;
   if (record.employmentTypeText) {
     employmentType = matchEmploymentType(record.employmentTypeText);
@@ -99,13 +108,11 @@ function importEmployee(record, summary) {
     }
   }
 
-  const existing = record.code
-    ? state.employees.find((employee) => employee.code === record.code)
-    : state.employees.find((employee) => employee.name === record.name);
+  const existing = state.employees.find((employee) => normalizeEmployeeCode(employee.code) === code);
 
   if (existing) {
     existing.name = record.name;
-    existing.code = record.code || existing.code;
+    existing.code = code;
     existing.department = record.department;
     existing.order = record.order || existing.order;
     if (employmentType) existing.employmentType = employmentType;
@@ -117,7 +124,7 @@ function importEmployee(record, summary) {
   state.employees.push({
     id: createId("employee"),
     name: record.name,
-    code: record.code,
+    code,
     department: record.department,
     order: record.order || state.employees.length + 1,
     employmentType: employmentType ?? DEFAULT_EMPLOYMENT_TYPE,
@@ -135,6 +142,11 @@ function importShift(record, summary) {
   const hasTimes = Boolean(record.start || record.end);
   if (hasTimes && (!isValidTime(record.start) || !isValidTime(record.end))) {
     summary.errors.push(`${record.line}行目: 開始時刻または終了時刻がHH:MM形式ではありません。`);
+    return;
+  }
+  // 日をまたぐシフトは時間計算（実働・休憩・勤務間隔）が扱えないため登録を拒否する。
+  if (hasTimes && timeToMinutes(record.end) <= timeToMinutes(record.start)) {
+    summary.errors.push(`${record.line}行目: 終了時刻は開始時刻より後にしてください（日をまたぐシフトは登録できません）。`);
     return;
   }
 
@@ -172,7 +184,8 @@ function importShift(record, summary) {
   }
 }
 
-export function importMasterRows(rows) {
+// options.save: falseにするとIndexedDB保存を予約しない（Nodeテスト用）。
+export function importMasterRows(rows, { save = true } = {}) {
   if (!Array.isArray(rows) || rows.length < 2) throw new Error("見出し行とデータ行が必要です。");
 
   const headers = rows[0];
@@ -255,7 +268,7 @@ export function importMasterRows(rows) {
   });
 
   state.employees.sort(compareEmployeeOrder);
-  scheduleSave();
+  if (save) scheduleSave();
   return summary;
 }
 
@@ -274,6 +287,9 @@ export function formatImportSummary(summary, sourceLabel = "") {
   }
   if (summary.ignoredSupplementRows?.length) {
     parts.push(`複合入力の説明${summary.ignoredSupplementRows.length}行は取込対象外`);
+  }
+  if (summary.repairedBreakDates) {
+    parts.push(`シフト時刻変更に伴い休憩を${summary.repairedBreakDates}日分再配置`);
   }
   if (summary.errors.length) parts.push(`読込不可${summary.errors.length}行`);
   return parts.join(" / ");

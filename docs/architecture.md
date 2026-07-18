@@ -158,6 +158,8 @@ state
 
 配置時刻の決定は純粋ソルバー`break-scheduler.js`が行います。貪欲な初期配置のあと、辞書式の全体目的関数（最小実配置人数の最大化 → 手薄スロット数の最小化 → 同時休憩の平準化 → 目標時刻からのずれ最小化）を改善する移動を繰り返します。`breaks.js`はアプリ状態との橋渡しだけを担います。ルール変更時は、画面・印刷・CSVへ個別の条件分岐を追加せず、共通関数を変更してください。
 
+休憩は常に勤務時間の内側（境界に接しない）へ配置される必要があります（`breaksFitShiftWindow()`）。`generateBreaksForDate()`は、保護された手動休憩でも現在のシフトの勤務枠に収まらない場合は保護を解除して再配置します。シフト変更・ソルバー適用・ペイント入力・マスター取込のどの経路でも、勤務枠外の休憩が残らないことを不変条件として維持してください。
+
 ### 手動編集
 
 `js/break-edit-ui.js`は1日チャートの「休憩✎」ボタンから遅延読み込みするダイアログで、選択中の日付・従業員1人分の休憩配列を直接編集します。保存は`model.js`の`setEmployeeBreaksForDate(dateValue, employeeId, breaksArray, options)`（他の従業員の配列を維持したまま1人分だけ差し替える）を`js/actions/break-edit-actions.js`から`runWithHistory()`で呼び出し、Undo対象にします。入力欄はvalidateBreaks()を使って保存前にライブ検証します。自動配置（`generateBreaksForDate`）は手動編集を区別せず上書きするため、シフト変更や「休憩を再配置」を実行すると手動編集は失われます。
@@ -190,6 +192,9 @@ state
 - CSV解析・マスター反映：`csv.js`
 - Excel展開：`xlsx-lite.js`
 - 読込アクション：`actions/file-actions.js`
+- 社内システム連携用エクスポート：`integration-export.js`（純粋モジュール。契約は`docs/integration.md`。コードの欠落・重複・未正規化、休憩ルール違反がある場合は出力を拒否する。`files.js`側でさらに`validateMonthReadiness()`のゲートを通し、転記準備OKの月だけ出力する）
+- 従業員コードの正規化：`master-codes.js`（NFKC＋大文字化。入力境界＝ダイアログ・CSV取込で適用）
+- 休憩と割当の整合性検査：`break-integrity.js`（純粋モジュール。勤務枠に収まらない休憩・勤務でない日の残留休憩を列挙。`breaks.js`の`repairBrokenBreaks()`がマスター取込後に再配置する）
 
 Excel解析モジュールは`.xlsx`を選択した時だけ動的に読み込みます。通常起動時の静的importへ戻さないでください。
 

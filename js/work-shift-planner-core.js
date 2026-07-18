@@ -74,8 +74,10 @@ export function scoreShiftCandidate(candidate, context) {
   const excess = Math.max(0, projectedOvertime - context.fixedOvertimeMinutes);
   const overtimeScore = candidateOvertime * 0.04 + excess * 0.5;
 
-  const previousShortRest = context.avoidLateEarly && hasShortRest(context.previousShift, candidate);
-  const nextShortRest = context.avoidLateEarly && hasShortRest(candidate, context.nextShift);
+  // 11時間休息は月間ソルバーのハード制約なので、個人の遅早回避設定にかかわらず
+  // 初期案の段階から全員へ同じ強いペナルティを適用する。
+  const previousShortRest = hasShortRest(context.previousShift, candidate);
+  const nextShortRest = hasShortRest(candidate, context.nextShift);
   const restPenalty = (previousShortRest ? 10000 : 0) + (nextShortRest ? 10000 : 0);
 
   return {

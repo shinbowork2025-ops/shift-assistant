@@ -91,6 +91,19 @@ test("終了が遅い勤務の翌日は開始が早い勤務を避ける", () =>
   assert.equal(plan.changes.find((change) => change.day === 2)?.after, "L");
 });
 
+test("遅早回避設定がなくても11時間未満の勤務間隔を避ける", () => {
+  const plan = buildWorkShiftPlan({
+    monthValue: "2026-07",
+    employees: [employee("e1", 1, { allowedShiftCodes: ["E", "L"], avoidLateEarly: false })],
+    shiftTypes,
+    shifts: { "2026-07": { e1: { "2026-07-01": "L", "2026-07-03": "休" } } },
+    shiftLocks: { "2026-07": { e1: { "2026-07-01": true } } },
+    selectedShiftCodes: ["E", "L"],
+    mode: "empty-only"
+  });
+  assert.equal(plan.changes.find((change) => change.day === 2)?.after, "L");
+});
+
 test("同じ日の時間帯とシフト種別が一方へ偏りにくい", () => {
   const plan = buildWorkShiftPlan({
     monthValue: "2026-07",

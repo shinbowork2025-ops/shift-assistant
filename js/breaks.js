@@ -4,12 +4,14 @@ import {
   shiftDurationMinutes,
   timeToMinutes,
   minutesToTime,
-  setBreaksForDate
+  setBreaksForDate,
+  scheduleSave
 } from "./model.js";
-import { plannedBreakTemplates } from "./break-rules.js";
+import { plannedBreakTemplates, breaksFitShiftWindow } from "./break-rules.js";
 import { scheduleBreaks } from "./break-scheduler.js";
-import { isManualBreakLockedInData } from "./manual-break-locks.js";
+import { isManualBreakLockedInData, setManualBreakLockInData } from "./manual-break-locks.js";
 import { buildShiftTypeMap, getShiftCodeFromData } from "./month-overview.js";
+import { findBrokenBreakAssignments } from "./break-integrity.js";
 
 function workingAssignments(dateValue) {
   const monthValue = dateValue.slice(0, 7);
@@ -45,16 +47,25 @@ export function generateBreaksForDate(dateValue, employeeIds = null, options = {
   const preserveManual = options.preserveManual !== false;
   const movableIds = new Set();
 
+  const shiftTypeById = new Map(assignments.map(({ employee, shiftType }) => [employee.id, shiftType]));
+
   for (const employeeId of requestedTargets) {
     if (!workingIds.has(employeeId)) {
       delete result[employeeId];
       continue;
     }
     const hasExisting = Array.isArray(result[employeeId]) && result[employeeId].length > 0;
+    // 保護された手動休憩でも、シフト変更・マスター更新で勤務枠に収まらなくなった場合は
+    // 保護を解除して自動再配置する。時間外の休憩を温存しないための整合性ルール。
+    const fitsWindow = hasExisting && breaksFitShiftWindow(shiftTypeById.get(employeeId), result[employeeId]);
     const protectedBreak = preserveManual
-      && hasExisting
+      && fitsWindow
       && isManualBreakLockedInData(state.manualBreakLocks, dateValue, employeeId);
     if (!protectedBreak) {
+      if (hasExisting && !fitsWindow) {
+        state.manualBreakLocks ??= {};
+        setManualBreakLockInData(state.manualBreakLocks, dateValue, employeeId, false);
+      }
       movableIds.add(employeeId);
       delete result[employeeId];
     }
@@ -87,6 +98,26 @@ export function generateBreaksForDate(dateValue, employeeIds = null, options = {
 
 export function ensureBreaksForDate(dateValue) {
   return state.breaks[dateValue] ?? {};
+}
+
+// 全日付を走査し、勤務枠に収まらない休憩・勤務でない日の残留休憩を再配置する。
+// マスター再取込でシフト時刻が変わった直後に呼び、時間外の休憩を残さない。
+// 戻り値は修復した日付数。
+export function repairBrokenBreaks({ save = true } = {}) {
+  const broken = findBrokenBreakAssignments({
+    shiftTypes: state.shiftTypes,
+    shifts: state.shifts,
+    breaks: state.breaks
+  });
+  for (const { dateValue, employeeIds } of broken) {
+    state.manualBreakLocks ??= {};
+    for (const employeeId of employeeIds) {
+      setManualBreakLockInData(state.manualBreakLocks, dateValue, employeeId, false);
+    }
+    generateBreaksForDate(dateValue, employeeIds, { save: false, preserveManual: false });
+  }
+  if (broken.length && save) scheduleSave();
+  return broken.length;
 }
 
 export function availableWorkersAt(dateValue, slotStart) {

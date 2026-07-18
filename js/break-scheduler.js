@@ -21,10 +21,6 @@ function alignDown(minute) {
   return Math.floor(minute / BREAK_SLOT_MINUTES) * BREAK_SLOT_MINUTES;
 }
 
-function alignRound(minute) {
-  return Math.round(minute / BREAK_SLOT_MINUTES) * BREAK_SLOT_MINUTES;
-}
-
 function slotsBetween(startMinute, endMinute) {
   const slots = [];
   for (let minute = alignDown(startMinute); minute < endMinute; minute += BREAK_SLOT_MINUTES) {
@@ -45,10 +41,6 @@ function candidateStarts(earliest, latest, target) {
   const first = Math.ceil(earliest / BREAK_SLOT_MINUTES) * BREAK_SLOT_MINUTES;
   const candidates = [];
   for (let slot = first; slot <= latest; slot += BREAK_SLOT_MINUTES) candidates.push(slot);
-  if (!candidates.length) {
-    // 制約を満たすグリッド位置がない場合は、禁止帯を越えない範囲で目標へ寄せる。
-    candidates.push(Math.max(earliest, Math.min(latest, alignRound(target))));
-  }
   return candidates;
 }
 
@@ -122,9 +114,10 @@ export function scheduleBreaks(assignments) {
   // --- 貪欲初期配置：シフト順に、その時点の全体スコアが最良の位置へ置く。
   for (const assignment of movable) {
     const placed = placements.get(assignment.id);
-    assignment.templates.forEach((template, index) => {
+    for (let index = 0; index < assignment.templates.length; index += 1) {
+      const template = assignment.templates[index];
       const target = assignment.shiftStart + template.targetOffset;
-      const reserved = assignment.templates
+      const reserved = SHIFT_EDGE_BUFFER_MINUTES + assignment.templates
         .slice(index + 1)
         .reduce((sum, item) => sum + item.duration + MINIMUM_GAP_MINUTES, 0);
       const previousEnd = index > 0
@@ -133,10 +126,11 @@ export function scheduleBreaks(assignments) {
       const earliest = index > 0
         ? previousEnd + MINIMUM_GAP_MINUTES
         : assignment.shiftStart + SHIFT_EDGE_BUFFER_MINUTES;
-      const latest = Math.max(
-        earliest,
-        assignment.shiftEnd - template.duration - Math.max(SHIFT_EDGE_BUFFER_MINUTES, reserved)
-      );
+      const latest = assignment.shiftEnd - template.duration - reserved;
+      const candidates = candidateStarts(earliest, latest, target);
+      // 制約を満たす位置がない場合は、違法な休憩を捏造せず未配置として返す。
+      // 呼び出し側のvalidateBreaksが不足時間を利用者へ明示する。
+      if (!candidates.length) break;
 
       const item = {
         assignment,
@@ -149,7 +143,7 @@ export function scheduleBreaks(assignments) {
 
       let bestStart = null;
       let bestScore = null;
-      for (const candidate of candidateStarts(earliest, latest, target)) {
+      for (const candidate of candidates) {
         const score = scoreCandidate(item, candidate);
         if (bestScore === null || isBetterScore(score, bestScore)) {
           bestScore = score;
@@ -161,7 +155,7 @@ export function scheduleBreaks(assignments) {
       deviations[item.deviationIndex] = Math.abs(bestStart - target);
       addLoad(load, bestStart, bestStart + template.duration, 1);
       breakItems.push(item);
-    });
+    }
   }
 
   // --- 反復改善：1休憩ずつ全体スコアが厳密に良くなる位置へ動かす。
@@ -179,17 +173,18 @@ export function scheduleBreaks(assignments) {
         ? previousEnd + MINIMUM_GAP_MINUTES
         : assignment.shiftStart + SHIFT_EDGE_BUFFER_MINUTES;
       const nextStart = index < placed.length - 1 ? placed[index + 1].startMinute : null;
-      const latest = Math.max(
-        earliest,
-        (nextStart !== null ? nextStart - MINIMUM_GAP_MINUTES : assignment.shiftEnd - SHIFT_EDGE_BUFFER_MINUTES) - duration
-      );
+      const latest = (nextStart !== null
+        ? nextStart - MINIMUM_GAP_MINUTES
+        : assignment.shiftEnd - SHIFT_EDGE_BUFFER_MINUTES) - duration;
+      const candidates = candidateStarts(earliest, latest, target);
+      if (!candidates.length) continue;
 
       const current = placed[index].startMinute;
       addLoad(load, current, current + duration, -1);
 
       let bestStart = current;
       let bestScore = scoreCandidate(item, current);
-      for (const candidate of candidateStarts(earliest, latest, target)) {
+      for (const candidate of candidates) {
         if (candidate === current) continue;
         const score = scoreCandidate(item, candidate);
         if (isBetterScore(score, bestScore)) {
@@ -211,7 +206,7 @@ export function scheduleBreaks(assignments) {
   for (const assignment of assignments) {
     if (!assignment.movable) continue;
     const placed = placements.get(assignment.id) ?? [];
-    result.set(assignment.id, (assignment.templates ?? []).map((template, index) => ({
+    result.set(assignment.id, (assignment.templates ?? []).slice(0, placed.length).map((template, index) => ({
       type: template.type,
       label: template.label,
       startMinute: placed[index].startMinute,
