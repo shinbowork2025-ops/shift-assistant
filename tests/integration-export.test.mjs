@@ -93,6 +93,17 @@ test("正常なワークスペースから連携用データを構築する", ()
   assert.equal(third.workMinutes, 0);
 });
 
+test("連携用の実働分はシフト区分の固定実働分を優先する", () => {
+  const workspace = sampleWorkspace();
+  workspace.shiftTypes[0].paidMinutes = 480;
+  const result = buildIntegrationExport(workspace);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.data.shiftTypes[0].paidMinutes, 480);
+  assert.equal(result.data.assignments[0].breakMinutes, 60);
+  assert.equal(result.data.assignments[0].workMinutes, 480);
+});
+
 test("従業員コードの欠落・重複を検出して出力を拒否する", () => {
   const missing = sampleWorkspace();
   missing.employees[0].code = "";
