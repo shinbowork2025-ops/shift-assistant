@@ -12,6 +12,25 @@
  */
 
 /**
+ * @typedef {Object} BreakPlacement
+ * @property {"small"|"lunch"} type
+ * @property {string} [label]
+ * @property {number} startMinute
+ * @property {number} endMinute
+ */
+
+/**
+ * @typedef {Object} BreakPlacementResult
+ * @property {boolean} ok
+ * @property {Object<string, BreakPlacement[]>} placements
+ * @property {Object[]} unplacedSegments
+ * @property {Object} finalCoverage
+ * @property {number} finalShortagePersonSlots
+ * @property {Object<string, number>} finalShortageByScope
+ * @property {Object} statistics
+ */
+
+/**
  * @typedef {Object} ShiftType
  * @property {string} code
  * @property {string} name

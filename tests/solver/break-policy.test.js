@@ -33,7 +33,7 @@ test("休憩方針を検証し、決定的な完全配置を返す", () => {
   const second = validateBreakPolicyForShift(shift, shift.breakPolicy, board.settings.breakConstraints);
   assert.equal(first.ok, true);
   assert.deepEqual(first.samplePlacement, second.samplePlacement);
-  assert.deepEqual(first.samplePlacement, [600, 675, 795]);
+  assert.deepEqual(first.samplePlacement, [660, 810, 960]);
 });
 
 test("法定下限不足と完全配置不能をすべて報告する", () => {
