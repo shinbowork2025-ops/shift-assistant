@@ -30,6 +30,7 @@ import {
   temperatureFromPositiveDeltas
 } from "./month-solver-control.js";
 import {
+  classifyEstimatedCandidate,
   considerCandidate,
   createCandidateArchives
 } from "./month-solver-archive.js";
@@ -37,6 +38,14 @@ import {
   compareFinalizedCandidates,
   finalizeMonthSolverCandidates
 } from "./month-solver-finalize.js";
+import {
+  RESTART_STAGNATION_BLOCKS,
+  adaptMonthSolverStrategyWeights,
+  adaptiveStrategyEnabled,
+  repairSizeForStagnation,
+  restartStrategyWeights,
+  strategyReward
+} from "./month-solver-adaptation.js";
 
 function clone(value) {
   return structuredClone(value);
@@ -49,33 +58,30 @@ function nowMilliseconds() {
 }
 
 function createStrategyStatistics() {
+  const common = () => ({
+    selections: 0,
+    attempts: 0,
+    generatedCandidates: 0,
+    validCandidates: 0,
+    evaluatedCandidates: 0,
+    acceptedCandidates: 0,
+    currentImprovements: 0,
+    bestUpdates: 0,
+    feasibleCandidates: 0,
+    totalChangedCells: 0
+  });
   return {
     smallNeighbor: {
-      selections: 0,
-      attempts: 0,
-      generatedCandidates: 0,
-      validCandidates: 0,
-      evaluatedCandidates: 0,
-      acceptedCandidates: 0
+      ...common()
     },
     repair: {
-      selections: 0,
-      attempts: 0,
-      generatedCandidates: 0,
-      validCandidates: 0,
-      evaluatedCandidates: 0,
-      acceptedCandidates: 0,
+      ...common(),
       bruteAttempts: 0,
       beamAttempts: 0,
       greedyBeamAttempts: 0
     },
     lns: {
-      selections: 0,
-      attempts: 0,
-      generatedCandidates: 0,
-      validCandidates: 0,
-      evaluatedCandidates: 0,
-      acceptedCandidates: 0,
+      ...common(),
       invariantRejections: 0,
       bruteAttempts: 0,
       beamAttempts: 0,
@@ -91,8 +97,16 @@ function createStrategyStatistics() {
   };
 }
 
+function createStrategyTiming() {
+  return Object.fromEntries(["smallNeighbor", "repair", "lns"].map((strategy) => [strategy, {
+    samples: 0,
+    totalMilliseconds: 0
+  }]));
+}
+
 function addNumericStatistics(target, source) {
   for (const [key, value] of Object.entries(source ?? {})) {
+    if (key === "averageChangedCells") continue;
     if (value && typeof value === "object") {
       target[key] ??= {};
       addNumericStatistics(target[key], value);
@@ -105,6 +119,50 @@ function addNumericStatistics(target, source) {
 
 function addStrategyStatistics(target, source) {
   return addNumericStatistics(target, source);
+}
+
+function incrementNumericPath(target, path, amount = 1) {
+  const keys = Array.isArray(path) ? path : [path];
+  let current = target;
+  for (const key of keys.slice(0, -1)) {
+    current[key] ??= {};
+    current = current[key];
+  }
+  const key = keys.at(-1);
+  current[key] = (Number(current[key]) || 0) + amount;
+}
+
+function recordStrategyStatistic(search, strategy, path, amount = 1) {
+  incrementNumericPath(search.strategyStatistics[strategy], path, amount);
+  incrementNumericPath(search.blockStrategyStatistics[strategy], path, amount);
+}
+
+function timedStrategyProposal(search, strategy, proposal) {
+  const startedAt = nowMilliseconds();
+  try {
+    return proposal();
+  } finally {
+    const timing = search.strategyTiming[strategy];
+    timing.samples += 1;
+    timing.totalMilliseconds += Math.max(0, nowMilliseconds() - startedAt);
+  }
+}
+
+function summarizedStrategyStatistics(input) {
+  const statistics = clone(input);
+  for (const values of Object.values(statistics)) {
+    values.averageChangedCells = values.validCandidates > 0
+      ? values.totalChangedCells / values.validCandidates
+      : 0;
+  }
+  return statistics;
+}
+
+function strategyTimingSnapshot(search) {
+  return Object.fromEntries(Object.entries(search.strategyTiming).map(([strategy, values]) => [strategy, {
+    ...values,
+    averageProcessingTimeMs: values.samples > 0 ? values.totalMilliseconds / values.samples : 0
+  }]));
 }
 
 function repairMethodStatisticsKey(method) {
@@ -174,6 +232,7 @@ function createSearch(planInput, config = {}) {
   };
   if (config.enableRepair === false) configuredStrategyWeights.repair = 0;
   if (config.enableLns === false) configuredStrategyWeights.lns = 0;
+  const initialStrategyWeights = normalizeMonthSolverStrategyWeights(configuredStrategyWeights);
   considerCandidate(archives, {
     plan,
     objective: context.objective,
@@ -192,20 +251,29 @@ function createSearch(planInput, config = {}) {
     minimumTemperature,
     coolingRate,
     temperatureScaleByStrategy: normalizeTemperatureScales(config.temperatureScaleByStrategy),
-    strategyWeights: normalizeMonthSolverStrategyWeights(configuredStrategyWeights),
+    strategyWeights: initialStrategyWeights,
+    baseStrategyWeights: clone(initialStrategyWeights),
+    adaptiveStrategyEnabled: adaptiveStrategyEnabled(execution.plannedBlocks, config.adaptiveStrategy),
+    strategyWeightHistory: [],
     repairOptions: {
       enabled: config.enableRepair !== false,
-      cellCount: Math.max(1, Math.floor(Number(config.repairCellCount ?? 3) || 3)),
+      configuredCellCount: Number.isFinite(Number(config.repairCellCount))
+        ? Math.max(1, Math.floor(Number(config.repairCellCount)))
+        : null,
       beamWidth: config.repairBeamWidth,
       exactCandidateCap: config.repairExactCandidateCap
     },
     lnsOptions: {
       enabled: config.enableLns !== false,
-      destroySize: config.lnsDestroySize,
+      configuredDestroySize: Number.isFinite(Number(config.lnsDestroySize))
+        ? Math.max(1, Math.floor(Number(config.lnsDestroySize)))
+        : null,
       beamWidth: config.lnsBeamWidth ?? config.repairBeamWidth,
       exactCandidateCap: config.lnsExactCandidateCap ?? 1
     },
     strategyStatistics: createStrategyStatistics(),
+    blockStrategyStatistics: createStrategyStatistics(),
+    strategyTiming: createStrategyTiming(),
     archives,
     initialObjective: clone(context.objective),
     bestPlan: clone(plan),
@@ -215,7 +283,17 @@ function createSearch(planInput, config = {}) {
     generated: 0,
     proposed: 0,
     accepted: 0,
-    statutoryRatchetRejections: 0
+    statutoryRatchetRejections: 0,
+    stagnationBlocks: 0,
+    restartStagnationBlocks: Math.max(
+      1,
+      Math.floor(Number(config.restartStagnationBlocks ?? RESTART_STAGNATION_BLOCKS)
+        || RESTART_STAGNATION_BLOCKS)
+    ),
+    restartEnabled: config.enableSearchRestart !== false,
+    searchRestarts: 0,
+    restartIterations: [],
+    restartSeeds: []
   };
 }
 
@@ -243,41 +321,59 @@ function updateBest(search) {
   if (compareBestObjectives(search.context.objective, search.bestObjective) < 0) {
     search.bestPlan = clone(search.plan);
     search.bestObjective = clone(search.context.objective);
+    return true;
   }
+  return false;
+}
+
+function activeRepairSize(search) {
+  return repairSizeForStagnation(
+    search.stagnationBlocks,
+    search.completedBlocks,
+    search.restartStagnationBlocks
+  );
 }
 
 function step(search) {
   search.performed += 1;
   const selectedStrategy = selectMonthSolverStrategy(search.random, search.strategyWeights);
-  search.strategyStatistics[selectedStrategy].selections += 1;
+  recordStrategyStatistic(search, selectedStrategy, "selections");
   let strategy = selectedStrategy;
   let evaluation = null;
   let changes = null;
   if (selectedStrategy === "repair" && search.repairOptions.enabled) {
-    const statistics = search.strategyStatistics.repair;
-    statistics.attempts += 1;
-    const repair = proposeMonthSolverRepair(search.context, search.source, search.repairOptions);
+    recordStrategyStatistic(search, "repair", "attempts");
+    const repair = timedStrategyProposal(search, "repair", () => proposeMonthSolverRepair(
+      search.context,
+      search.source,
+      {
+        ...search.repairOptions,
+        cellCount: search.repairOptions.configuredCellCount ?? activeRepairSize(search)
+      }
+    ));
     if (repair) {
       changes = repair.changes;
       evaluation = repair.evaluation;
-      statistics.evaluatedCandidates += repair.evaluatedCandidates;
-      statistics[repairMethodStatisticsKey(repair.method)] += 1;
+      recordStrategyStatistic(search, "repair", "evaluatedCandidates", repair.evaluatedCandidates);
+      recordStrategyStatistic(search, "repair", repairMethodStatisticsKey(repair.method));
     }
   } else if (selectedStrategy === "lns" && search.lnsOptions.enabled) {
-    const statistics = search.strategyStatistics.lns;
-    statistics.attempts += 1;
-    const lns = proposeMonthSolverLns(
+    recordStrategyStatistic(search, "lns", "attempts");
+    const lns = timedStrategyProposal(search, "lns", () => proposeMonthSolverLns(
       search.context,
       search.source,
       search.random,
-      search.lnsOptions
-    );
+      {
+        ...search.lnsOptions,
+        destroySize: search.lnsOptions.configuredDestroySize ?? activeRepairSize(search)
+      }
+    ));
     if (lns) {
-      statistics.evaluatedCandidates += lns.evaluatedCandidates;
-      statistics[repairMethodStatisticsKey(lns.method)] += 1;
-      statistics.destroyMethods[lns.destroyMethod] += 1;
+      recordStrategyStatistic(search, "lns", "evaluatedCandidates", lns.evaluatedCandidates);
+      recordStrategyStatistic(search, "lns", repairMethodStatisticsKey(lns.method));
+      recordStrategyStatistic(search, "lns", ["destroyMethods", lns.destroyMethod]);
       if (!lns.invariant.ok) {
-        statistics.invariantRejections += 1;
+        recordStrategyStatistic(search, "lns", "invariantRejections");
         return;
       }
       changes = lns.changes;
@@ -286,19 +382,30 @@ function step(search) {
   }
   if (!changes) {
     strategy = "smallNeighbor";
-    search.strategyStatistics.smallNeighbor.attempts += 1;
-    changes = proposeMonthSolverNeighbor(search.plan, search.source, search.random);
+    recordStrategyStatistic(search, "smallNeighbor", "attempts");
+    changes = timedStrategyProposal(search, "smallNeighbor", () => (
+      proposeMonthSolverNeighbor(search.plan, search.source, search.random)
+    ));
   }
   if (!changes) return;
   search.generated += 1;
-  search.strategyStatistics[strategy].generatedCandidates += 1;
+  recordStrategyStatistic(search, strategy, "generatedCandidates");
   if (!evaluation) {
+    const evaluationStartedAt = nowMilliseconds();
     evaluation = evaluateMonthSolverChanges(search.context, changes);
-    if (evaluation) search.strategyStatistics[strategy].evaluatedCandidates += 1;
+    search.strategyTiming[strategy].totalMilliseconds += Math.max(
+      0,
+      nowMilliseconds() - evaluationStartedAt
+    );
+    if (evaluation) recordStrategyStatistic(search, strategy, "evaluatedCandidates");
   }
   if (!evaluation) return;
   search.proposed += 1;
-  search.strategyStatistics[strategy].validCandidates += 1;
+  recordStrategyStatistic(search, strategy, "validCandidates");
+  recordStrategyStatistic(search, strategy, "totalChangedCells", evaluation.changes.length);
+  if (classifyEstimatedCandidate(evaluation.objective) === "feasible") {
+    recordStrategyStatistic(search, strategy, "feasibleCandidates");
+  }
   considerCandidate(search.archives, {
     plan: search.plan,
     changes: evaluation.changes,
@@ -315,15 +422,68 @@ function step(search) {
   });
   if (decision.reason === "statutoryRatchet") search.statutoryRatchetRejections += 1;
   if (!decision.accepted) return;
+  const improvedCurrent = compareBestObjectives(evaluation.objective, search.context.objective) < 0;
   applyMonthSolverEvaluation(search.context, evaluation);
   search.accepted += 1;
-  search.strategyStatistics[strategy].acceptedCandidates += 1;
-  updateBest(search);
+  recordStrategyStatistic(search, strategy, "acceptedCandidates");
+  if (improvedCurrent) recordStrategyStatistic(search, strategy, "currentImprovements");
+  if (updateBest(search)) recordStrategyStatistic(search, strategy, "bestUpdates");
+}
+
+function restartSearchFromBest(search) {
+  search.searchRestarts += 1;
+  const seed = restartSeed(search.seed, search.searchRestarts);
+  search.plan = clone(search.bestPlan);
+  search.context = createMonthSolverScoreContext(search.plan);
+  search.source = createMonthSolverNeighborSource(search.plan);
+  search.random = createSeededRandom(`${seed}:search`);
+  search.temperature = search.initialTemperature;
+  search.strategyWeights = restartStrategyWeights(
+    search.baseStrategyWeights,
+    search.searchRestarts
+  );
+  search.stagnationBlocks = 0;
+  search.restartIterations.push(search.performed);
+  search.restartSeeds.push(seed);
+  search.strategyWeightHistory.push({
+    block: search.completedBlocks,
+    reason: "restart",
+    restart: search.searchRestarts,
+    seed,
+    temperature: search.temperature,
+    weights: clone(search.strategyWeights)
+  });
 }
 
 function completeBlock(search) {
+  const blockBestUpdates = Object.values(search.blockStrategyStatistics)
+    .reduce((sum, statistics) => sum + (Number(statistics.bestUpdates) || 0), 0);
   search.completedBlocks += 1;
   search.temperature = Math.max(search.minimumTemperature, search.temperature * search.coolingRate);
+  search.stagnationBlocks = blockBestUpdates > 0 ? 0 : search.stagnationBlocks + 1;
+  if (search.adaptiveStrategyEnabled) {
+    const before = clone(search.strategyWeights);
+    search.strategyWeights = adaptMonthSolverStrategyWeights(
+      search.strategyWeights,
+      search.blockStrategyStatistics
+    );
+    search.strategyWeightHistory.push({
+      block: search.completedBlocks,
+      reason: "adaptation",
+      before,
+      weights: clone(search.strategyWeights),
+      rewards: Object.fromEntries(Object.entries(search.blockStrategyStatistics).map(([strategy, values]) => [
+        strategy,
+        strategyReward(values)
+      ]))
+    });
+  }
+  search.blockStrategyStatistics = createStrategyStatistics();
+  if (search.restartEnabled
+    && search.stagnationBlocks >= search.restartStagnationBlocks
+    && search.performed < search.iterations) {
+    restartSearchFromBest(search);
+  }
 }
 
 function progressSnapshot(search) {
@@ -341,6 +501,9 @@ function progressSnapshot(search) {
     internalViolationCount: Number(search.bestObjective.internalViolationCount) || 0,
     estimatedShortagePersonSlots: Number(search.bestObjective.shortagePeople) || 0,
     temperature: search.temperature,
+    strategyWeights: clone(search.strategyWeights),
+    stagnationBlocks: search.stagnationBlocks,
+    searchRestarts: search.searchRestarts,
     proposed: search.proposed,
     accepted: search.accepted,
     acceptanceRate: search.proposed ? search.accepted / search.proposed : 0
@@ -406,6 +569,15 @@ function result(search, stopped, timedOut = false) {
     temperatureCalibration: clone(search.temperatureCalibration),
     temperatureScaleByStrategy: clone(search.temperatureScaleByStrategy),
     strategyWeights: clone(search.strategyWeights),
+    adaptiveStrategyEnabled: search.adaptiveStrategyEnabled,
+    strategyWeightHistory: clone(search.strategyWeightHistory),
+    stagnationBlocks: search.stagnationBlocks,
+    searchRestarts: search.searchRestarts,
+    restartIterations: [...search.restartIterations],
+    restartSeeds: [...search.restartSeeds],
+    performanceStatistics: {
+      strategies: strategyTimingSnapshot(search)
+    },
     stopped,
     timedOut,
     statistics: {
@@ -414,7 +586,11 @@ function result(search, stopped, timedOut = false) {
       validCandidates: search.proposed,
       acceptedCandidates: search.accepted,
       statutoryRatchetRejections: search.statutoryRatchetRejections,
-      strategies: clone(search.strategyStatistics),
+      strategies: summarizedStrategyStatistics(search.strategyStatistics),
+      adaptiveStrategyEnabled: search.adaptiveStrategyEnabled,
+      strategyWeightUpdates: search.strategyWeightHistory.length,
+      stagnationBlocks: search.stagnationBlocks,
+      searchRestarts: search.searchRestarts,
       ...finalization.statistics,
       placement: selected.placementStatistics
     },
@@ -504,6 +680,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
   let totalProposed = 0;
   let totalAccepted = 0;
   let totalRatchetRejections = 0;
+  let totalSearchRestarts = 0;
   const totalStrategyStatistics = createStrategyStatistics();
   let manualStop = false;
   let lastProgressAt = -Infinity;
@@ -566,6 +743,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
     totalProposed += candidate.proposed;
     totalAccepted += candidate.accepted;
     totalRatchetRejections += candidate.statistics?.statutoryRatchetRejections ?? 0;
+    totalSearchRestarts += candidate.statistics?.searchRestarts ?? 0;
     addStrategyStatistics(totalStrategyStatistics, candidate.statistics?.strategies);
     if (!bestResult || compareCompletedResults(candidate, bestResult) < 0) {
       bestResult = candidate;
@@ -618,6 +796,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
     totalProposed = bestResult.proposed;
     totalAccepted = bestResult.accepted;
     totalRatchetRejections = bestResult.statistics?.statutoryRatchetRejections ?? 0;
+    totalSearchRestarts = bestResult.statistics?.searchRestarts ?? 0;
     addStrategyStatistics(totalStrategyStatistics, bestResult.statistics?.strategies);
     manualStop = Boolean(hooks.shouldStop?.());
   }
@@ -630,6 +809,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
     seed: baseSeed,
     bestRestart,
     restarts,
+    searchRestarts: totalSearchRestarts,
     iterations: totalIterations,
     completedBlocks: totalBlocks,
     generatedCandidates: totalGenerated,
@@ -646,7 +826,8 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
       validCandidates: totalProposed,
       acceptedCandidates: totalAccepted,
       statutoryRatchetRejections: totalRatchetRejections,
-      strategies: totalStrategyStatistics,
+      searchRestarts: totalSearchRestarts,
+      strategies: summarizedStrategyStatistics(totalStrategyStatistics),
       restarts
     },
     stopped: manualStop,
