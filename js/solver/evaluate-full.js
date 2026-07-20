@@ -6,6 +6,7 @@ import {
   normalizeSolverWeights
 } from "./solver-config.js";
 import { estimatedBreakLoadProfile } from "./break-load-profile.js";
+import { overtimeMinutes } from "./time-slots.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -32,7 +33,7 @@ function normalizeShiftType(shiftType) {
     isDayOff,
     startMinutes: isDayOff ? null : parseMinute(shiftType.startMinutes ?? shiftType.start),
     endMinutes: isDayOff ? null : parseMinute(shiftType.endMinutes ?? shiftType.end),
-    overtimeMinutes: Math.max(0, Number(shiftType.overtimeMinutes) || 0)
+    overtimeMinutes: overtimeMinutes(shiftType)
   };
 }
 
@@ -153,6 +154,8 @@ export function evaluatePlanFull(plan, context) {
   let statutoryViolationAmount = 0;
   let internalViolationCount = 0;
   let internalViolationAmount = 0;
+  let preferenceViolationCount = 0;
+  let preferenceViolationAmount = 0;
 
   const previousKnown = settings.previousBoundaryKnown !== false;
   const nextKnown = settings.nextBoundaryKnown !== false;
@@ -366,8 +369,35 @@ export function evaluatePlanFull(plan, context) {
     if (row === undefined || !Number.isInteger(day) || day < 0 || day >= plan.dayCount) continue;
     const code = assignment(plan, row, day);
     const shift = shiftTypes.get(code);
-    if (request.kind === "dayOff" && !shift?.isDayOff) preferencePenalty += weights.missedDayOffRequest;
-    if (request.kind === "shift" && code !== request.shiftCode) preferencePenalty += weights.missedShiftRequest;
+    const employee = employees.get(request.employeeId) ?? { id: request.employeeId, name: request.employeeId };
+    if (request.kind === "dayOff" && !shift?.isDayOff) {
+      preferencePenalty += weights.missedDayOffRequest;
+      preferenceViolationCount += 1;
+      preferenceViolationAmount += 1;
+      addViolation(
+        violations,
+        "preference",
+        "missedDayOffRequest",
+        employee,
+        [day],
+        1,
+        `${employee.name}の希望休が満たされていません。`
+      );
+    }
+    if (request.kind === "shift" && code !== request.shiftCode) {
+      preferencePenalty += weights.missedShiftRequest;
+      preferenceViolationCount += 1;
+      preferenceViolationAmount += 1;
+      addViolation(
+        violations,
+        "preference",
+        "missedShiftRequest",
+        employee,
+        [day],
+        1,
+        `${employee.name}の希望シフト${request.shiftCode}が満たされていません。`
+      );
+    }
   }
 
   fairnessPenalty = weights.fairnessUnit * (
@@ -407,6 +437,25 @@ export function evaluatePlanFull(plan, context) {
     statutoryViolationAmount,
     internalViolationCount,
     internalViolationAmount,
+    preferenceViolationCount,
+    preferenceViolationAmount,
+    constraintLayers: {
+      statutory: {
+        violationCount: statutoryViolationCount,
+        violationAmount: statutoryViolationAmount,
+        penalty: statutoryPenalty
+      },
+      internal: {
+        violationCount: internalViolationCount,
+        violationAmount: internalViolationAmount,
+        penalty: internalPenalty
+      },
+      preference: {
+        violationCount: preferenceViolationCount,
+        violationAmount: preferenceViolationAmount,
+        penalty: preferencePenalty
+      }
+    },
     estimatedShortagePersonSlots,
     estimatedShortageByScope,
     violations,

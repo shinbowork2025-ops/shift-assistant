@@ -77,8 +77,8 @@
 
 /**
  * @typedef {Object} ViolationDetail
- * @property {"statutory"|"internal"} layer
- * @property {"statutoryHolidayDeficit"|"restDeficit"|"consecutiveExcess"|"daysOffDeviation"} type
+ * @property {"statutory"|"internal"|"preference"} layer
+ * @property {"statutoryHolidayDeficit"|"restDeficit"|"consecutiveExcess"|"daysOffDeviation"|"missedDayOffRequest"|"missedShiftRequest"} type
  * @property {string} [employeeId]
  * @property {number[]} days
  * @property {number} amount 日、15分単位数、超過日数、差日数のいずれか
@@ -107,6 +107,9 @@
  * @property {number} statutoryViolationAmount
  * @property {number} internalViolationCount
  * @property {number} internalViolationAmount
+ * @property {number} preferenceViolationCount
+ * @property {number} preferenceViolationAmount
+ * @property {{statutory:Object, internal:Object, preference:Object}} constraintLayers
  * @property {number} estimatedShortagePersonSlots
  * @property {Object<string, number>} estimatedShortageByScope
  * @property {Object[]} violations

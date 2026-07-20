@@ -91,11 +91,10 @@ export function validateBreakPolicyForShift(shiftType, breakPolicy, breakConstra
   }
 
   const workMinutes = scheduledWorkMinutes({ ...shiftType, breakPolicy });
-  if (workMinutes > 360 && totalMinutes < 45) {
-    issues.push(`予定実働${workMinutes}分に対して休憩${totalMinutes}分は下限45分を満たしません。`);
-  }
   if (workMinutes > 480 && totalMinutes < 60) {
     issues.push(`予定実働${workMinutes}分に対して休憩${totalMinutes}分は下限60分を満たしません。`);
+  } else if (workMinutes > 360 && totalMinutes < 45) {
+    issues.push(`予定実働${workMinutes}分に対して休憩${totalMinutes}分は下限45分を満たしません。`);
   }
 
   let samplePlacement = null;

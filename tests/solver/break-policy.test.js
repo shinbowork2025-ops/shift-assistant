@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { validateBreakPolicyForShift } from "../../js/solver/break-policy.js";
 import { estimatedBreakLoadProfile } from "../../js/solver/break-load-profile.js";
 import {
+  overtimeMinutes,
   payableMinutes,
   plannedBreakMinutes,
   scheduledWorkMinutes,
@@ -19,8 +20,11 @@ test("時間値を拘束・休憩・実働・支給対象へ分離する", () =>
   assert.equal(plannedBreakMinutes(shift), 90);
   assert.equal(scheduledWorkMinutes(shift), 450);
   assert.equal(payableMinutes(shift), 450);
+  assert.equal(payableMinutes({ ...shift, paidMinutes: 480 }), 480);
   assert.equal(payableMinutes({ ...shift, paidMinutes: undefined }), 450);
+  assert.equal(overtimeMinutes(shift), 60);
   assert.equal(spanMinutes(shifts.get("OFF")), 0);
+  assert.equal(overtimeMinutes(shifts.get("OFF")), 0);
 });
 
 test("休憩方針を検証し、決定的な完全配置を返す", () => {
@@ -40,6 +44,7 @@ test("法定下限不足と完全配置不能をすべて報告する", () => {
   }, board.settings.breakConstraints);
   assert.equal(insufficient.ok, false);
   assert.match(insufficient.issues.join(" / "), /下限60分/);
+  assert.equal(insufficient.issues.filter((issue) => /下限(45|60)分/.test(issue)).length, 1);
 
   const shortShift = shifts.get("S03");
   const impossible = validateBreakPolicyForShift(shortShift, shortShift.breakPolicy, {

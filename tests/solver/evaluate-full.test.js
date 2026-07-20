@@ -24,6 +24,16 @@ test("盤面Aの全ペナルティが手計算値と一致する", () => {
   assert.ok(Math.abs(result.score - 4984.4) < 1e-9);
   assert.equal(result.statutoryViolationCount, 0);
   assert.equal(result.internalViolationCount, 3);
+  assert.equal(result.preferenceViolationCount, 1);
+  assert.deepEqual(result.constraintLayers, {
+    statutory: { violationCount: 0, violationAmount: 0, penalty: 0 },
+    internal: { violationCount: 3, violationAmount: 4, penalty: 4300 },
+    preference: { violationCount: 1, violationAmount: 1, penalty: 50 }
+  });
+  assert.deepEqual(
+    result.violations.filter((violation) => violation.layer === "preference").map((violation) => violation.type),
+    ["missedDayOffRequest"]
+  );
 });
 
 test("盤面Bの法定休日不足・所定休日差・変更量を評価する", () => {
