@@ -160,8 +160,15 @@ test("固定ブロック数とseedが同じなら案・統計・ブロック進�
   const second = await run();
   assert.equal(first.result.iterations, 2_000);
   assert.equal(first.result.completedBlocks, 1);
-  assert.equal(first.result.statistics.strategies.repair.attempts, 1);
-  assert.equal(first.result.statistics.strategies.repair.bruteAttempts, 1);
+  const strategies = first.result.statistics.strategies;
+  assert.equal(
+    strategies.smallNeighbor.selections + strategies.repair.selections + strategies.lns.selections,
+    2_000
+  );
+  assert.ok(strategies.repair.attempts > 0);
+  assert.ok(strategies.repair.bruteAttempts > 0);
+  assert.ok(strategies.lns.attempts > 0);
+  assert.ok(strategies.lns.beamAttempts > 0);
   assert.ok(first.result.statistics.strategies.repair.evaluatedCandidates > 0);
   assert.equal(first.progress.length, 1);
   assert.deepEqual(first.progress.map((item) => item.completedBlocks), [1]);

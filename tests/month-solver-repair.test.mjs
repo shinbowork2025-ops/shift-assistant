@@ -5,6 +5,7 @@ import {
   BRUTE_CELL_CAP,
   BRUTE_COMBO_CAP,
   DEFAULT_BEAM_WIDTH,
+  DEFAULT_EXACT_CANDIDATE_CAP,
   REPAIR_CELL_CAP,
   proposeMonthSolverRepair,
   selectRepairCells
@@ -69,6 +70,7 @@ test("repair limits are fixed by the v5 contract", () => {
   assert.equal(BRUTE_CELL_CAP, 8);
   assert.equal(BRUTE_COMBO_CAP, 20_000);
   assert.equal(DEFAULT_BEAM_WIDTH, 30);
+  assert.equal(DEFAULT_EXACT_CANDIDATE_CAP, 3);
 });
 
 test("small repairs exhaustively choose a deterministic atomic candidate", () => {
@@ -102,6 +104,7 @@ test("nine to twelve cells use a width-limited deterministic beam", () => {
   assert.equal(first.method, "beam");
   assert.equal(first.cells.length, 9);
   assert.ok(first.evaluatedCandidates > 0);
+  assert.ok(first.evaluatedCandidates <= DEFAULT_EXACT_CANDIDATE_CAP);
   assert.deepEqual(first.changes, second.changes);
   assert.deepEqual(first.evaluation.objective, second.evaluation.objective);
   assertMatchesFullEvaluation(plan, first);
@@ -130,5 +133,6 @@ test("a repair region over twelve cells uses greedy fill followed by a beam wind
   assert.equal(repair.cells.length, 13);
   assert.equal(repair.combinationCount, 8_192);
   assert.ok(repair.evaluatedCandidates > 0);
+  assert.ok(repair.evaluatedCandidates <= DEFAULT_EXACT_CANDIDATE_CAP);
   assert.deepEqual(plan.assignments, before);
 });

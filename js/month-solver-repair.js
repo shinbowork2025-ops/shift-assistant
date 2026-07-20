@@ -1,10 +1,12 @@
 import { compareStatutoryVectors } from "./month-solver-control.js";
 import { evaluateMonthSolverChanges } from "./month-solver-score.js";
+import { timeToMinutes } from "./date-time.js";
 
 export const REPAIR_CELL_CAP = 12;
 export const BRUTE_CELL_CAP = 8;
 export const BRUTE_COMBO_CAP = 20_000;
 export const DEFAULT_BEAM_WIDTH = 30;
+export const DEFAULT_EXACT_CANDIDATE_CAP = 3;
 
 function currentCode(plan, cell) {
   return plan.assignments?.[cell.employeeId]?.[cell.day] ?? "";
@@ -42,7 +44,7 @@ function compareRepairCellPriority(context, left, right) {
 export function selectRepairCells(context, source, options = {}) {
   const requested = Math.max(1, Math.min(
     REPAIR_CELL_CAP,
-    Math.floor(Number(options.cellCount ?? 4) || 4)
+    Math.floor(Number(options.cellCount ?? 3) || 3)
   ));
   return [...source.mutableCells]
     .filter((cell) => optionsForCell(context.plan, source, cell).length >= 2)
@@ -85,6 +87,39 @@ function evaluateChoices(context, cells, choices, fixedCells = [], fixedChoices 
   return evaluation ? { ...evaluation, choices: [...choices] } : null;
 }
 
+function coversSlot(source, code, slotIndex) {
+  const shift = source.typeMap.get(code);
+  if (!shift?.isWork) return false;
+  const start = timeToMinutes(shift.start);
+  const end = timeToMinutes(shift.end);
+  const minute = slotIndex * 15;
+  return start !== null && end !== null && minute >= start && minute < end;
+}
+
+function choiceHeuristic(context, source, cell, choice) {
+  const before = currentCode(context.plan, cell);
+  if (choice === before) return 0;
+  const shortage = context.dayMetrics.get(cell.day)?.shortageBySlot ?? [];
+  let relief = 0;
+  for (let slot = 0; slot < shortage.length; slot += 1) {
+    const need = Number(shortage[slot]) || 0;
+    if (need <= 0) continue;
+    relief += need * (
+      Number(coversSlot(source, choice, slot))
+      - Number(coversSlot(source, before, slot))
+    );
+  }
+  const original = context.plan.originalAssignments?.[cell.employeeId]?.[cell.day] ?? "";
+  const changePenalty = choice === original ? 0 : 1;
+  return -(relief * 1_000_000) + changePenalty * 100 + 1;
+}
+
+function choicesHeuristic(context, source, cells, choices) {
+  return choices.reduce((sum, choice, index) => (
+    sum + choiceHeuristic(context, source, cells[index], choice)
+  ), 0);
+}
+
 function bruteRepair(context, cells, choicesByCell) {
   let evaluatedCandidates = 0;
   let best = null;
@@ -109,103 +144,90 @@ function bruteRepair(context, cells, choicesByCell) {
 
 function beamRepair(
   context,
+  source,
   cells,
   choicesByCell,
   beamWidth,
+  exactCandidateCap,
   fixedCells = [],
   fixedChoices = []
 ) {
   let evaluatedCandidates = 0;
-  let beam = [{ choices: [], evaluation: null }];
+  let beam = [{ choices: [], heuristic: 0 }];
   for (let index = 0; index < cells.length; index += 1) {
     const next = [];
     for (const state of beam) {
       for (const choice of choicesByCell[index]) {
         const choices = [...state.choices, choice];
         const partialCells = cells.slice(0, index + 1);
-        const evaluation = evaluateChoices(
-          context,
-          partialCells,
+        next.push({
           choices,
-          fixedCells,
-          fixedChoices
-        );
-        if (!evaluation) {
-          if (choices.every((value, choiceIndex) => value === currentCode(context.plan, partialCells[choiceIndex]))) {
-            next.push({ choices, evaluation: null });
-          }
-          continue;
-        }
-        evaluatedCandidates += 1;
-        next.push({ choices, evaluation });
+          heuristic: choicesHeuristic(context, source, partialCells, choices)
+        });
       }
     }
     next.sort((left, right) => {
-      if (!left.evaluation) return 1;
-      if (!right.evaluation) return -1;
-      return compareEvaluations(left.evaluation, right.evaluation);
+      const difference = left.heuristic - right.heuristic;
+      return difference || JSON.stringify(left.choices).localeCompare(JSON.stringify(right.choices));
     });
     beam = next.slice(0, beamWidth);
     if (!beam.length) break;
   }
   const completed = beam
-    .map((state) => state.evaluation ?? evaluateChoices(
-      context,
-      cells,
-      state.choices,
-      fixedCells,
-      fixedChoices
-    ))
+    .filter((state) => [
+      ...changesForChoices(context.plan, fixedCells, fixedChoices),
+      ...changesForChoices(context.plan, cells, state.choices)
+    ].length > 0)
+    .slice(0, exactCandidateCap)
+    .map((state) => {
+      const evaluation = evaluateChoices(
+        context,
+        cells,
+        state.choices,
+        fixedCells,
+        fixedChoices
+      );
+      if (evaluation) evaluatedCandidates += 1;
+      return evaluation;
+    })
     .filter(Boolean)
     .sort(compareEvaluations);
   return { method: "beam", evaluation: completed[0] ?? null, evaluatedCandidates };
 }
 
-function greedyRepair(context, cells, choicesByCell) {
-  let evaluatedCandidates = 0;
+function greedyRepair(context, source, cells, choicesByCell) {
   const choices = [];
   for (let index = 0; index < cells.length; index += 1) {
-    let best = null;
-    let bestChoice = choicesByCell[index][0];
-    for (const choice of choicesByCell[index]) {
-      const candidateChoices = [...choices, choice];
-      const evaluation = evaluateChoices(
-        context,
-        cells.slice(0, index + 1),
-        candidateChoices
-      );
-      if (!evaluation) {
-        if (choice === currentCode(context.plan, cells[index])) {
-          best ??= {
-            objective: context.objective,
-            changes: [],
-            choices: candidateChoices
-          };
-        }
-        continue;
-      }
-      evaluatedCandidates += 1;
-      if (compareEvaluations(evaluation, best) < 0) {
-        best = evaluation;
-        bestChoice = choice;
-      }
-    }
-    choices.push(bestChoice);
+    const ranked = [...choicesByCell[index]].sort((left, right) => (
+      choiceHeuristic(context, source, cells[index], left)
+      - choiceHeuristic(context, source, cells[index], right)
+      || String(left).localeCompare(String(right))
+    ));
+    choices.push(ranked[0]);
   }
-  return { choices, evaluatedCandidates };
+  return { choices, evaluatedCandidates: 0 };
 }
 
-function greedyBeamRepair(context, cells, choicesByCell, beamWidth) {
-  const greedy = greedyRepair(context, cells, choicesByCell);
+function greedyBeamRepair(
+  context,
+  source,
+  cells,
+  choicesByCell,
+  beamWidth,
+  exactCandidateCap
+) {
+  const greedy = greedyRepair(context, source, cells, choicesByCell);
   const windowCells = cells.slice(0, REPAIR_CELL_CAP);
   const windowChoices = choicesByCell.slice(0, REPAIR_CELL_CAP);
   const fixedCells = cells.slice(REPAIR_CELL_CAP);
   const fixedChoices = greedy.choices.slice(REPAIR_CELL_CAP);
   const beam = beamRepair(
     context,
+    source,
     windowCells,
     windowChoices,
     beamWidth,
+    exactCandidateCap,
     fixedCells,
     fixedChoices
   );
@@ -237,20 +259,32 @@ export function proposeMonthSolverRepair(context, source, options = {}) {
       ? Number.POSITIVE_INFINITY
       : product * choices.length
   ), 1);
-  const useBrute = cells.length <= BRUTE_CELL_CAP && combinationCount <= BRUTE_COMBO_CAP;
+  const useBrute = options.forceBeam !== true
+    && cells.length <= BRUTE_CELL_CAP
+    && combinationCount <= BRUTE_COMBO_CAP;
   const beamWidth = Math.max(
     1,
     Math.floor(Number(options.beamWidth ?? DEFAULT_BEAM_WIDTH) || DEFAULT_BEAM_WIDTH)
   );
+  const exactCandidateCap = Math.max(
+    1,
+    Math.min(
+      beamWidth,
+      Math.floor(Number(options.exactCandidateCap ?? DEFAULT_EXACT_CANDIDATE_CAP)
+        || DEFAULT_EXACT_CANDIDATE_CAP)
+    )
+  );
   const result = cells.length > REPAIR_CELL_CAP
-    ? greedyBeamRepair(context, cells, choicesByCell, beamWidth)
+    ? greedyBeamRepair(context, source, cells, choicesByCell, beamWidth, exactCandidateCap)
     : useBrute
       ? bruteRepair(context, cells, choicesByCell)
       : beamRepair(
       context,
+      source,
       cells,
       choicesByCell,
-      beamWidth
+      beamWidth,
+      exactCandidateCap
     );
   if (!result.evaluation) return null;
   return {

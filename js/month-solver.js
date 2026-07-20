@@ -12,6 +12,11 @@ import {
 } from "./month-solver-neighbors.js";
 import { proposeMonthSolverRepair } from "./month-solver-repair.js";
 import {
+  normalizeMonthSolverStrategyWeights,
+  proposeMonthSolverLns,
+  selectMonthSolverStrategy
+} from "./month-solver-lns.js";
+import {
   EPOCH_ITERATIONS,
   TEMPERATURE_SAMPLE_DEFAULT,
   TEMPERATURE_SAMPLE_MAX,
@@ -46,6 +51,7 @@ function nowMilliseconds() {
 function createStrategyStatistics() {
   return {
     smallNeighbor: {
+      selections: 0,
       attempts: 0,
       generatedCandidates: 0,
       validCandidates: 0,
@@ -53,6 +59,7 @@ function createStrategyStatistics() {
       acceptedCandidates: 0
     },
     repair: {
+      selections: 0,
       attempts: 0,
       generatedCandidates: 0,
       validCandidates: 0,
@@ -61,18 +68,51 @@ function createStrategyStatistics() {
       bruteAttempts: 0,
       beamAttempts: 0,
       greedyBeamAttempts: 0
+    },
+    lns: {
+      selections: 0,
+      attempts: 0,
+      generatedCandidates: 0,
+      validCandidates: 0,
+      evaluatedCandidates: 0,
+      acceptedCandidates: 0,
+      invariantRejections: 0,
+      bruteAttempts: 0,
+      beamAttempts: 0,
+      greedyBeamAttempts: 0,
+      destroyMethods: {
+        violation: 0,
+        shortageDay: 0,
+        employeeWeek: 0,
+        multipleEmployees: 0,
+        random: 0
+      }
     }
   };
 }
 
-function addStrategyStatistics(target, source) {
-  for (const [strategy, values] of Object.entries(source ?? {})) {
-    if (!target[strategy]) target[strategy] = {};
-    for (const [key, value] of Object.entries(values ?? {})) {
-      target[strategy][key] = (Number(target[strategy][key]) || 0) + (Number(value) || 0);
+function addNumericStatistics(target, source) {
+  for (const [key, value] of Object.entries(source ?? {})) {
+    if (value && typeof value === "object") {
+      target[key] ??= {};
+      addNumericStatistics(target[key], value);
+    } else {
+      target[key] = (Number(target[key]) || 0) + (Number(value) || 0);
     }
   }
   return target;
+}
+
+function addStrategyStatistics(target, source) {
+  return addNumericStatistics(target, source);
+}
+
+function repairMethodStatisticsKey(method) {
+  return method === "brute"
+    ? "bruteAttempts"
+    : method === "greedyBeam"
+      ? "greedyBeamAttempts"
+      : "beamAttempts";
 }
 
 export function calibrateMonthSolverTemperature(
@@ -129,6 +169,11 @@ function createSearch(planInput, config = {}) {
     1 / Math.max(1, execution.plannedBlocks)
   );
   const archives = createCandidateArchives(config);
+  const configuredStrategyWeights = {
+    ...(config.strategyWeights ?? {})
+  };
+  if (config.enableRepair === false) configuredStrategyWeights.repair = 0;
+  if (config.enableLns === false) configuredStrategyWeights.lns = 0;
   considerCandidate(archives, {
     plan,
     objective: context.objective,
@@ -147,10 +192,18 @@ function createSearch(planInput, config = {}) {
     minimumTemperature,
     coolingRate,
     temperatureScaleByStrategy: normalizeTemperatureScales(config.temperatureScaleByStrategy),
+    strategyWeights: normalizeMonthSolverStrategyWeights(configuredStrategyWeights),
     repairOptions: {
       enabled: config.enableRepair !== false,
-      cellCount: Math.max(1, Math.floor(Number(config.repairCellCount ?? 4) || 4)),
-      beamWidth: config.repairBeamWidth
+      cellCount: Math.max(1, Math.floor(Number(config.repairCellCount ?? 3) || 3)),
+      beamWidth: config.repairBeamWidth,
+      exactCandidateCap: config.repairExactCandidateCap
+    },
+    lnsOptions: {
+      enabled: config.enableLns !== false,
+      destroySize: config.lnsDestroySize,
+      beamWidth: config.lnsBeamWidth ?? config.repairBeamWidth,
+      exactCandidateCap: config.lnsExactCandidateCap ?? 1
     },
     strategyStatistics: createStrategyStatistics(),
     archives,
@@ -195,29 +248,44 @@ function updateBest(search) {
 
 function step(search) {
   search.performed += 1;
-  let strategy = "smallNeighbor";
+  const selectedStrategy = selectMonthSolverStrategy(search.random, search.strategyWeights);
+  search.strategyStatistics[selectedStrategy].selections += 1;
+  let strategy = selectedStrategy;
   let evaluation = null;
   let changes = null;
-  const repairTurn = search.repairOptions.enabled
-    && (search.performed - 1) % EPOCH_ITERATIONS === 0;
-  if (repairTurn) {
+  if (selectedStrategy === "repair" && search.repairOptions.enabled) {
     const statistics = search.strategyStatistics.repair;
     statistics.attempts += 1;
     const repair = proposeMonthSolverRepair(search.context, search.source, search.repairOptions);
     if (repair) {
-      strategy = "repair";
       changes = repair.changes;
       evaluation = repair.evaluation;
       statistics.evaluatedCandidates += repair.evaluatedCandidates;
-      const methodKey = repair.method === "brute"
-        ? "bruteAttempts"
-        : repair.method === "greedyBeam"
-          ? "greedyBeamAttempts"
-          : "beamAttempts";
-      statistics[methodKey] += 1;
+      statistics[repairMethodStatisticsKey(repair.method)] += 1;
+    }
+  } else if (selectedStrategy === "lns" && search.lnsOptions.enabled) {
+    const statistics = search.strategyStatistics.lns;
+    statistics.attempts += 1;
+    const lns = proposeMonthSolverLns(
+      search.context,
+      search.source,
+      search.random,
+      search.lnsOptions
+    );
+    if (lns) {
+      statistics.evaluatedCandidates += lns.evaluatedCandidates;
+      statistics[repairMethodStatisticsKey(lns.method)] += 1;
+      statistics.destroyMethods[lns.destroyMethod] += 1;
+      if (!lns.invariant.ok) {
+        statistics.invariantRejections += 1;
+        return;
+      }
+      changes = lns.changes;
+      evaluation = lns.evaluation;
     }
   }
   if (!changes) {
+    strategy = "smallNeighbor";
     search.strategyStatistics.smallNeighbor.attempts += 1;
     changes = proposeMonthSolverNeighbor(search.plan, search.source, search.random);
   }
@@ -337,6 +405,7 @@ function result(search, stopped, timedOut = false) {
     finalTemperature: search.temperature,
     temperatureCalibration: clone(search.temperatureCalibration),
     temperatureScaleByStrategy: clone(search.temperatureScaleByStrategy),
+    strategyWeights: clone(search.strategyWeights),
     stopped,
     timedOut,
     statistics: {
