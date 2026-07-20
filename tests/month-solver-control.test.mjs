@@ -160,6 +160,9 @@ test("固定ブロック数とseedが同じなら案・統計・ブロック進�
   const second = await run();
   assert.equal(first.result.iterations, 2_000);
   assert.equal(first.result.completedBlocks, 1);
+  assert.equal(first.result.statistics.strategies.repair.attempts, 1);
+  assert.equal(first.result.statistics.strategies.repair.bruteAttempts, 1);
+  assert.ok(first.result.statistics.strategies.repair.evaluatedCandidates > 0);
   assert.equal(first.progress.length, 1);
   assert.deepEqual(first.progress.map((item) => item.completedBlocks), [1]);
   assert.equal(first.progress[0].temperature, first.result.finalTemperature);
