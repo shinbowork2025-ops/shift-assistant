@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validateBreakPolicyForShift } from "../../js/solver/break-policy.js";
-import { estimatedBreakLoadProfile } from "../../js/solver/break-load-profile.js";
+import {
+  breakLoadProfileCache,
+  clearBreakLoadProfileCache,
+  estimatedBreakLoadProfile
+} from "../../js/solver/break-load-profile.js";
 import {
   overtimeMinutes,
   payableMinutes,
@@ -56,12 +60,13 @@ test("法定下限不足と完全配置不能をすべて報告する", () => {
   assert.match(impossible.issues.join(" / "), /配置できません/);
 });
 
-test("単純休憩負荷プロファイルが手計算値と一致する", () => {
+test("完全配置候補の休憩負荷プロファイルがperson-slot手計算値と一致する", () => {
+  clearBreakLoadProfileCache();
   const s01 = estimatedBreakLoadProfile(shifts.get("S01"), board.settings.breakConstraints);
   assert.ok(Math.abs(s01.reduce((sum, value) => sum + value, 0) - 6) < 1e-9);
-  assert.ok(Math.abs(s01[42] - (1 / 11)) < 1e-9);
-  assert.ok(Math.abs(s01[48] - (24 / 143)) < 1e-9);
-  assert.ok(Math.abs(s01[51] - (4 / 13)) < 1e-9);
+  assert.ok(Math.abs(s01[42] - (75 / 565)) < 1e-9);
+  assert.ok(Math.abs(s01[48] - (68 / 565)) < 1e-9);
+  assert.ok(Math.abs(s01[51] - (213 / 565)) < 1e-9);
   assert.equal(s01[36], 0);
   assert.equal(s01[71], 0);
 
@@ -71,4 +76,8 @@ test("単純休憩負荷プロファイルが手計算値と一致する", () =>
 
   const s02 = estimatedBreakLoadProfile(shifts.get("S02"), board.settings.breakConstraints);
   for (let slot = 48; slot <= 51; slot += 1) assert.equal(s02[slot], 0);
+
+  const reused = estimatedBreakLoadProfile(shifts.get("S01"), board.settings.breakConstraints);
+  assert.equal(reused, s01);
+  assert.equal(breakLoadProfileCache.size, 3);
 });

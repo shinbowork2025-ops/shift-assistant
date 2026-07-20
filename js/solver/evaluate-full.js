@@ -1,11 +1,8 @@
 import {
-  DEFAULT_BREAK_CONSTRAINTS,
   SOLVER_CONFIG_VERSION,
-  SLOTS_PER_DAY,
-  normalizeBreakConstraints,
   normalizeSolverWeights
 } from "./solver-config.js";
-import { estimatedBreakLoadProfile } from "./break-load-profile.js";
+import { evaluateEstimatedCoverageForDay } from "./coverage-evaluation.js";
 import { overtimeMinutes } from "./time-slots.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -67,25 +64,6 @@ function addViolation(target, layer, type, employee, days, amount, message) {
   });
 }
 
-function scopeKey(scope) {
-  const type = scope?.type ?? "total";
-  return type === "total" ? "total" : `${type}:${String(scope?.key ?? "")}`;
-}
-
-function employeeMatchesScope(employee, scope) {
-  switch (scope?.type ?? "total") {
-    case "total": return true;
-    case "employmentType": return employee.employmentType === scope.key;
-    case "department": return employee.department === scope.key;
-    case "qualification": return (employee.qualifications ?? []).includes(scope.key);
-    default: return false;
-  }
-}
-
-function scopeWeight(weights, scope) {
-  return weights.shortagePersonSlot[scope?.type ?? "total"] ?? weights.shortagePersonSlot.total;
-}
-
 function statutoryCycleStarts(plan, settings) {
   const first = dateAt(plan.periodStart, 0);
   const last = dateAt(plan.periodStart, plan.dayCount - 1);
@@ -134,8 +112,6 @@ export function evaluatePlanFull(plan, context) {
   const employees = asMap(context?.employees);
   const settings = context?.settings && typeof context.settings === "object" ? context.settings : {};
   const weights = normalizeSolverWeights(settings.weights);
-  const breakConstraints = normalizeBreakConstraints(settings.breakConstraints ?? DEFAULT_BREAK_CONSTRAINTS);
-  const requirements = Array.isArray(context?.requirements) ? context.requirements : [];
   const preferences = Array.isArray(context?.preferences) ? context.preferences : [];
   const employeeOrder = Array.isArray(plan?.employeeOrder) ? plan.employeeOrder : [];
   const employeeIndex = new Map(employeeOrder.map((employeeId, index) => [employeeId, index]));
@@ -328,37 +304,17 @@ export function evaluatePlanFull(plan, context) {
     lateDays.push(metrics.lateShiftDays);
   }
 
-  const profileCache = new Map();
   const estimatedShortageByScope = {};
-  for (const requirement of requirements) {
-    // 合計人数と属性別人数は別々の要件であり、同じ人物の欠けでも重複計上し得る。
-    // これは複数の独立した要件が同時に破られていることを表す意図的な設計である。
-    const key = scopeKey(requirement.scope);
-    const count = Math.max(0, Number(requirement.count) || 0);
-    const startSlot = Math.max(0, Math.min(SLOTS_PER_DAY, Math.floor(Number(requirement.startSlot) || 0)));
-    const endSlot = Math.max(startSlot, Math.min(SLOTS_PER_DAY, Math.floor(Number(requirement.endSlot) || 0)));
-    for (const dayValue of requirement.days ?? []) {
-      const day = Number(dayValue);
-      if (!Number.isInteger(day) || day < 0 || day >= plan.dayCount) continue;
-      for (let slot = startSlot; slot < endSlot; slot += 1) {
-        let rawStaff = 0;
-        let loadSum = 0;
-        const minute = slot * 15;
-        for (const employeeId of employeeOrder) {
-          const employee = employees.get(employeeId) ?? { id: employeeId };
-          if (!employeeMatchesScope(employee, requirement.scope)) continue;
-          const code = assignment(plan, employeeIndex.get(employeeId), day);
-          const shift = shiftTypes.get(code);
-          if (!shift || shift.isDayOff || minute < shift.startMinutes || minute >= shift.endMinutes) continue;
-          rawStaff += 1;
-          if (!profileCache.has(code)) profileCache.set(code, estimatedBreakLoadProfile(shift, breakConstraints));
-          loadSum += profileCache.get(code)[slot];
-        }
-        const shortage = Math.max(0, count - (rawStaff - loadSum));
-        if (shortage === 0) continue;
-        coveragePenalty += shortage * scopeWeight(weights, requirement.scope);
-        estimatedShortageByScope[key] = (estimatedShortageByScope[key] ?? 0) + shortage;
-      }
+  for (let day = 0; day < plan.dayCount; day += 1) {
+    const dayResult = evaluateEstimatedCoverageForDay(plan, day, {
+      ...context,
+      shiftTypes,
+      employees,
+      settings
+    }, weights);
+    coveragePenalty += dayResult.coveragePenalty;
+    for (const [key, shortage] of Object.entries(dayResult.estimatedShortageByScope)) {
+      estimatedShortageByScope[key] = (estimatedShortageByScope[key] ?? 0) + shortage;
     }
   }
   const estimatedShortagePersonSlots = estimatedShortageByScope.total ?? 0;
