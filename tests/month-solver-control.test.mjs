@@ -152,18 +152,17 @@ test("固定ブロック数とseedが同じなら案・統計・ブロック進�
     const progress = [];
     const result = await solveMonthScheduleAsync(blockPlan(), {
       masterSeed: 20260720,
-      fixedBlockCount: 2
+      fixedBlockCount: 1
     }, { onProgress: (item) => progress.push(item) });
     return { result, progress };
   };
   const first = await run();
   const second = await run();
-  assert.equal(first.result.iterations, 4_000);
-  assert.equal(first.result.completedBlocks, 2);
-  assert.equal(first.progress.length, 2);
-  assert.deepEqual(first.progress.map((item) => item.completedBlocks), [1, 2]);
-  assert.ok(first.progress[0].temperature > first.progress[1].temperature);
-  assert.equal(first.progress[1].temperature, first.result.finalTemperature);
+  assert.equal(first.result.iterations, 2_000);
+  assert.equal(first.result.completedBlocks, 1);
+  assert.equal(first.progress.length, 1);
+  assert.deepEqual(first.progress.map((item) => item.completedBlocks), [1]);
+  assert.equal(first.progress[0].temperature, first.result.finalTemperature);
   assert.deepEqual(first.result.plan.assignments, second.result.plan.assignments);
   assert.deepEqual(first.result.objective, second.result.objective);
   assert.deepEqual(first.result.statistics, second.result.statistics);

@@ -119,6 +119,7 @@ export function evaluateSolverDay(plan, day, typeMap = null) {
     day,
     shortagePeople,
     shortageSlots: evaluation.shortageSlotCount,
+    shortageBySlot: evaluation.perSlot.map((slot) => slot.shortagePeople),
     coveragePenalty: shortagePeople * 1000 + evaluation.shortageSlotCount,
     requirementMessages: evaluation.messages,
     breaksByEmployee: Object.fromEntries(

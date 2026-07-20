@@ -1,4 +1,3 @@
-import { generateBreaksForDate } from "./breaks.js";
 import { runWithHistory } from "./history.js";
 import { validateMonthSolverApplication } from "./month-solver-application.js";
 import { buildMonthSolverPlan, monthSolverChanges } from "./month-solver-plan.js";
@@ -7,12 +6,14 @@ import {
   getScheduleRevision,
   isShiftLocked,
   scheduleSave,
+  setEmployeeBreaksForDate,
   setShift,
   state
 } from "./model.js";
 import { refresh } from "./actions/view-actions.js";
 import { assertValidSolverBreakPolicies } from "./solver/shift-adapter.js";
 import { createSolverInputFingerprint } from "./month-solver-worker-protocol.js";
+import { setManualBreakLockInData } from "./manual-break-locks.js";
 
 export function createCurrentMonthSolverPlan(options = {}) {
   assertValidSolverBreakPolicies(state.shiftTypes);
@@ -63,6 +64,18 @@ export function applyMonthSolverResult(result) {
       throw new Error(`探索開始後に${change.employeeId}・${change.day}日の値が変更されています。`);
     }
   }
+  for (const change of result.breakChanges ?? []) {
+    const current = state.breaks?.[change.date]?.[change.employeeId] ?? [];
+    if (JSON.stringify(current) !== JSON.stringify(change.before ?? [])) {
+      throw new Error(`探索開始後に${change.employeeId}・${change.date}の休憩が変更されています。`);
+    }
+  }
+  for (const change of result.manualBreakLockChanges ?? []) {
+    const current = Boolean(state.manualBreakLocks?.[change.date]?.[change.employeeId]);
+    if (current !== Boolean(change.before)) {
+      throw new Error(`探索開始後に${change.employeeId}・${change.date}の休憩保護が変更されています。`);
+    }
+  }
 
   const applicationValidation = validateMonthSolverApplication(result);
   if (!applicationValidation.ok) {
@@ -79,6 +92,7 @@ export function applyMonthSolverResult(result) {
 
   const changedDates = new Set();
   let applied = 0;
+  let appliedBreaks = 0;
   let skippedLocked = 0;
 
   runWithHistory("月間ソルバーの案を適用", () => {
@@ -95,10 +109,33 @@ export function applyMonthSolverResult(result) {
       applied += 1;
       changedDates.add(dateKey(result.plan.monthValue, change.day));
     }
-    // 休憩配置は日全体で相互作用するため、変更日の全従業員分を再計算する。
-    for (const dateValue of changedDates) generateBreaksForDate(dateValue, null, { save: false });
-    if (applied > 0) scheduleSave();
+    for (const change of result.breakChanges ?? []) {
+      setEmployeeBreaksForDate(change.date, change.employeeId, cloneBreaks(change.after), { save: false });
+      appliedBreaks += 1;
+      changedDates.add(change.date);
+    }
+    for (const change of result.manualBreakLockChanges ?? []) {
+      state.manualBreakLocks ??= {};
+      setManualBreakLockInData(
+        state.manualBreakLocks,
+        change.date,
+        change.employeeId,
+        Boolean(change.after)
+      );
+    }
+    if (applied > 0 || appliedBreaks > 0 || (result.manualBreakLockChanges?.length ?? 0) > 0) scheduleSave();
   });
   refresh();
-  return { applied, skippedLocked, changedDates: changedDates.size, changes, applicationValidation };
+  return {
+    applied,
+    appliedBreaks,
+    skippedLocked,
+    changedDates: changedDates.size,
+    changes,
+    applicationValidation
+  };
+}
+
+function cloneBreaks(value) {
+  return structuredClone(Array.isArray(value) ? value : []);
 }

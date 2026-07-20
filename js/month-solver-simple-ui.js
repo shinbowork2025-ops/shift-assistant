@@ -37,7 +37,8 @@ function syncApplyGate(dialog) {
     const hard = metricAfter(result, "勤務間隔・連勤違反");
     if (shortage !== null && shortage > 0) reasons.push(`必要人数不足 ${shortage}人枠`);
     if (hard !== null && hard > 0) reasons.push(`勤務間隔・連勤違反 ${hard}件`);
-    const blocked = structuralBlocked || reasons.length > 0;
+    const statutoryConfirmation = result.querySelector('input[data-statutory-confirm="true"]');
+    const blocked = structuralBlocked || Boolean(statutoryConfirmation && !statutoryConfirmation.checked);
     apply.hidden = blocked;
     let note = result.querySelector(".month-solver-apply-gate");
     if (blocked) {
@@ -46,9 +47,20 @@ function syncApplyGate(dialog) {
         note.className = "month-solver-apply-gate";
         result.append(note);
       }
-      const detail = reasons.length ? reasons.join(" / ") : "固定セルまたは使用可能なシフト区分を確認してください。";
-      const message = `この案は適用できません。${detail}`;
+      const detail = statutoryConfirmation && !statutoryConfirmation.checked
+        ? "設定された法定ルールの違反を確認し、確認欄をチェックしてください。"
+        : reasons.length ? reasons.join(" / ") : "固定セルまたは使用可能なシフト区分を確認してください。";
+      const message = statutoryConfirmation && !statutoryConfirmation.checked
+        ? detail
+        : `この案は適用できません。${detail}`;
       if (note.textContent !== message) note.textContent = message;
+    } else if (reasons.length > 0) {
+      if (!note) {
+        note = document.createElement("p");
+        note.className = "month-solver-apply-gate";
+        result.append(note);
+      }
+      note.textContent = `要修正: ${reasons.join(" / ")}。内容を確認してから適用してください。`;
     } else {
       note?.remove();
     }

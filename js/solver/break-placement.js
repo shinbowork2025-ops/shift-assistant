@@ -167,6 +167,8 @@ function candidateTargetDeviation(candidate) {
 function evaluateState(coverage, requirements, selected) {
   let totalShortage = 0;
   let attributeShortage = 0;
+  const totalShortageBySlot = new Float64Array(SLOTS_PER_DAY);
+  const attributeShortageBySlot = new Float64Array(SLOTS_PER_DAY);
   const shortageByScope = {};
   for (const requirement of requirements) {
     const [raw, load] = scopeArrays(coverage, requirement.scope);
@@ -175,7 +177,10 @@ function evaluateState(coverage, requirements, selected) {
     const required = Math.max(0, Number(requirement.count) || 0);
     let shortage = 0;
     for (let slot = startSlot; slot < endSlot; slot += 1) {
-      shortage += Math.max(0, required - (raw[slot] - load[slot]));
+      const slotShortage = Math.max(0, required - (raw[slot] - load[slot]));
+      shortage += slotShortage;
+      if (scopeKey(requirement.scope) === "total") totalShortageBySlot[slot] += slotShortage;
+      else attributeShortageBySlot[slot] += slotShortage;
     }
     const key = scopeKey(requirement.scope);
     shortageByScope[key] = (shortageByScope[key] ?? 0) + shortage;
@@ -211,6 +216,8 @@ function evaluateState(coverage, requirements, selected) {
     totalShortage,
     attributeShortage,
     shortageByScope,
+    totalShortageBySlot,
+    attributeShortageBySlot,
     minimumCoverage
   };
 }
@@ -420,6 +427,8 @@ export function placeBreaksForDay(input = {}) {
     unplacedSegments,
     finalCoverage: finalCoverage(coverage),
     finalShortagePersonSlots: finalScore.totalShortage,
+    finalShortageBySlot: finalScore.totalShortageBySlot,
+    finalAttributeShortageBySlot: finalScore.attributeShortageBySlot,
     finalShortageByScope: finalScore.shortageByScope,
     statistics: {
       seed: input.seed ?? null,

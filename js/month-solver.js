@@ -23,6 +23,14 @@ import {
   statutoryVector,
   temperatureFromPositiveDeltas
 } from "./month-solver-control.js";
+import {
+  considerCandidate,
+  createCandidateArchives
+} from "./month-solver-archive.js";
+import {
+  compareFinalizedCandidates,
+  finalizeMonthSolverCandidates
+} from "./month-solver-finalize.js";
 
 function clone(value) {
   return structuredClone(value);
@@ -87,6 +95,12 @@ function createSearch(planInput, config = {}) {
     minimumTemperature / initialTemperature,
     1 / Math.max(1, execution.plannedBlocks)
   );
+  const archives = createCandidateArchives(config);
+  considerCandidate(archives, {
+    plan,
+    objective: context.objective,
+    dayMetrics: context.dayMetrics
+  });
   return {
     plan,
     context,
@@ -100,6 +114,7 @@ function createSearch(planInput, config = {}) {
     minimumTemperature,
     coolingRate,
     temperatureScaleByStrategy: normalizeTemperatureScales(config.temperatureScaleByStrategy),
+    archives,
     initialObjective: clone(context.objective),
     bestPlan: clone(plan),
     bestObjective: clone(context.objective),
@@ -147,6 +162,12 @@ function step(search) {
   const evaluation = evaluateMonthSolverChanges(search.context, changes);
   if (!evaluation) return;
   search.proposed += 1;
+  considerCandidate(search.archives, {
+    plan: search.plan,
+    changes: evaluation.changes,
+    objective: evaluation.objective,
+    dayMetrics: evaluation.dayMetrics
+  });
   const decision = decideCandidateAcceptance({
     currentObjective: search.context.objective,
     candidateObjective: evaluation.objective,
@@ -201,11 +222,39 @@ function shortageReports(plan) {
 }
 
 function result(search, stopped, timedOut = false) {
-  const validation = validateMonthSolverPlan(search.bestPlan);
-  return {
+  const finalization = finalizeMonthSolverCandidates(search.archives, { masterSeed: search.seed });
+  const selected = finalization.best ?? finalization.finalized[0] ?? {
     plan: search.bestPlan,
-    initialObjective: search.initialObjective,
     objective: search.bestObjective,
+    classification: "invalid",
+    placementOk: false,
+    finalBreaks: clone(search.bestPlan.breaks ?? {}),
+    finalShortagePersonSlots: search.bestObjective.shortagePeople,
+    finalAttributeShortagePersonSlots: 0,
+    finalShortageByScope: { total: search.bestObjective.shortagePeople },
+    estimateMetrics: null,
+    shortageReports: shortageReports(search.bestPlan),
+    unplacedSegments: [],
+    placementStatistics: {}
+  };
+  const validation = validateMonthSolverPlan(selected.plan);
+  if (!selected.placementOk) {
+    validation.ok = false;
+    validation.issues.push("休憩を完全配置できないため、この案は適用できません。");
+  }
+  return {
+    plan: selected.plan,
+    initialObjective: search.initialObjective,
+    objective: selected.objective,
+    classification: selected.classification,
+    placementOk: selected.placementOk,
+    finalBreaks: selected.finalBreaks,
+    finalShortagePersonSlots: selected.finalShortagePersonSlots,
+    finalAttributeShortagePersonSlots: selected.finalAttributeShortagePersonSlots,
+    changedCellCount: selected.changedCellCount ?? 0,
+    finalShortageByScope: selected.finalShortageByScope,
+    estimateMetrics: selected.estimateMetrics,
+    unplacedSegments: selected.unplacedSegments,
     iterations: search.performed,
     completedBlocks: search.completedBlocks,
     plannedBlocks: search.plannedBlocks,
@@ -225,11 +274,20 @@ function result(search, stopped, timedOut = false) {
       generatedCandidates: search.generated,
       validCandidates: search.proposed,
       acceptedCandidates: search.accepted,
-      statutoryRatchetRejections: search.statutoryRatchetRejections
+      statutoryRatchetRejections: search.statutoryRatchetRejections,
+      ...finalization.statistics,
+      placement: selected.placementStatistics
     },
-    shortageReports: shortageReports(search.bestPlan),
+    shortageReports: selected.shortageReports,
     validation
   };
+}
+
+function compareCompletedResults(first, second) {
+  return compareFinalizedCandidates(
+    { ...first, signature: "first" },
+    { ...second, signature: "second" }
+  );
 }
 
 function betterObjective(first, second) {
@@ -367,7 +425,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
     totalProposed += candidate.proposed;
     totalAccepted += candidate.accepted;
     totalRatchetRejections += candidate.statistics?.statutoryRatchetRejections ?? 0;
-    if (!bestResult || compareBestObjectives(candidate.objective, bestResult.objective) < 0) {
+    if (!bestResult || compareCompletedResults(candidate, bestResult) < 0) {
       bestResult = candidate;
       bestRestart = restartNumber;
     }
