@@ -1,0 +1,4 @@
+{
+  "base": "board-a.json",
+  "assignmentChanges": [{ "employeeId": "E3", "day": 6, "shiftCode": "S02" }]
+}

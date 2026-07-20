@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          node --test tests/*.test.mjs 2>&1 | tee unit-test.log
+          node --test tests/*.test.mjs tests/solver/*.test.js 2>&1 | tee unit-test.log
           exit ${PIPESTATUS[0]}
       - name: Upload unit test log
         if: always()

@@ -66,6 +66,13 @@ test("精密最適化は制限時間内の複数探索から最良案を返す",
   assert.equal(result.optimalityGuaranteed, false);
   assert.ok(result.restarts >= 1);
   assert.ok(result.iterations > 0);
+  const strategies = result.statistics.strategies;
+  assert.equal(
+    strategies.smallNeighbor.selections + strategies.repair.selections + strategies.lns.selections,
+    result.iterations
+  );
+  assert.ok(Object.values(strategies.lns.destroyMethods).reduce((sum, value) => sum + value, 0)
+    <= strategies.lns.attempts);
   assert.ok(progress.some((item) => item.mode === "precision"));
   assert.ok(compareSolverObjectives(result.objective, result.initialObjective) <= 0);
   assert.equal(result.validation.ok, true);

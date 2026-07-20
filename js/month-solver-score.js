@@ -1,10 +1,13 @@
-import { breaksFitShiftWindow, plannedBreakTemplates } from "./break-rules.js";
-import { scheduleBreaks } from "./break-scheduler.js";
+import { breaksFitShiftWindow } from "./break-rules.js";
 import { activeRequirementsForWeekday, evaluateCoverage } from "./coverage-requirements.js";
 import { dateKey, getDayInfo, timeToMinutes } from "./date-time.js";
 import { EMPLOYMENT_TYPES, normalizeEmploymentType } from "./employment-types.js";
 import { isManualBreakLockedInData } from "./manual-break-locks.js";
-import { overtimeMinutesForShift, shiftDurationMinutes } from "./shift-metrics.js";
+import { overtimeMinutesForShift } from "./shift-metrics.js";
+import { aggregateEstimatedBreakLoad } from "./solver/break-load-profile.js";
+import { enumerateBreakPlacementCandidates } from "./solver/break-placement-candidates.js";
+import { normalizeShiftBreakPolicy, toSolverShiftType } from "./solver/shift-adapter.js";
+import { DEFAULT_BREAK_CONSTRAINTS } from "./solver/solver-config.js";
 import { normalizePreferredShiftCode } from "./work-shift-preferences.js";
 import { restGapMinutes } from "./work-shift-planner-core.js";
 
@@ -45,43 +48,80 @@ function slotIsInside(start, end, slot) {
   return slot >= start && slot < end;
 }
 
-function breakCoversSlot(items, slot) {
-  return items.some((item) => slotIsInside(item.startMinute, item.endMinute, slot));
-}
-
 function coverageMap(names) {
   return Object.fromEntries([...new Set(names.filter(Boolean))].map((name) => [name, Array(SLOT_COUNT).fill(0)]));
 }
 
-export function evaluateSolverDay(plan, day, typeMap = null) {
+function solverShiftMap(plan) {
+  return new Map((plan.shiftTypes ?? []).map((shiftType) => {
+    const normalized = normalizeShiftBreakPolicy(shiftType);
+    return [shiftType.code, toSolverShiftType({
+      ...shiftType,
+      breakPolicy: normalized.breakPolicy
+    })];
+  }));
+}
+
+function subtractLoad(coverage, load) {
+  return coverage.map((value, index) => value - Number(load?.[index] ?? 0));
+}
+
+function subtractGroupedLoad(coverage, load) {
+  return Object.fromEntries(Object.entries(coverage).map(([key, values]) => [
+    key,
+    subtractLoad(values, load?.get?.(key))
+  ]));
+}
+
+export function evaluateSolverDay(plan, day, typeMap = null, normalizedTypeMap = null) {
   const shiftTypesByCode = typeMap ?? new Map(plan.shiftTypes.map((shiftType) => [shiftType.code, shiftType]));
+  const solverShiftTypesByCode = normalizedTypeMap ?? solverShiftMap(plan);
   const dateValue = dateKey(plan.monthValue, day);
   const assignments = [];
+  let structuralInvalid = false;
   for (const employee of plan.employees) {
     const code = assignmentCode(plan, employee.id, day);
     const shiftType = shiftTypesByCode.get(code) ?? null;
-    if (!shiftType?.isWork) continue;
+    const existingBreaks = plan.breaks?.[dateValue]?.[employee.id] ?? [];
+    const breakLocked = existingBreaks.length > 0
+      && isManualBreakLockedInData(plan.manualBreakLocks, dateValue, employee.id);
+    if (!shiftType?.isWork) {
+      if (breakLocked) structuralInvalid = true;
+      continue;
+    }
     const shiftStart = timeToMinutes(shiftType.start);
     const shiftEnd = timeToMinutes(shiftType.end);
     if (shiftStart === null || shiftEnd === null || shiftEnd <= shiftStart) continue;
-    const existingBreaks = plan.breaks?.[dateValue]?.[employee.id] ?? [];
-    const protectedBreak = existingBreaks.length > 0
-      && isManualBreakLockedInData(plan.manualBreakLocks, dateValue, employee.id)
-      && breaksFitShiftWindow(shiftType, existingBreaks);
+    const protectedBreak = breakLocked && breaksFitShiftWindow(shiftType, existingBreaks);
+    const solverShiftType = solverShiftTypesByCode.get(code);
+    const fixedBreaks = protectedBreak ? minuteIntervals(existingBreaks) : [];
+    if (breakLocked && (!protectedBreak || enumerateBreakPlacementCandidates(
+      solverShiftType,
+      solverShiftType?.breakPolicy,
+      fixedBreaks,
+      DEFAULT_BREAK_CONSTRAINTS
+    ).length === 0)) {
+      structuralInvalid = true;
+    }
     assignments.push({
       id: employee.id,
+      employee: {
+        ...employee,
+        employmentType: normalizeEmploymentType(employee.employmentType)
+      },
       employmentType: normalizeEmploymentType(employee.employmentType),
       department: employee.department ?? "",
       qualifications: Array.isArray(employee.qualifications) ? employee.qualifications : [],
       shiftStart,
       shiftEnd,
-      templates: protectedBreak ? [] : plannedBreakTemplates(shiftDurationMinutes(shiftType)),
-      movable: !protectedBreak,
-      existingBreaks: protectedBreak ? minuteIntervals(existingBreaks) : []
+      shiftType: solverShiftType,
+      fixedBreaks
     });
   }
 
-  const scheduled = scheduleBreaks(assignments);
+  const breakLoad = aggregateEstimatedBreakLoad(assignments, {
+    breakConstraints: DEFAULT_BREAK_CONSTRAINTS
+  });
   const slots = Array.from({ length: SLOT_COUNT }, (_, index) => index * SLOT_MINUTES);
   const coverage = Array(SLOT_COUNT).fill(0);
   const coverageByType = Object.fromEntries(EMPLOYMENT_TYPES.map((type) => [type.code, Array(SLOT_COUNT).fill(0)]));
@@ -91,12 +131,9 @@ export function evaluateSolverDay(plan, day, typeMap = null) {
   const coverageByQualification = coverageMap(activeRequirements.map((item) => item.requiredQualification));
 
   for (const assignment of assignments) {
-    const breaks = assignment.movable
-      ? scheduled.get(assignment.id) ?? []
-      : assignment.existingBreaks;
     for (let index = 0; index < slots.length; index += 1) {
       const slot = slots[index];
-      if (!slotIsInside(assignment.shiftStart, assignment.shiftEnd, slot) || breakCoversSlot(breaks, slot)) continue;
+      if (!slotIsInside(assignment.shiftStart, assignment.shiftEnd, slot)) continue;
       coverage[index] += 1;
       coverageByType[assignment.employmentType][index] += 1;
       if (coverageByDepartment[assignment.department]) coverageByDepartment[assignment.department][index] += 1;
@@ -109,26 +146,24 @@ export function evaluateSolverDay(plan, day, typeMap = null) {
   const evaluation = evaluateCoverage({
     activeRequirements,
     slots,
-    coverage,
-    coverageByType,
-    coverageByDepartment,
-    coverageByQualification
+    coverage: subtractLoad(coverage, breakLoad.total),
+    coverageByType: subtractGroupedLoad(coverageByType, breakLoad.byEmploymentType),
+    coverageByDepartment: subtractGroupedLoad(coverageByDepartment, breakLoad.byDepartment),
+    coverageByQualification: subtractGroupedLoad(coverageByQualification, breakLoad.byQualification)
   });
   const shortagePeople = evaluation.perSlot.reduce((sum, slot) => sum + slot.shortagePeople, 0);
   return {
     day,
     shortagePeople,
     shortageSlots: evaluation.shortageSlotCount,
+    shortageBySlot: evaluation.perSlot.map((slot) => slot.shortagePeople),
     coveragePenalty: shortagePeople * 1000 + evaluation.shortageSlotCount,
     requirementMessages: evaluation.messages,
-    breaksByEmployee: Object.fromEntries(
-      assignments.map((assignment) => {
-        const items = assignment.movable
-          ? scheduled.get(assignment.id) ?? []
-          : assignment.existingBreaks;
-        return [assignment.id, items.map((item) => ({ ...item }))];
-      })
-    )
+    structuralInvalid,
+    breaksByEmployee: Object.fromEntries(assignments.map((assignment) => [
+      assignment.id,
+      assignment.fixedBreaks.map((item) => ({ ...item }))
+    ]))
   };
 }
 
@@ -162,6 +197,62 @@ function leadingWorkCodes(codes, typeMap) {
     result.push(code);
   }
   return result;
+}
+
+const DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
+
+function monthKey(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function boundaryAssignmentForDate(plan, employeeId, date) {
+  const boundary = plan.boundaryAssignments?.[employeeId] ?? {};
+  const key = monthKey(date);
+  if (key === boundary.previousMonth) {
+    const code = boundary.previousKnown ? boundary.previousCodes?.[date.getUTCDate() - 1] : undefined;
+    return code || undefined;
+  }
+  if (key === boundary.nextMonth) {
+    const code = boundary.nextKnown ? boundary.nextCodes?.[date.getUTCDate() - 1] : undefined;
+    return code || undefined;
+  }
+  return undefined;
+}
+
+function weeklyStatutoryHolidayViolations(plan, employeeId, typeMap) {
+  if (!plan.publicHolidayCode || !plan.monthValue || plan.daysInMonth <= 0) {
+    return { count: 0, amount: 0, unverifiedCycles: 0 };
+  }
+  const first = new Date(`${plan.monthValue}-01T00:00:00.000Z`);
+  const last = new Date(first.getTime() + (plan.daysInMonth - 1) * DAY_MILLISECONDS);
+  const daysBackToMonday = (first.getUTCDay() + 6) % 7;
+  let cycleStart = new Date(first.getTime() - daysBackToMonday * DAY_MILLISECONDS);
+  let count = 0;
+  let amount = 0;
+  let unverifiedCycles = 0;
+  while (cycleStart <= last) {
+    let statutoryDaysOff = 0;
+    let verified = true;
+    for (let offset = 0; offset < 7; offset += 1) {
+      const date = new Date(cycleStart.getTime() + offset * DAY_MILLISECONDS);
+      let code;
+      if (monthKey(date) === plan.monthValue) {
+        code = assignmentCode(plan, employeeId, date.getUTCDate());
+      } else {
+        code = boundaryAssignmentForDate(plan, employeeId, date);
+        if (code === undefined || !typeMap.has(code)) verified = false;
+      }
+      if (code === plan.publicHolidayCode) statutoryDaysOff += 1;
+    }
+    if (!verified) {
+      unverifiedCycles += 1;
+    } else if (statutoryDaysOff < 1) {
+      count += 1;
+      amount += 1 - statutoryDaysOff;
+    }
+    cycleStart = new Date(cycleStart.getTime() + 7 * DAY_MILLISECONDS);
+  }
+  return { count, amount, unverifiedCycles };
 }
 
 export function evaluateSolverEmployee(plan, employee, typeMap = null) {
@@ -222,6 +313,11 @@ export function evaluateSolverEmployee(plan, employee, typeMap = null) {
   const maxAllowed = Number(plan.maxConsecutiveByEmployee?.[employee.id] ?? 6) || 6;
   const consecutiveExcess = Math.max(0, maxConsecutive - maxAllowed);
   const hardViolations = shortRestCount + (consecutiveExcess * consecutiveExcess);
+  const statutory = weeklyStatutoryHolidayViolations(plan, employee.id, shiftTypesByCode);
+  const statutoryViolationCount = statutory.count;
+  const statutoryViolationAmount = statutory.amount;
+  const internalViolationCount = shortRestCount + (consecutiveExcess > 0 ? 1 : 0);
+  const internalViolationAmount = shortRestCount + consecutiveExcess;
   const fixedOvertime = Math.max(0, Number(employee.fixedOvertimeMinutes) || 0);
   const overtimeExcess = Math.max(0, overtimeMinutes - fixedOvertime);
   const targetDaysOff = Number(plan.targetDaysOffByEmployee?.[employee.id] ?? 0) || 0;
@@ -245,7 +341,12 @@ export function evaluateSolverEmployee(plan, employee, typeMap = null) {
     maxAllowed,
     boundaryPreviousKnown: Boolean(boundary.previousKnown),
     boundaryNextKnown: Boolean(boundary.nextKnown),
+    statutoryUnverifiedCycles: statutory.unverifiedCycles,
     hardViolations,
+    statutoryViolationCount,
+    statutoryViolationAmount,
+    internalViolationCount,
+    internalViolationAmount,
     shiftConcentration,
     preferencePenalty
   };
@@ -259,6 +360,16 @@ function composeObjective(dayMetrics, employeeMetrics, selectedEmployeeIds) {
   const shortageSlots = days.reduce((sum, metric) => sum + metric.shortageSlots, 0);
   const coverage = shortagePeople * 1000 + shortageSlots;
   const hard = employees.reduce((sum, metric) => sum + metric.hardViolations, 0);
+  const statutoryViolationCount = employees
+    .reduce((sum, metric) => sum + metric.statutoryViolationCount, 0);
+  const statutoryViolationAmount = employees
+    .reduce((sum, metric) => sum + metric.statutoryViolationAmount, 0);
+  const statutoryUnverifiedCycles = employees
+    .reduce((sum, metric) => sum + (Number(metric.statutoryUnverifiedCycles) || 0), 0);
+  const internalViolationCount = employees
+    .reduce((sum, metric) => sum + metric.internalViolationCount, 0);
+  const internalViolationAmount = employees
+    .reduce((sum, metric) => sum + metric.internalViolationAmount, 0);
   const overtime = employees.reduce((sum, metric) => sum + metric.overtimeExcess, 0);
   const daysOffFairness = employees.reduce((sum, metric) => sum + metric.daysOffDeviation ** 2, 0);
   const fairness = daysOffFairness * 25
@@ -273,10 +384,32 @@ function composeObjective(dayMetrics, employeeMetrics, selectedEmployeeIds) {
     + overtime * 10
     + fairness
     + preference * 0.1;
-  return { vector, scalar, coverage, shortagePeople, shortageSlots, hard, overtime, fairness, preference };
+  return {
+    vector,
+    scalar,
+    coverage,
+    shortagePeople,
+    shortageSlots,
+    hard,
+    statutoryViolationCount,
+    statutoryViolationAmount,
+    statutoryUnverifiedCycles,
+    internalViolationCount,
+    internalViolationAmount,
+    overtime,
+    fairness,
+    preference
+  };
 }
 
 export function compareSolverObjectives(a, b) {
+  const statutoryKeys = ["statutoryViolationCount", "statutoryViolationAmount"];
+  for (const key of statutoryKeys) {
+    const left = Math.max(0, Number(a?.[key]) || 0);
+    const right = Math.max(0, Number(b?.[key]) || 0);
+    if (left < right) return -1;
+    if (left > right) return 1;
+  }
   for (let index = 0; index < a.vector.length; index += 1) {
     if (a.vector[index] < b.vector[index]) return -1;
     if (a.vector[index] > b.vector[index]) return 1;
@@ -286,13 +419,21 @@ export function compareSolverObjectives(a, b) {
 
 export function createMonthSolverScoreContext(plan) {
   const typeMap = new Map(plan.shiftTypes.map((shiftType) => [shiftType.code, shiftType]));
+  const normalizedTypeMap = solverShiftMap(plan);
   const dayMetrics = new Map();
-  for (let day = 1; day <= plan.daysInMonth; day += 1) dayMetrics.set(day, evaluateSolverDay(plan, day, typeMap));
+  for (let day = 1; day <= plan.daysInMonth; day += 1) {
+    const metric = evaluateSolverDay(plan, day, typeMap, normalizedTypeMap);
+    if (metric.structuralInvalid) {
+      throw new Error(`手動固定休憩と${day}日のシフト割当が矛盾しています。`);
+    }
+    dayMetrics.set(day, metric);
+  }
   const employeeMetrics = new Map();
   for (const employee of plan.employees) employeeMetrics.set(employee.id, evaluateSolverEmployee(plan, employee, typeMap));
   return {
     plan,
     typeMap,
+    normalizedTypeMap,
     dayMetrics,
     employeeMetrics,
     objective: composeObjective(dayMetrics, employeeMetrics, plan.selectedEmployeeIds)
@@ -319,7 +460,19 @@ export function evaluateMonthSolverChanges(context, changes) {
   const affectedEmployees = new Set(normalized.map((change) => change.employeeId));
   const dayMetrics = new Map(context.dayMetrics);
   const employeeMetrics = new Map(context.employeeMetrics);
-  for (const day of affectedDays) dayMetrics.set(day, evaluateSolverDay(context.plan, day, context.typeMap));
+  for (const day of affectedDays) {
+    const metric = evaluateSolverDay(
+      context.plan,
+      day,
+      context.typeMap,
+      context.normalizedTypeMap
+    );
+    if (metric.structuralInvalid) {
+      for (const change of normalized) context.plan.assignments[change.employeeId][change.day] = change.before;
+      return null;
+    }
+    dayMetrics.set(day, metric);
+  }
   for (const employeeId of affectedEmployees) {
     const employee = context.plan.employees.find((item) => item.id === employeeId);
     employeeMetrics.set(employeeId, evaluateSolverEmployee(context.plan, employee, context.typeMap));

@@ -51,10 +51,19 @@ export function validateMonthSolverApplication(result) {
   if (!constraintsOk) {
     issues.push(`勤務間隔・連続勤務の違反が${objective.hard}件残っています。`);
   }
+  const statutoryUnverifiedCycles = Math.max(0, Number(objective.statutoryUnverifiedCycles) || 0);
+  if (statutoryUnverifiedCycles > 0) {
+    issues.push(`月境界の勤務情報が不足しているため、法定休日${statutoryUnverifiedCycles}従業員・周期は未確認です。`);
+  }
 
-  const coverageOk = Number(objective.shortagePeople) === 0 && Number(objective.shortageSlots) === 0;
+  const shortagePeople = Number(result?.finalShortagePersonSlots ?? objective.shortagePeople) || 0;
+  const attributeShortage = Number(result?.finalAttributeShortagePersonSlots) || 0;
+  const shortageSlots = result?.shortageReports
+    ? result.shortageReports.reduce((sum, report) => sum + (Number(report.shortageSlots) || 0), 0)
+    : Number(objective.shortageSlots) || 0;
+  const coverageOk = shortagePeople === 0 && attributeShortage === 0;
   if (!coverageOk) {
-    issues.push(`必要人数不足が${objective.shortagePeople}人枠、${objective.shortageSlots}時間帯残っています。`);
+    issues.push(`休憩配置後の必要人数不足が${shortagePeople}人枠、${shortageSlots}時間帯残っています。`);
   }
 
   const structuralOk = Boolean(structural.ok);
@@ -63,11 +72,15 @@ export function validateMonthSolverApplication(result) {
   }
 
   const daysOffOk = daysOffIssues.length === 0;
+  const placementOk = result?.placementOk !== false && result?.classification !== "invalid";
+  if (!placementOk) issues.push("休憩を完全配置できないため、この案は適用できません。");
   const normalizedIssues = uniqueMessages(issues);
   return {
-    ok: structuralOk && daysOffOk && constraintsOk && coverageOk,
+    // 必要人数不足と社内規定違反は要修正案として適用可能。構造不正と休憩配置失敗だけを遮断する。
+    ok: structuralOk && daysOffOk && placementOk,
     structuralOk,
     daysOffOk,
+    placementOk,
     constraintsOk,
     coverageOk,
     objective,

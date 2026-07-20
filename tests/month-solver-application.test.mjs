@@ -65,6 +65,11 @@ test("休日数・勤務制約・必要人数を満たす案だけ適用可能�
     objective: { hard: 0, shortagePeople: 2, shortageSlots: 3 }
   });
   assert.equal(validateMonthSolverApplication(shortage).coverageOk, false);
+  assert.equal(validateMonthSolverApplication(shortage).ok, true);
+
+  const placementFailure = applicationResult({ placementOk: false, classification: "invalid" });
+  assert.equal(validateMonthSolverApplication(placementFailure).ok, false);
+  assert.equal(validateMonthSolverApplication(placementFailure).placementOk, false);
 });
 
 test("月間ソルバーの近傍生成は従業員ごとの休日数を変えない", () => {

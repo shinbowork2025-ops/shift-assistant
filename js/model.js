@@ -92,7 +92,12 @@ let saveInFlight = null;
 let saveQueued = false;
 let savePending = false;
 let changeRevision = 0;
+let scheduleRevision = 0;
 let statusHandler = () => {};
+
+export function getScheduleRevision() {
+  return scheduleRevision;
+}
 
 export function setStatusHandler(handler) {
   statusHandler = handler;
@@ -153,6 +158,7 @@ export function getApplicationBackup() {
 
 async function persistApplicationStateNow() {
   changeRevision += 1;
+  scheduleRevision += 1;
   await saveNow();
 }
 
@@ -349,6 +355,7 @@ export function daySummary(day) {
 
 export function scheduleSave() {
   state.updatedAt = new Date().toISOString();
+  scheduleRevision += 1;
   requestSave();
 }
 
