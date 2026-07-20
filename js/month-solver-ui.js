@@ -1,6 +1,8 @@
-import { monthDisplayName, state } from "./model.js";
+import { getScheduleRevision, monthDisplayName, state } from "./model.js";
 import { createCurrentMonthSolverPlan, applyMonthSolverResult } from "./month-solver-actions.js";
 import { validateMonthSolverApplication } from "./month-solver-application.js";
+import { EPOCH_ITERATIONS } from "./month-solver-control.js";
+import { createSolverInputFingerprint } from "./month-solver-worker-protocol.js";
 
 const PRECISION_TIME_LIMIT_MS = 3 * 60 * 1000;
 const PRECISION_ITERATIONS_PER_RESTART = 12000;
@@ -227,6 +229,8 @@ function startSearch(alternative) {
     const options = searchOptions();
     const precision = options.mode === "precision";
     const plan = createCurrentMonthSolverPlan(options);
+    const scheduleRevision = getScheduleRevision();
+    const inputFingerprint = createSolverInputFingerprint(plan);
     worker = new Worker(new URL("./month-solver-worker.js", import.meta.url), { type: "module" });
     ui.dialog.start.hidden = true;
     ui.dialog.stop.hidden = false;
@@ -248,15 +252,19 @@ function startSearch(alternative) {
     worker.onerror = (event) => showError(event.message || "月間ソルバーでエラーが発生しました。");
     worker.postMessage({
       type: "start",
+      scheduleRevision,
+      inputFingerprint,
+      planSnapshot: plan,
+      masterSeed: options.seed,
       mode: options.mode,
-      plan,
-      config: precision
+      timeBudgetMs: precision ? PRECISION_TIME_LIMIT_MS : undefined,
+      fixedBlockCount: precision ? undefined : Math.max(1, Math.ceil(options.iterations / EPOCH_ITERATIONS)),
+      solverConfig: precision
         ? {
-            seed: options.seed,
-            timeLimitMs: PRECISION_TIME_LIMIT_MS,
+            mode: "precision",
             iterationsPerRestart: PRECISION_ITERATIONS_PER_RESTART
           }
-        : { seed: options.seed, iterations: options.iterations }
+        : { mode: "fast" }
     });
   } catch (error) {
     showError(error.message);
@@ -276,7 +284,7 @@ function objectiveText(objective) {
 
 function handleWorkerMessage(message) {
   if (message.type === "progress") {
-    const progress = message.progress;
+    const progress = message.progress ?? message;
     if (progress.mode === "precision") {
       ui.dialog.progress.value = progress.timeLimitMs
         ? Math.min(1, progress.elapsedMs / progress.timeLimitMs)
@@ -292,7 +300,20 @@ function handleWorkerMessage(message) {
     showError(message.message);
     return;
   }
-  if (message.type === "result") showResult(message.result);
+  if (message.type === "result") {
+    showResult({
+      ...message.result,
+      scheduleRevision: message.scheduleRevision,
+      inputFingerprint: message.inputFingerprint,
+      shiftChanges: message.shiftChanges,
+      breakChanges: message.breakChanges,
+      manualBreakLockChanges: message.manualBreakLockChanges,
+      resultSummary: message.resultSummary,
+      estimateMetrics: message.estimateMetrics,
+      statistics: message.statistics,
+      solverConfigSnapshot: message.solverConfigSnapshot
+    });
+  }
 }
 
 function showError(message) {
