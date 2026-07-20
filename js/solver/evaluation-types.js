@@ -31,6 +31,16 @@
  */
 
 /**
+ * @typedef {Object} IncrementalEvaluationContext
+ * @property {function(Object[]): EvaluationResult} applyChanges
+ * @property {EvaluationResult} result
+ * @property {Plan} plan
+ * @property {Map<string, EvaluationResult>} employeeMetrics
+ * @property {Map<number, Object>} dayMetrics
+ * @property {{employeeIds:string[], days:number[]}} lastUpdate
+ */
+
+/**
  * @typedef {Object} ShiftType
  * @property {string} code
  * @property {string} name

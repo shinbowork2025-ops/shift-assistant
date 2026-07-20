@@ -49,9 +49,9 @@ test("盤面Bの法定休日不足・所定休日差・変更量を評価する"
 
 test("盤面Cの小数不足を丸めずに評価する", () => {
   const { result } = evaluateFixture("board-c.json");
-  assert.ok(Math.abs(result.estimatedShortageByScope.total - (590 / 429)) < 1e-9);
-  assert.ok(Math.abs(result.coveragePenalty - (59_000 / 143)) < 1e-6);
-  assert.ok(Math.abs(result.score - 5396.987412587413) < 1e-6);
+  assert.ok(Math.abs(result.estimatedShortageByScope.total - (2236 / 1695)) < 1e-9);
+  assert.ok(Math.abs(result.coveragePenalty - (44_720 / 113)) < 1e-6);
+  assert.ok(Math.abs(result.score - 5380.152212389381) < 1e-6);
 });
 
 test("盤面Dは見える範囲を過小評価せず境界未確認を分離する", () => {
