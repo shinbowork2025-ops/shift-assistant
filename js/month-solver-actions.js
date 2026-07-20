@@ -4,8 +4,10 @@ import { validateMonthSolverApplication } from "./month-solver-application.js";
 import { buildMonthSolverPlan, monthSolverChanges } from "./month-solver-plan.js";
 import { dateKey, isShiftLocked, scheduleSave, setShift, state } from "./model.js";
 import { refresh } from "./actions/view-actions.js";
+import { assertValidSolverBreakPolicies } from "./solver/shift-adapter.js";
 
 export function createCurrentMonthSolverPlan(options = {}) {
+  assertValidSolverBreakPolicies(state.shiftTypes);
   return buildMonthSolverPlan({
     monthValue: state.selectedMonth,
     employees: state.employees,

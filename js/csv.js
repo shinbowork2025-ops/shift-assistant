@@ -2,6 +2,7 @@ import { state, createId, isValidTime, timeToMinutes, scheduleSave } from "./mod
 import { DEFAULT_EMPLOYMENT_TYPE, matchEmploymentType } from "./employment-types.js";
 import { compareEmployeeOrder } from "./workspace-normalizer.js";
 import { normalizeEmployeeCode } from "./master-codes.js";
+import { normalizeShiftBreakPolicy } from "./solver/shift-adapter.js";
 
 export function parseCsv(text) {
   const rows = [];
@@ -115,6 +116,12 @@ function duplicateMessage(kind, code, line, lines) {
   return `${line}行目: ${kind}「${code}」がファイル内の${otherLines}行目と重複しています。`;
 }
 
+function importValueEquals(left, right) {
+  if (Object.is(left, right)) return true;
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 function employeeOperation(record, context) {
   const { summary, operations, duplicateEmployeeCodes } = context;
   const rowErrors = [];
@@ -223,9 +230,18 @@ function shiftOperation(record, context) {
     paidMinutes,
     overtimeMinutes: record.overtimeMinutes ?? existing?.overtimeMinutes ?? 0
   };
+  Object.assign(shiftValue, normalizeShiftBreakPolicy(shiftValue, existing?.breakPolicy));
+  if (!shiftValue.breakPolicyValid) {
+    summary.breakPolicyErrors.push({
+      line: record.line,
+      code: shiftValue.code,
+      name: shiftValue.name,
+      issues: [...shiftValue.breakPolicyIssues]
+    });
+  }
 
   if (existing) {
-    const changed = Object.entries(shiftValue).some(([key, value]) => existing[key] !== value);
+    const changed = Object.entries(shiftValue).some(([key, value]) => !importValueEquals(existing[key], value));
     operations.push({ entity: "shift", action: changed ? "update" : "unchanged", existingCode: existing.code, changes: shiftValue, line: record.line });
     if (changed) summary.updatedShifts += 1;
     else summary.unchangedShifts += 1;
@@ -273,6 +289,7 @@ export function prepareMasterImport(rows) {
     addedShifts: 0,
     updatedShifts: 0,
     unchangedShifts: 0,
+    breakPolicyErrors: [],
     errors: []
   };
   const operations = [];
@@ -405,6 +422,9 @@ export function formatImportSummary(summary, sourceLabel = "") {
   }
   if (summary.repairedBreakDates) {
     parts.push(`シフト時刻変更に伴い休憩を${summary.repairedBreakDates}日分再配置`);
+  }
+  if (summary.breakPolicyErrors?.length) {
+    parts.push(`休憩設定エラー${summary.breakPolicyErrors.length}件（ソルバー起動不可）`);
   }
   if (summary.errors.length) parts.push(`読込不可${summary.errorRows ?? summary.errors.length}行${summary.partial ? "（正常行のみ反映）" : ""}`);
   return parts.join(" / ");
