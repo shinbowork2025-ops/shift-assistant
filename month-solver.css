@@ -141,6 +141,20 @@
   font-weight: 800;
 }
 
+.month-solver-statutory-confirmation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid #ef4444;
+  border-left-width: 5px;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fff1f2;
+  color: #991b1b;
+  font-weight: 800;
+}
+
 .month-solver-metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

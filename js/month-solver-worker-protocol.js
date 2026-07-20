@@ -43,6 +43,27 @@ export function createSolverShiftChanges(plan) {
   return changes;
 }
 
+export function createSolverBreakChanges(initialBreaks = {}, finalBreaks = {}, forcedKeys = []) {
+  const changes = [];
+  const forced = new Set(forcedKeys);
+  const dates = [...new Set([...Object.keys(initialBreaks ?? {}), ...Object.keys(finalBreaks ?? {})])]
+    .sort();
+  for (const date of dates) {
+    const employeeIds = [...new Set([
+      ...Object.keys(initialBreaks?.[date] ?? {}),
+      ...Object.keys(finalBreaks?.[date] ?? {})
+    ])].sort();
+    for (const employeeId of employeeIds) {
+      const before = structuredClone(initialBreaks?.[date]?.[employeeId] ?? []);
+      const after = structuredClone(finalBreaks?.[date]?.[employeeId] ?? []);
+      if (stableSolverStringify(before) === stableSolverStringify(after)
+        && !forced.has(`${date}:${employeeId}`)) continue;
+      changes.push({ date, employeeId, before, after });
+    }
+  }
+  return changes;
+}
+
 export function createEstimateMetrics(estimatedSlots, finalSlots) {
   const estimated = Array.isArray(estimatedSlots) || ArrayBuffer.isView(estimatedSlots)
     ? [...estimatedSlots].map((value) => Math.max(0, Number(value) || 0))
@@ -102,21 +123,38 @@ export function createWorkerProgressMessage(metadata, progress) {
 
 export function createWorkerResultMessage(metadata, solverResult, solverConfig = {}) {
   const estimatedShortage = Number(solverResult?.objective?.shortagePeople) || 0;
-  const estimateMetrics = createEstimateMetrics(estimatedShortage, estimatedShortage);
+  const finalShortage = Number(solverResult?.finalShortagePersonSlots ?? estimatedShortage) || 0;
+  const estimateMetrics = solverResult?.estimateMetrics
+    ? structuredClone(solverResult.estimateMetrics)
+    : createEstimateMetrics(estimatedShortage, finalShortage);
+  const shiftChanges = createSolverShiftChanges(solverResult?.plan);
+  const forcedBreakKeys = shiftChanges.map((change) => {
+    const date = `${solverResult.plan.monthValue}-${String(change.day).padStart(2, "0")}`;
+    return `${date}:${change.employeeId}`;
+  });
+  const breakChanges = createSolverBreakChanges(
+    solverResult?.plan?.breaks,
+    solverResult?.finalBreaks,
+    forcedBreakKeys
+  );
   return {
     type: "result",
     scheduleRevision: metadata?.scheduleRevision ?? null,
     inputFingerprint: metadata?.inputFingerprint ?? "",
-    shiftChanges: createSolverShiftChanges(solverResult?.plan),
-    breakChanges: [],
-    manualBreakLockChanges: [],
+    shiftChanges,
+    breakChanges,
+    manualBreakLockChanges: structuredClone(solverResult?.manualBreakLockChanges ?? []),
     resultSummary: {
+      classification: solverResult?.classification ?? "invalid",
       estimatedScore: Number(solverResult?.objective?.scalar) || 0,
       statutoryViolationCount: Number(solverResult?.objective?.statutoryViolationCount) || 0,
       statutoryViolationAmount: Number(solverResult?.objective?.statutoryViolationAmount) || 0,
       internalViolationCount: Number(solverResult?.objective?.internalViolationCount) || 0,
       estimatedShortagePersonSlots: estimatedShortage,
-      changedCellCount: createSolverShiftChanges(solverResult?.plan).length
+      finalShortagePersonSlots: finalShortage,
+      finalAttributeShortagePersonSlots: Number(solverResult?.finalAttributeShortagePersonSlots) || 0,
+      changedCellCount: shiftChanges.length,
+      changedBreakCount: breakChanges.length
     },
     estimateMetrics,
     statistics: structuredClone(solverResult?.statistics ?? {}),

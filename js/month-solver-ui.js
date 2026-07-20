@@ -415,15 +415,18 @@ function showResult(result) {
   ui.dialog.result.classList.remove("error");
 
   const title = document.createElement("strong");
-  if (applicationValidation.ok) {
-    title.textContent = precision ? "精密最適化で有効な最良案を見つけました" : "有効な月間案を作成しました";
-  } else {
+  if (!applicationValidation.ok) {
     title.textContent = "適用条件を満たしていません";
+  } else if (result.classification === "repairable") {
+    title.textContent = "要修正の月間案を作成しました";
+  } else {
+    title.textContent = precision ? "精密最適化で有効な最良案を見つけました" : "有効な月間案を作成しました";
   }
+  const finalShortage = Number(result.finalShortagePersonSlots ?? result.objective.shortagePeople) || 0;
   const stats = document.createElement("div");
   stats.className = "month-solver-metrics";
   stats.append(
-    metricRow("必要人数不足", `${result.initialObjective.shortagePeople}人枠`, `${result.objective.shortagePeople}人枠`),
+    metricRow("必要人数不足", `${result.initialObjective.shortagePeople}人枠`, `${finalShortage}人枠`),
     metricRow("勤務間隔・連勤違反", result.initialObjective.hard, result.objective.hard),
     metricRow("固定残業枠超過", `${Math.round(result.initialObjective.overtime / 6) / 10}時間`, `${Math.round(result.objective.overtime / 6) / 10}時間`),
     metricRow("公平性スコア", Math.round(result.initialObjective.fairness), Math.round(result.objective.fairness)),
@@ -442,12 +445,26 @@ function showResult(result) {
     item.textContent = issue;
     issues.append(item);
   }
+  const statutoryCount = Number(result.objective.statutoryViolationCount) || 0;
+  const statutoryConfirmation = statutoryCount > 0 ? document.createElement("label") : null;
+  if (statutoryConfirmation) {
+    statutoryConfirmation.className = "month-solver-statutory-confirmation";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.statutoryConfirm = "true";
+    statutoryConfirmation.append(checkbox, document.createTextNode("設定された法定ルールの違反を確認しました"));
+    ui.dialog.apply.hidden = true;
+    checkbox.addEventListener("change", () => {
+      ui.dialog.apply.hidden = !applicationValidation.ok || !checkbox.checked;
+    });
+  }
   ui.dialog.result.replaceChildren(
     title,
     stats,
     details,
     changeList,
     ...(shortageSection ? [shortageSection] : []),
+    ...(statutoryConfirmation ? [statutoryConfirmation] : []),
     issues
   );
   previewPlan(result.plan);
@@ -495,8 +512,8 @@ function applyResult() {
     const summary = applyMonthSolverResult(currentResult);
     ui.dialog.dialog.close();
     ui.summary.hidden = false;
-    ui.summary.textContent = `${monthDisplayName(state.selectedMonth)}へ${summary.applied}セルを適用し、${summary.changedDates}日分の休憩を再配置しました。`;
-    setStatus(`月間ソルバーの案を${summary.applied}セルへ適用しました`);
+    ui.summary.textContent = `${monthDisplayName(state.selectedMonth)}へシフト${summary.applied}セル・休憩${summary.appliedBreaks}件を一括適用しました。`;
+    setStatus(`月間ソルバーの案をシフト${summary.applied}セル・休憩${summary.appliedBreaks}件へ適用しました`);
     currentResult = null;
   } catch (error) {
     showError(error.message);
