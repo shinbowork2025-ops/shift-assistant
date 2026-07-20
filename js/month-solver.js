@@ -10,6 +10,7 @@ import {
   createMonthSolverNeighborSource,
   proposeMonthSolverNeighbor
 } from "./month-solver-neighbors.js";
+import { proposeMonthSolverRepair } from "./month-solver-repair.js";
 import {
   EPOCH_ITERATIONS,
   TEMPERATURE_SAMPLE_DEFAULT,
@@ -40,6 +41,38 @@ function nowMilliseconds() {
   return typeof performance !== "undefined" && typeof performance.now === "function"
     ? performance.now()
     : Date.now();
+}
+
+function createStrategyStatistics() {
+  return {
+    smallNeighbor: {
+      attempts: 0,
+      generatedCandidates: 0,
+      validCandidates: 0,
+      evaluatedCandidates: 0,
+      acceptedCandidates: 0
+    },
+    repair: {
+      attempts: 0,
+      generatedCandidates: 0,
+      validCandidates: 0,
+      evaluatedCandidates: 0,
+      acceptedCandidates: 0,
+      bruteAttempts: 0,
+      beamAttempts: 0,
+      greedyBeamAttempts: 0
+    }
+  };
+}
+
+function addStrategyStatistics(target, source) {
+  for (const [strategy, values] of Object.entries(source ?? {})) {
+    if (!target[strategy]) target[strategy] = {};
+    for (const [key, value] of Object.entries(values ?? {})) {
+      target[strategy][key] = (Number(target[strategy][key]) || 0) + (Number(value) || 0);
+    }
+  }
+  return target;
 }
 
 export function calibrateMonthSolverTemperature(
@@ -114,6 +147,12 @@ function createSearch(planInput, config = {}) {
     minimumTemperature,
     coolingRate,
     temperatureScaleByStrategy: normalizeTemperatureScales(config.temperatureScaleByStrategy),
+    repairOptions: {
+      enabled: config.enableRepair !== false,
+      cellCount: Math.max(1, Math.floor(Number(config.repairCellCount ?? 4) || 4)),
+      beamWidth: config.repairBeamWidth
+    },
+    strategyStatistics: createStrategyStatistics(),
     archives,
     initialObjective: clone(context.objective),
     bestPlan: clone(plan),
@@ -156,12 +195,42 @@ function updateBest(search) {
 
 function step(search) {
   search.performed += 1;
-  const changes = proposeMonthSolverNeighbor(search.plan, search.source, search.random);
+  let strategy = "smallNeighbor";
+  let evaluation = null;
+  let changes = null;
+  const repairTurn = search.repairOptions.enabled
+    && (search.performed - 1) % EPOCH_ITERATIONS === 0;
+  if (repairTurn) {
+    const statistics = search.strategyStatistics.repair;
+    statistics.attempts += 1;
+    const repair = proposeMonthSolverRepair(search.context, search.source, search.repairOptions);
+    if (repair) {
+      strategy = "repair";
+      changes = repair.changes;
+      evaluation = repair.evaluation;
+      statistics.evaluatedCandidates += repair.evaluatedCandidates;
+      const methodKey = repair.method === "brute"
+        ? "bruteAttempts"
+        : repair.method === "greedyBeam"
+          ? "greedyBeamAttempts"
+          : "beamAttempts";
+      statistics[methodKey] += 1;
+    }
+  }
+  if (!changes) {
+    search.strategyStatistics.smallNeighbor.attempts += 1;
+    changes = proposeMonthSolverNeighbor(search.plan, search.source, search.random);
+  }
   if (!changes) return;
   search.generated += 1;
-  const evaluation = evaluateMonthSolverChanges(search.context, changes);
+  search.strategyStatistics[strategy].generatedCandidates += 1;
+  if (!evaluation) {
+    evaluation = evaluateMonthSolverChanges(search.context, changes);
+    if (evaluation) search.strategyStatistics[strategy].evaluatedCandidates += 1;
+  }
   if (!evaluation) return;
   search.proposed += 1;
+  search.strategyStatistics[strategy].validCandidates += 1;
   considerCandidate(search.archives, {
     plan: search.plan,
     changes: evaluation.changes,
@@ -172,7 +241,7 @@ function step(search) {
     currentObjective: search.context.objective,
     candidateObjective: evaluation.objective,
     temperature: search.temperature,
-    strategy: "smallNeighbor",
+    strategy,
     temperatureScaleByStrategy: search.temperatureScaleByStrategy,
     random: search.random
   });
@@ -180,6 +249,7 @@ function step(search) {
   if (!decision.accepted) return;
   applyMonthSolverEvaluation(search.context, evaluation);
   search.accepted += 1;
+  search.strategyStatistics[strategy].acceptedCandidates += 1;
   updateBest(search);
 }
 
@@ -275,6 +345,7 @@ function result(search, stopped, timedOut = false) {
       validCandidates: search.proposed,
       acceptedCandidates: search.accepted,
       statutoryRatchetRejections: search.statutoryRatchetRejections,
+      strategies: clone(search.strategyStatistics),
       ...finalization.statistics,
       placement: selected.placementStatistics
     },
@@ -364,6 +435,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
   let totalProposed = 0;
   let totalAccepted = 0;
   let totalRatchetRejections = 0;
+  const totalStrategyStatistics = createStrategyStatistics();
   let manualStop = false;
   let lastProgressAt = -Infinity;
 
@@ -425,6 +497,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
     totalProposed += candidate.proposed;
     totalAccepted += candidate.accepted;
     totalRatchetRejections += candidate.statistics?.statutoryRatchetRejections ?? 0;
+    addStrategyStatistics(totalStrategyStatistics, candidate.statistics?.strategies);
     if (!bestResult || compareCompletedResults(candidate, bestResult) < 0) {
       bestResult = candidate;
       bestRestart = restartNumber;
@@ -476,6 +549,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
     totalProposed = bestResult.proposed;
     totalAccepted = bestResult.accepted;
     totalRatchetRejections = bestResult.statistics?.statutoryRatchetRejections ?? 0;
+    addStrategyStatistics(totalStrategyStatistics, bestResult.statistics?.strategies);
     manualStop = Boolean(hooks.shouldStop?.());
   }
 
@@ -503,6 +577,7 @@ export async function solveMonthSchedulePrecisionAsync(plan, config = {}, hooks 
       validCandidates: totalProposed,
       acceptedCandidates: totalAccepted,
       statutoryRatchetRejections: totalRatchetRejections,
+      strategies: totalStrategyStatistics,
       restarts
     },
     stopped: manualStop,
