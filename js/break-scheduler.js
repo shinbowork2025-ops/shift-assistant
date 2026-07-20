@@ -1,217 +1,55 @@
-// 休憩配置の純粋ソルバー。
-// 貪欲な初期配置のあと、全体目的関数（下記）を改善する移動を繰り返して
-// 局所解から抜け出し、日全体で最適に近い配置を作る。
-//
-// 目的関数（辞書式・上から優先）：
-//   1. 休憩を除いた実配置人数の最小値を最大化する（人が最も薄い瞬間を守る）
-//   2. その最小値に落ちる時間帯の数を減らす
-//   3. 同時に休憩する人数を平準化する（Σ 同時休憩数²を最小化）
-//   4. 各休憩の目標時刻からのずれの合計を最小化する
-//
-// DOMやアプリ状態に依存しない。入出力はすべて分単位の数値。
+// 既存画面向けの互換ラッパー。
+// 実際の候補生成・日別最適化は次世代ソルバーと共通の純粋実装を使用する。
+import { placeBreaksForDay } from "./solver/break-placement.js";
+
 export const BREAK_SLOT_MINUTES = 15;
 
-const MAX_IMPROVEMENT_SWEEPS = 4;
-// 始業後と終業前は、それぞれ最低60分を休憩禁止帯として確保する。
-const SHIFT_EDGE_BUFFER_MINUTES = 60;
-// 休憩同士に空ける最短間隔。
-const MINIMUM_GAP_MINUTES = 60;
-
-function alignDown(minute) {
-  return Math.floor(minute / BREAK_SLOT_MINUTES) * BREAK_SLOT_MINUTES;
-}
-
-function slotsBetween(startMinute, endMinute) {
-  const slots = [];
-  for (let minute = alignDown(startMinute); minute < endMinute; minute += BREAK_SLOT_MINUTES) {
-    slots.push(minute);
-  }
-  return slots;
-}
-
-function addLoad(load, startMinute, endMinute, delta) {
-  for (const slot of slotsBetween(startMinute, endMinute)) {
-    const next = (load.get(slot) ?? 0) + delta;
-    if (next === 0) load.delete(slot);
-    else load.set(slot, next);
-  }
-}
-
-function candidateStarts(earliest, latest, target) {
-  const first = Math.ceil(earliest / BREAK_SLOT_MINUTES) * BREAK_SLOT_MINUTES;
-  const candidates = [];
-  for (let slot = first; slot <= latest; slot += BREAK_SLOT_MINUTES) candidates.push(slot);
-  return candidates;
-}
-
-function isBetterScore(candidate, incumbent) {
-  for (let index = 0; index < candidate.length; index += 1) {
-    if (candidate[index] !== incumbent[index]) return candidate[index] < incumbent[index];
-  }
-  return false;
+function policyFromAssignment(assignment) {
+  const templates = assignment.movable
+    ? (assignment.templates ?? [])
+    : (assignment.existingBreaks ?? []).map((item, index) => ({
+      type: item.type ?? (index === 0 ? "lunch" : "small"),
+      label: item.label,
+      duration: item.endMinute - item.startMinute,
+      targetOffset: item.startMinute - assignment.shiftStart
+    }));
+  return {
+    totalMinutes: templates.reduce((sum, item) => sum + Number(item.duration || 0), 0),
+    segments: templates.map((item) => ({
+      type: item.type,
+      label: item.label,
+      duration: item.duration,
+      targetOffset: item.targetOffset
+    }))
+  };
 }
 
 // assignments: [{ id, shiftStart, shiftEnd, movable, templates, existingBreaks }]
-// - movable=true の従業員は templates（type/label/duration/targetOffset）を配置する
-// - movable=false の従業員は existingBreaks（{startMinute,endMinute}）を固定負荷として尊重する
 // 返り値: Map(id -> [{ type, label, startMinute, endMinute }])
 export function scheduleBreaks(assignments) {
-  const active = new Map();
-  for (const assignment of assignments) {
-    for (const slot of slotsBetween(assignment.shiftStart, assignment.shiftEnd)) {
-      active.set(slot, (active.get(slot) ?? 0) + 1);
-    }
-  }
-  const activeSlots = [...active.entries()]
-    .map(([slot, count]) => ({ slot, count }))
-    .sort((a, b) => a.slot - b.slot);
-
-  const load = new Map();
-  for (const assignment of assignments) {
-    if (assignment.movable) continue;
-    for (const breakItem of assignment.existingBreaks ?? []) {
-      addLoad(load, breakItem.startMinute, breakItem.endMinute, 1);
-    }
-  }
-
-  const placements = new Map();
-  const movable = assignments.filter((assignment) => assignment.movable);
-  for (const assignment of movable) placements.set(assignment.id, []);
-
-  const breakItems = [];
-  const deviations = [];
-
-  function evaluate() {
-    let minimumCoverage = Number.POSITIVE_INFINITY;
-    let slotsAtMinimum = 0;
-    let loadPenalty = 0;
-    for (const { slot, count } of activeSlots) {
-      const onBreak = load.get(slot) ?? 0;
-      const coverage = count - onBreak;
-      if (coverage < minimumCoverage) {
-        minimumCoverage = coverage;
-        slotsAtMinimum = 1;
-      } else if (coverage === minimumCoverage) {
-        slotsAtMinimum += 1;
+  const fixedBreaks = {};
+  const normalized = assignments.map((assignment, index) => {
+    if (!assignment.movable) fixedBreaks[assignment.id] = assignment.existingBreaks ?? [];
+    return {
+      id: assignment.id,
+      displayOrder: index,
+      shiftType: {
+        code: assignment.id,
+        isDayOff: false,
+        startMinutes: assignment.shiftStart,
+        endMinutes: assignment.shiftEnd,
+        breakPolicy: policyFromAssignment(assignment)
       }
-      loadPenalty += onBreak * onBreak;
-    }
-    let totalDeviation = 0;
-    for (const value of deviations) totalDeviation += value;
-    return [-minimumCoverage, slotsAtMinimum, loadPenalty, totalDeviation];
-  }
-
-  function scoreCandidate(item, startMinute) {
-    addLoad(load, startMinute, startMinute + item.duration, 1);
-    const saved = deviations[item.deviationIndex];
-    deviations[item.deviationIndex] = Math.abs(startMinute - item.target);
-    const score = evaluate();
-    deviations[item.deviationIndex] = saved;
-    addLoad(load, startMinute, startMinute + item.duration, -1);
-    return score;
-  }
-
-  // --- 貪欲初期配置：シフト順に、その時点の全体スコアが最良の位置へ置く。
-  for (const assignment of movable) {
-    const placed = placements.get(assignment.id);
-    for (let index = 0; index < assignment.templates.length; index += 1) {
-      const template = assignment.templates[index];
-      const target = assignment.shiftStart + template.targetOffset;
-      const reserved = SHIFT_EDGE_BUFFER_MINUTES + assignment.templates
-        .slice(index + 1)
-        .reduce((sum, item) => sum + item.duration + MINIMUM_GAP_MINUTES, 0);
-      const previousEnd = index > 0
-        ? placed[index - 1].startMinute + assignment.templates[index - 1].duration
-        : null;
-      const earliest = index > 0
-        ? previousEnd + MINIMUM_GAP_MINUTES
-        : assignment.shiftStart + SHIFT_EDGE_BUFFER_MINUTES;
-      const latest = assignment.shiftEnd - template.duration - reserved;
-      const candidates = candidateStarts(earliest, latest, target);
-      // 制約を満たす位置がない場合は、違法な休憩を捏造せず未配置として返す。
-      // 呼び出し側のvalidateBreaksが不足時間を利用者へ明示する。
-      if (!candidates.length) break;
-
-      const item = {
-        assignment,
-        index,
-        duration: template.duration,
-        target,
-        deviationIndex: deviations.length
-      };
-      deviations.push(0);
-
-      let bestStart = null;
-      let bestScore = null;
-      for (const candidate of candidates) {
-        const score = scoreCandidate(item, candidate);
-        if (bestScore === null || isBetterScore(score, bestScore)) {
-          bestScore = score;
-          bestStart = candidate;
-        }
-      }
-
-      placed.push({ startMinute: bestStart });
-      deviations[item.deviationIndex] = Math.abs(bestStart - target);
-      addLoad(load, bestStart, bestStart + template.duration, 1);
-      breakItems.push(item);
-    }
-  }
-
-  // --- 反復改善：1休憩ずつ全体スコアが厳密に良くなる位置へ動かす。
-  // 厳密改善のみ受け入れるため必ず停止する。念のため走査回数にも上限を置く。
-  let improved = true;
-  for (let sweep = 0; improved && sweep < MAX_IMPROVEMENT_SWEEPS; sweep += 1) {
-    improved = false;
-    for (const item of breakItems) {
-      const { assignment, index, duration, target } = item;
-      const placed = placements.get(assignment.id);
-      const previousEnd = index > 0
-        ? placed[index - 1].startMinute + assignment.templates[index - 1].duration
-        : null;
-      const earliest = index > 0
-        ? previousEnd + MINIMUM_GAP_MINUTES
-        : assignment.shiftStart + SHIFT_EDGE_BUFFER_MINUTES;
-      const nextStart = index < placed.length - 1 ? placed[index + 1].startMinute : null;
-      const latest = (nextStart !== null
-        ? nextStart - MINIMUM_GAP_MINUTES
-        : assignment.shiftEnd - SHIFT_EDGE_BUFFER_MINUTES) - duration;
-      const candidates = candidateStarts(earliest, latest, target);
-      if (!candidates.length) continue;
-
-      const current = placed[index].startMinute;
-      addLoad(load, current, current + duration, -1);
-
-      let bestStart = current;
-      let bestScore = scoreCandidate(item, current);
-      for (const candidate of candidates) {
-        if (candidate === current) continue;
-        const score = scoreCandidate(item, candidate);
-        if (isBetterScore(score, bestScore)) {
-          bestScore = score;
-          bestStart = candidate;
-        }
-      }
-
-      addLoad(load, bestStart, bestStart + duration, 1);
-      if (bestStart !== current) {
-        placed[index].startMinute = bestStart;
-        deviations[item.deviationIndex] = Math.abs(bestStart - target);
-        improved = true;
-      }
-    }
-  }
-
-  const result = new Map();
-  for (const assignment of assignments) {
-    if (!assignment.movable) continue;
-    const placed = placements.get(assignment.id) ?? [];
-    result.set(assignment.id, (assignment.templates ?? []).slice(0, placed.length).map((template, index) => ({
-      type: template.type,
-      label: template.label,
-      startMinute: placed[index].startMinute,
-      endMinute: placed[index].startMinute + template.duration
-    })));
-  }
-  return result;
+    };
+  });
+  const result = placeBreaksForDay({
+    assignments: normalized,
+    fixedBreaks,
+    maxCandidatesPerAssignment: 128,
+    localImprovementSweeps: 1,
+    enablePairImprovement: false
+  });
+  return new Map(assignments
+    .filter((assignment) => assignment.movable)
+    .map((assignment) => [assignment.id, result.placements[assignment.id] ?? []]));
 }

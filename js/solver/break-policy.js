@@ -1,52 +1,11 @@
-import { normalizeBreakConstraints, SLOT_MINUTES } from "./solver-config.js";
+import { SLOT_MINUTES } from "./solver-config.js";
 import { scheduledWorkMinutes } from "./time-slots.js";
+import {
+  enumerateBreakPlacementCandidates,
+  enumerateSegmentStartsSimple
+} from "./break-placement-candidates.js";
 
-function alignedCeil(minutes) {
-  return Math.ceil(minutes / SLOT_MINUTES) * SLOT_MINUTES;
-}
-
-function alignedFloor(minutes) {
-  return Math.floor(minutes / SLOT_MINUTES) * SLOT_MINUTES;
-}
-
-function shiftWindow(shiftType, breakConstraints) {
-  const constraints = normalizeBreakConstraints(breakConstraints);
-  return {
-    earliest: alignedCeil(Number(shiftType?.startMinutes) + constraints.forbiddenStartMinutes),
-    latestEnd: alignedFloor(Number(shiftType?.endMinutes) - constraints.forbiddenEndMinutes),
-    constraints
-  };
-}
-
-function placementByDfs(segments, earliest, latestEnd, minGap) {
-  function search(index, minimumStart) {
-    if (index === segments.length) return [];
-    const segment = segments[index];
-    const lastStart = alignedFloor(latestEnd - segment.duration);
-    for (let start = alignedCeil(minimumStart); start <= lastStart; start += SLOT_MINUTES) {
-      const rest = search(index + 1, start + segment.duration + minGap);
-      if (rest !== null) return [start, ...rest];
-    }
-    return null;
-  }
-  return search(0, earliest);
-}
-
-export function enumerateSegmentStartsSimple(shiftType, segment, breakConstraints = {}) {
-  if (!shiftType || shiftType.isDayOff || !segment) return [];
-  const { earliest, latestEnd, constraints } = shiftWindow(shiftType, breakConstraints);
-  const duration = Number(segment.duration);
-  const target = Number(shiftType.startMinutes) + Number(segment.targetOffset);
-  const windowStart = alignedCeil(Math.max(earliest, target - constraints.segmentWindowRadiusMinutes));
-  const windowEnd = alignedFloor(Math.min(
-    latestEnd - duration,
-    target + constraints.segmentWindowRadiusMinutes
-  ));
-  if (!Number.isFinite(duration) || windowStart > windowEnd) return [];
-  const starts = [];
-  for (let start = windowStart; start <= windowEnd; start += SLOT_MINUTES) starts.push(start);
-  return starts;
-}
+export { enumerateBreakPlacementCandidates, enumerateSegmentStartsSimple };
 
 export function validateBreakPolicyForShift(shiftType, breakPolicy, breakConstraints = {}) {
   if (!shiftType || shiftType.isDayOff) {
@@ -99,8 +58,8 @@ export function validateBreakPolicyForShift(shiftType, breakPolicy, breakConstra
 
   let samplePlacement = null;
   if (issues.length === 0) {
-    const { earliest, latestEnd, constraints } = shiftWindow(shiftType, breakConstraints);
-    samplePlacement = placementByDfs(segments, earliest, latestEnd, constraints.minSegmentGapMinutes);
+    const candidates = enumerateBreakPlacementCandidates(shiftType, breakPolicy, [], breakConstraints);
+    samplePlacement = candidates[0]?.map((item) => item.startMinute) ?? null;
     if (samplePlacement === null) issues.push("全セグメントを勤務時間内へ配置できません。");
   }
 
