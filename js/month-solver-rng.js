@@ -1,4 +1,4 @@
-function hashSeed(value) {
+export function hashSeed(value) {
   const text = String(value ?? "1");
   let hash = 2166136261;
   for (let index = 0; index < text.length; index += 1) {

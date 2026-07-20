@@ -2,9 +2,17 @@ import { generateBreaksForDate } from "./breaks.js";
 import { runWithHistory } from "./history.js";
 import { validateMonthSolverApplication } from "./month-solver-application.js";
 import { buildMonthSolverPlan, monthSolverChanges } from "./month-solver-plan.js";
-import { dateKey, isShiftLocked, scheduleSave, setShift, state } from "./model.js";
+import {
+  dateKey,
+  getScheduleRevision,
+  isShiftLocked,
+  scheduleSave,
+  setShift,
+  state
+} from "./model.js";
 import { refresh } from "./actions/view-actions.js";
 import { assertValidSolverBreakPolicies } from "./solver/shift-adapter.js";
+import { createSolverInputFingerprint } from "./month-solver-worker-protocol.js";
 
 export function createCurrentMonthSolverPlan(options = {}) {
   assertValidSolverBreakPolicies(state.shiftTypes);
@@ -25,6 +33,36 @@ export function createCurrentMonthSolverPlan(options = {}) {
 export function applyMonthSolverResult(result) {
   if (!result?.plan) throw new Error("有効な月間シフト案ではありません。");
   if (result.plan.monthValue !== state.selectedMonth) throw new Error("表示月が探索開始時から変更されています。もう一度案を作成してください。");
+  if (result.scheduleRevision !== undefined
+    && result.scheduleRevision !== null
+    && Number(result.scheduleRevision) !== getScheduleRevision()) {
+    throw new Error("探索開始後にシフト表の入力が変更されています。もう一度案を作成してください。");
+  }
+  if (result.inputFingerprint) {
+    const currentPlan = buildMonthSolverPlan({
+      monthValue: state.selectedMonth,
+      employees: state.employees,
+      shiftTypes: state.shiftTypes,
+      shifts: state.shifts,
+      shiftLocks: state.shiftLocks,
+      breaks: state.breaks,
+      manualBreakLocks: state.manualBreakLocks,
+      coverageRequirements: state.coverageRequirements,
+      selectedEmployeeIds: result.plan.selectedEmployeeIds,
+      selectedShiftCodes: result.plan.selectedShiftCodes
+    });
+    if (createSolverInputFingerprint(currentPlan) !== result.inputFingerprint) {
+      throw new Error("探索開始後に入力内容が変更されています。もう一度案を作成してください。");
+    }
+  }
+
+  for (const change of result.shiftChanges ?? []) {
+    const current = state.shifts?.[result.plan.monthValue]?.[change.employeeId]
+      ?.[dateKey(result.plan.monthValue, change.day)] ?? "";
+    if (current !== change.before) {
+      throw new Error(`探索開始後に${change.employeeId}・${change.day}日の値が変更されています。`);
+    }
+  }
 
   const applicationValidation = validateMonthSolverApplication(result);
   if (!applicationValidation.ok) {

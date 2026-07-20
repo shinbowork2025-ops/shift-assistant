@@ -222,6 +222,12 @@ export function evaluateSolverEmployee(plan, employee, typeMap = null) {
   const maxAllowed = Number(plan.maxConsecutiveByEmployee?.[employee.id] ?? 6) || 6;
   const consecutiveExcess = Math.max(0, maxConsecutive - maxAllowed);
   const hardViolations = shortRestCount + (consecutiveExcess * consecutiveExcess);
+  // 現行画面の勤務間隔・連勤上限は社内規定として扱う。
+  // 法定指標はv5評価コンテキストから供給されるまで0を明示し、社内違反を誤表示しない。
+  const statutoryViolationCount = 0;
+  const statutoryViolationAmount = 0;
+  const internalViolationCount = shortRestCount + (consecutiveExcess > 0 ? 1 : 0);
+  const internalViolationAmount = shortRestCount + consecutiveExcess;
   const fixedOvertime = Math.max(0, Number(employee.fixedOvertimeMinutes) || 0);
   const overtimeExcess = Math.max(0, overtimeMinutes - fixedOvertime);
   const targetDaysOff = Number(plan.targetDaysOffByEmployee?.[employee.id] ?? 0) || 0;
@@ -246,6 +252,10 @@ export function evaluateSolverEmployee(plan, employee, typeMap = null) {
     boundaryPreviousKnown: Boolean(boundary.previousKnown),
     boundaryNextKnown: Boolean(boundary.nextKnown),
     hardViolations,
+    statutoryViolationCount,
+    statutoryViolationAmount,
+    internalViolationCount,
+    internalViolationAmount,
     shiftConcentration,
     preferencePenalty
   };
@@ -259,6 +269,14 @@ function composeObjective(dayMetrics, employeeMetrics, selectedEmployeeIds) {
   const shortageSlots = days.reduce((sum, metric) => sum + metric.shortageSlots, 0);
   const coverage = shortagePeople * 1000 + shortageSlots;
   const hard = employees.reduce((sum, metric) => sum + metric.hardViolations, 0);
+  const statutoryViolationCount = employees
+    .reduce((sum, metric) => sum + metric.statutoryViolationCount, 0);
+  const statutoryViolationAmount = employees
+    .reduce((sum, metric) => sum + metric.statutoryViolationAmount, 0);
+  const internalViolationCount = employees
+    .reduce((sum, metric) => sum + metric.internalViolationCount, 0);
+  const internalViolationAmount = employees
+    .reduce((sum, metric) => sum + metric.internalViolationAmount, 0);
   const overtime = employees.reduce((sum, metric) => sum + metric.overtimeExcess, 0);
   const daysOffFairness = employees.reduce((sum, metric) => sum + metric.daysOffDeviation ** 2, 0);
   const fairness = daysOffFairness * 25
@@ -273,7 +291,21 @@ function composeObjective(dayMetrics, employeeMetrics, selectedEmployeeIds) {
     + overtime * 10
     + fairness
     + preference * 0.1;
-  return { vector, scalar, coverage, shortagePeople, shortageSlots, hard, overtime, fairness, preference };
+  return {
+    vector,
+    scalar,
+    coverage,
+    shortagePeople,
+    shortageSlots,
+    hard,
+    statutoryViolationCount,
+    statutoryViolationAmount,
+    internalViolationCount,
+    internalViolationAmount,
+    overtime,
+    fairness,
+    preference
+  };
 }
 
 export function compareSolverObjectives(a, b) {
