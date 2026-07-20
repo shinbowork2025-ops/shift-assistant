@@ -1,0 +1,4 @@
+{
+  "base": "board-a.json",
+  "settingChanges": { "previousBoundaryKnown": false }
+}

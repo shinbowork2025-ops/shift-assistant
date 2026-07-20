@@ -23,27 +23,36 @@ export function confirmMasterImport(plan, { sourceLabel = "マスター", downlo
 
   const summary = plan.summary;
   const errorRows = summary.errorRows ?? plan.errors.length;
+  const breakPolicyErrors = summary.breakPolicyErrors ?? [];
   source.textContent = `${sourceLabel}を検証しました。まだデータは変更されていません。`;
   counts.replaceChildren(
     countRow("従業員", `追加${summary.addedEmployees}名・更新${summary.updatedEmployees}名・変更なし${summary.unchangedEmployees}名`),
     countRow("シフト", `追加${summary.addedShifts}件・更新${summary.updatedShifts}件・変更なし${summary.unchangedShifts}件`),
+    countRow("休憩設定エラー", `${breakPolicyErrors.length}件`),
     countRow("読込不可", `${errorRows}行`)
   );
 
   const hasErrors = plan.errors.length > 0;
-  warning.hidden = !hasErrors;
+  const hasBreakPolicyErrors = breakPolicyErrors.length > 0;
+  warning.hidden = !hasErrors && !hasBreakPolicyErrors;
   warning.textContent = hasErrors
     ? `${errorRows}行は反映されません。既定では取込を中止します。正常な行だけ反映する場合は、内容を確認して明示的に実行してください。`
-    : "すべての行を検証しました。内容を確認してから取り込んでください。";
-  errorList.replaceChildren(...plan.errors.slice(0, 20).map((message) => {
+    : hasBreakPolicyErrors
+      ? `休憩設定エラーが${breakPolicyErrors.length}件あります。取込はできますが、修正するまで月間ソルバーは起動できません。`
+      : "すべての行を検証しました。内容を確認してから取り込んでください。";
+  const displayedIssues = [
+    ...plan.errors,
+    ...breakPolicyErrors.map((item) => `${item.line}行目: ${item.name || item.code}: ${item.issues.join(" / ")}`)
+  ];
+  errorList.replaceChildren(...displayedIssues.slice(0, 20).map((message) => {
     const item = document.createElement("li");
     item.textContent = message;
     return item;
   }));
-  errorList.hidden = !hasErrors;
-  if (plan.errors.length > 20) {
+  errorList.hidden = displayedIssues.length === 0;
+  if (displayedIssues.length > 20) {
     const item = document.createElement("li");
-    item.textContent = `ほか${plan.errors.length - 20}件（エラー一覧CSVで確認できます）`;
+    item.textContent = `ほか${displayedIssues.length - 20}件`;
     errorList.append(item);
   }
 

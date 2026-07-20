@@ -20,6 +20,7 @@ import {
   normalizePreferredShiftCode
 } from "./work-shift-preferences.js";
 import { createBlankWorkspace } from "./workspace-schema.js";
+import { normalizeShiftBreakPolicy } from "./solver/shift-adapter.js";
 
 const VALID_VIEWS = new Set(["month", "day", "print"]);
 let workspaceMigrationPending = false;
@@ -69,7 +70,7 @@ export function normalizeShiftType(shift, index) {
   const start = isValidTime(shift.start) ? shift.start : "";
   const end = isValidTime(shift.end) ? shift.end : "";
   const isWork = Boolean(shift.isWork ?? (start && end));
-  return {
+  const normalized = {
     code: shift.code.trim().slice(0, 30) || `shift-${index + 1}`,
     name: shift.name.trim().slice(0, 40),
     shortLabel: String(shift.shortLabel || shift.name).trim().slice(0, 4),
@@ -77,8 +78,10 @@ export function normalizeShiftType(shift, index) {
     end: isWork ? end : "",
     isWork,
     paidMinutes: Number.isFinite(Number(shift.paidMinutes)) ? Math.max(0, Number(shift.paidMinutes)) : undefined,
-    overtimeMinutes: nonNegativeMinutes(shift.overtimeMinutes)
+    overtimeMinutes: nonNegativeMinutes(shift.overtimeMinutes),
+    isLateShift: Boolean(shift.isLateShift)
   };
+  return { ...normalized, ...normalizeShiftBreakPolicy(normalized, shift.breakPolicy) };
 }
 
 export function normalizeShiftTypes(candidate) {

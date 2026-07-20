@@ -1,0 +1,81 @@
+{
+  "periodStart": "2026-07-06",
+  "employeeOrder": ["E1", "E2", "E3", "E4", "E5"],
+  "assignments": [
+    ["S01", "S01", "S01", "S01", "S01", "OFF", "OFF"],
+    ["S03", "S03", "S03", "S03", "S03", "S03", "OFF"],
+    ["S02", "S02", "S02", "LEAVE", "S01", "S02", "OFF"],
+    ["OFF", "S01", "S01", "S01", "OFF", "S01", "S01"],
+    ["S02", "S01", "S02", "S02", "OFF", "S03", "OFF"]
+  ],
+  "shiftTypes": [
+    {
+      "code": "S01", "name": "早番", "isDayOff": false,
+      "startMinutes": 540, "endMinutes": 1080, "paidMinutes": 450,
+      "overtimeMinutes": 60, "isLateShift": false,
+      "breakPolicy": {
+        "totalMinutes": 90,
+        "segments": [
+          { "type": "small", "duration": 15, "targetOffset": 120 },
+          { "type": "lunch", "duration": 60, "targetOffset": 270 },
+          { "type": "small", "duration": 15, "targetOffset": 420 }
+        ]
+      }
+    },
+    {
+      "code": "S02", "name": "遅番", "isDayOff": false,
+      "startMinutes": 720, "endMinutes": 1260, "paidMinutes": 450,
+      "overtimeMinutes": 30, "isLateShift": true,
+      "breakPolicy": {
+        "totalMinutes": 90,
+        "segments": [
+          { "type": "small", "duration": 15, "targetOffset": 120 },
+          { "type": "lunch", "duration": 60, "targetOffset": 270 },
+          { "type": "small", "duration": 15, "targetOffset": 420 }
+        ]
+      }
+    },
+    {
+      "code": "S03", "name": "短番", "isDayOff": false,
+      "startMinutes": 540, "endMinutes": 840, "paidMinutes": 285,
+      "overtimeMinutes": 0, "isLateShift": false,
+      "breakPolicy": {
+        "totalMinutes": 15,
+        "segments": [
+          { "type": "small", "duration": 15, "targetOffset": 150 }
+        ]
+      }
+    },
+    { "code": "OFF", "name": "公休", "isDayOff": true, "paidMinutes": 0, "overtimeMinutes": 0 },
+    { "code": "LEAVE", "name": "休暇", "isDayOff": true, "paidMinutes": 0, "overtimeMinutes": 0 }
+  ],
+  "employees": [
+    { "id": "E1", "name": "E1", "employmentType": "社員", "department": "園芸", "qualifications": ["レジ"], "fixedOvertimeMinutes": 120, "targetDaysOff": 2 },
+    { "id": "E2", "name": "E2", "employmentType": "パート", "department": "園芸", "qualifications": [], "fixedOvertimeMinutes": 0, "targetDaysOff": 2 },
+    { "id": "E3", "name": "E3", "employmentType": "社員", "department": "資材", "qualifications": ["レジ"], "fixedOvertimeMinutes": 300, "targetDaysOff": 2 },
+    { "id": "E4", "name": "E4", "employmentType": "パート", "department": "資材", "qualifications": [], "fixedOvertimeMinutes": 300, "targetDaysOff": 2 },
+    { "id": "E5", "name": "E5", "employmentType": "準社員", "department": "園芸", "qualifications": [], "fixedOvertimeMinutes": 300, "targetDaysOff": 2 }
+  ],
+  "settings": {
+    "statutoryHolidayRule": "weekly",
+    "weekStartDay": 1,
+    "statutoryHolidayCodes": ["OFF"],
+    "previousBoundaryKnown": true,
+    "nextBoundaryKnown": true,
+    "restMinimumMinutes": 750,
+    "maxConsecutiveWorkDays": 5,
+    "breakConstraints": {
+      "forbiddenStartMinutes": 60,
+      "forbiddenEndMinutes": 60,
+      "segmentWindowRadiusMinutes": 90,
+      "minSegmentGapMinutes": 60
+    }
+  },
+  "requirements": [
+    { "days": [0], "startSlot": 48, "endSlot": 52, "scope": { "type": "total" }, "count": 3 },
+    { "days": [0], "startSlot": 48, "endSlot": 52, "scope": { "type": "qualification", "key": "レジ" }, "count": 1 }
+  ],
+  "preferences": [
+    { "employeeId": "E4", "day": 6, "kind": "dayOff" }
+  ]
+}
