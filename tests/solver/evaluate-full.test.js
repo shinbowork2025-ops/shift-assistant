@@ -75,3 +75,35 @@ test("scoreは7ペナルティの合計で、評価は純粋かつ決定的で�
   assert.equal(first.score, first.statutoryPenalty + first.internalPenalty + first.coveragePenalty
     + first.overtimePenalty + first.preferencePenalty + first.fairnessPenalty + first.changePenalty);
 });
+
+test("期間外を含む法定休日周期は境界既知フラグだけで違反認定しない", () => {
+  const plan = {
+    periodStart: "2026-07-01",
+    dayCount: 1,
+    employeeOrder: ["E1"],
+    assignments: [["WORK"]],
+    lockedCells: new Set()
+  };
+  const context = {
+    shiftTypes: new Map([
+      ["WORK", { code: "WORK", isDayOff: false, startMinutes: 540, endMinutes: 1020, overtimeMinutes: 0 }],
+      ["OFF", { code: "OFF", isDayOff: true, overtimeMinutes: 0 }]
+    ]),
+    employees: new Map([["E1", { id: "E1", name: "E1", targetDaysOff: 0 }]]),
+    settings: {
+      statutoryHolidayRule: "weekly",
+      weekStartDay: 1,
+      statutoryHolidayCodes: ["OFF"],
+      previousBoundaryKnown: true,
+      nextBoundaryKnown: true,
+      restMinimumMinutes: 660,
+      maxConsecutiveWorkDays: 6
+    },
+    requirements: [],
+    preferences: []
+  };
+
+  const result = evaluatePlanFull(plan, context);
+  assert.equal(result.statutoryViolationCount, 0);
+  assert.ok(result.verificationIssues.some((issue) => issue.type === "statutoryCycleIncomplete"));
+});

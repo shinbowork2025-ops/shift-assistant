@@ -257,7 +257,10 @@ function createSearch(planInput, config = {}) {
     strategyWeightHistory: [],
     repairOptions: {
       enabled: config.enableRepair !== false,
-      configuredCellCount: Number.isFinite(Number(config.repairCellCount))
+      configuredCellCount: config.repairCellCount !== null
+        && config.repairCellCount !== undefined
+        && config.repairCellCount !== ""
+        && Number.isFinite(Number(config.repairCellCount))
         ? Math.max(1, Math.floor(Number(config.repairCellCount)))
         : null,
       beamWidth: config.repairBeamWidth,
@@ -265,7 +268,10 @@ function createSearch(planInput, config = {}) {
     },
     lnsOptions: {
       enabled: config.enableLns !== false,
-      configuredDestroySize: Number.isFinite(Number(config.lnsDestroySize))
+      configuredDestroySize: config.lnsDestroySize !== null
+        && config.lnsDestroySize !== undefined
+        && config.lnsDestroySize !== ""
+        && Number.isFinite(Number(config.lnsDestroySize))
         ? Math.max(1, Math.floor(Number(config.lnsDestroySize)))
         : null,
       beamWidth: config.lnsBeamWidth ?? config.repairBeamWidth,

@@ -51,6 +51,10 @@ export function validateMonthSolverApplication(result) {
   if (!constraintsOk) {
     issues.push(`勤務間隔・連続勤務の違反が${objective.hard}件残っています。`);
   }
+  const statutoryUnverifiedCycles = Math.max(0, Number(objective.statutoryUnverifiedCycles) || 0);
+  if (statutoryUnverifiedCycles > 0) {
+    issues.push(`月境界の勤務情報が不足しているため、法定休日${statutoryUnverifiedCycles}従業員・周期は未確認です。`);
+  }
 
   const shortagePeople = Number(result?.finalShortagePersonSlots ?? objective.shortagePeople) || 0;
   const attributeShortage = Number(result?.finalAttributeShortagePersonSlots) || 0;

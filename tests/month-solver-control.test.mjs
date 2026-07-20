@@ -76,6 +76,17 @@ test("2,000反復ブロックと120反復yieldを既定値として固定する"
     yieldChunkIterations: 120,
     timeBudgetMs: null
   });
+  assert.deepEqual(normalizeExecutionConfig({
+    iterations: 600,
+    fixedBlockCount: null,
+    timeBudgetMs: null
+  }), {
+    iterations: 600,
+    fixedBlockCount: null,
+    plannedBlocks: 1,
+    yieldChunkIterations: 120,
+    timeBudgetMs: null
+  });
 });
 
 test("正の差分30件以上は中央値、29件以下は2,000点で温度較正する", () => {

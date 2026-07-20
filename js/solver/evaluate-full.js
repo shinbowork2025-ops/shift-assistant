@@ -165,7 +165,11 @@ export function evaluatePlanFull(plan, context) {
       const cycleEnd = new Date(cycle.start.getTime() + (cycle.length - 1) * DAY_MS);
       const extendsPrevious = cycle.start < periodStartDate;
       const extendsNext = cycleEnd > periodEndDate;
-      if ((extendsPrevious && !previousKnown) || (extendsNext && !nextKnown)) {
+      // A single adjacent-day code is enough for rest-interval checks, but not for
+      // counting every statutory holiday in a partial 7/28-day cycle. Treat all
+      // cross-period cycles as unverified until the evaluation contract carries
+      // the complete adjacent-cycle assignments.
+      if (extendsPrevious || extendsNext) {
         incompleteCycle = true;
         continue;
       }
@@ -203,13 +207,16 @@ export function evaluatePlanFull(plan, context) {
   }
 
   const restMinimumMinutes = Math.max(0, Number(settings.restMinimumMinutes) || 0);
-  const maxConsecutiveWorkDays = Math.max(0, Number(settings.maxConsecutiveWorkDays) || 0);
   const weekendDays = [];
   const lateDays = [];
 
   for (const employeeId of employeeOrder) {
     const row = employeeIndex.get(employeeId);
     const employee = employees.get(employeeId) ?? { id: employeeId, name: employeeId };
+    const maxConsecutiveWorkDays = Math.max(
+      0,
+      Number(employee.maxConsecutiveWorkDays ?? settings.maxConsecutiveWorkDays) || 0
+    );
     const metrics = breakdownByEmployee[employeeId];
     const codes = Array.from({ length: plan.dayCount }, (_, day) => assignment(plan, row, day));
     const types = codes.map((code) => shiftTypes.get(code) ?? null);

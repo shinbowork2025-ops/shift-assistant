@@ -2,7 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { solveMonthSchedule } from "../js/month-solver.js";
-import { compareSolverObjectives, scoreMonthSolverPlan } from "../js/month-solver-score.js";
+import {
+  compareSolverObjectives,
+  createMonthSolverScoreContext,
+  evaluateMonthSolverChanges,
+  evaluateSolverDay,
+  scoreMonthSolverPlan
+} from "../js/month-solver-score.js";
 
 const shifts = [
   { code: "E", name: "早い勤務", start: "09:00", end: "17:00", isWork: true, overtimeMinutes: 0 },
@@ -43,7 +49,7 @@ test("必要人数不足を最優先に改善する", () => {
   const result = solveMonthSchedule(plan, { seed: 123, iterations: 600 });
   assert.ok(compareSolverObjectives(result.objective, initial) < 0);
   assert.equal(initial.shortagePeople > result.objective.shortagePeople, true);
-  assert.equal(result.objective.shortagePeople, 0);
+  assert.equal(result.finalShortagePersonSlots, 0);
   assert.equal(result.validation.ok, true);
 });
 
@@ -84,7 +90,7 @@ test("雇用区分別の必要人数を満たす組合せを優先する", () =>
   ];
   const result = solveMonthSchedule(plan, { seed: 31415, iterations: 800 });
 
-  assert.equal(result.objective.shortagePeople, 0);
+  assert.equal(result.finalShortagePersonSlots, 0);
   assert.equal(result.plan.assignments.e1[1], "E");
   assert.equal(result.plan.assignments.e2[1], "L");
 });
@@ -137,6 +143,65 @@ test("同じ入力とシードなら同じ案を返す", () => {
   const second = solveMonthSchedule(oneDayPlan(), { seed: 9876, iterations: 500 });
   assert.deepEqual(first.plan.assignments, second.plan.assignments);
   assert.deepEqual(first.objective, second.objective);
+});
+
+test("本番探索評価が休憩をperson-slotで按分する", () => {
+  const plan = oneDayPlan();
+  plan.employees = [plan.employees[0]];
+  plan.selectedEmployeeIds = ["e1"];
+  plan.assignments = { e1: { 1: "E" } };
+  plan.originalAssignments = { e1: { 1: "E" } };
+  plan.fixedValues = { e1: {} };
+  plan.allowedCodes = { e1: ["E", "L"] };
+  plan.targetDaysOffByEmployee = { e1: 0 };
+  plan.maxConsecutiveByEmployee = { e1: 6 };
+  plan.dominantCodeByEmployee = { e1: "E" };
+  plan.mutableCells = [{ employeeId: "e1", day: 1 }];
+  plan.coverageRequirements = [{
+    scope: "everyday",
+    start: "09:00",
+    end: "17:00",
+    requiredTotal: 1,
+    requiredByType: {}
+  }];
+
+  const metric = evaluateSolverDay(plan, 1);
+  const shortage = metric.shortageBySlot.reduce((sum, value) => sum + value, 0);
+  assert.ok(Math.abs(shortage - 3) < 1e-9);
+  assert.ok(metric.shortageBySlot.some((value) => value > 0 && value < 1));
+});
+
+test("本番探索評価が完全に判定できる週の法定休日不足を数える", () => {
+  const plan = performancePlan();
+  plan.employees = [plan.employees[0]];
+  plan.selectedEmployeeIds = ["e1"];
+  plan.assignments = { e1: Object.fromEntries(Array.from({ length: 31 }, (_, index) => [index + 1, "E"])) };
+  plan.originalAssignments = structuredClone(plan.assignments);
+  plan.fixedValues = { e1: {} };
+  plan.allowedCodes = { e1: ["E", "L", "休"] };
+  plan.targetDaysOffByEmployee = { e1: 0 };
+  plan.maxConsecutiveByEmployee = { e1: 31 };
+  plan.dominantCodeByEmployee = { e1: "E" };
+  plan.mutableCells = Array.from({ length: 31 }, (_, index) => ({ employeeId: "e1", day: index + 1 }));
+
+  const objective = scoreMonthSolverPlan(plan);
+  assert.equal(objective.statutoryViolationCount, 3);
+  assert.equal(objective.statutoryViolationAmount, 3);
+  assert.equal(objective.statutoryUnverifiedCycles, 2);
+});
+
+test("手動固定休憩と矛盾するシフト候補を探索前に棄却する", () => {
+  const plan = oneDayPlan();
+  plan.breaks = {
+    "2026-07-01": {
+      e1: [{ type: "lunch", start: "17:00", end: "17:45" }]
+    }
+  };
+  plan.manualBreakLocks = { "2026-07-01": { e1: true } };
+  const context = createMonthSolverScoreContext(plan);
+  assert.equal(evaluateMonthSolverChanges(context, [
+    { employeeId: "e1", day: 1, after: "E" }
+  ]), null);
 });
 
 function performancePlan() {

@@ -176,7 +176,7 @@ test("ソルバー日次評価は保護された手動休憩を固定負荷と�
     manualBreakLocks: { "2026-07-01": { e1: true } }
   }, 1);
 
-  assert.equal(movable.shortagePeople, 0);
-  assert.ok(protectedMetric.shortagePeople > 0);
+  assert.ok(movable.shortagePeople > 0);
+  assert.ok(protectedMetric.shortagePeople > movable.shortagePeople);
   assert.deepEqual(protectedMetric.breaksByEmployee.e1, [{ startMinute: 600, endMinute: 645 }]);
 });

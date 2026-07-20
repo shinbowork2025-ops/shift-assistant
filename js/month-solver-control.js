@@ -16,6 +16,7 @@ export const DEFAULT_TEMPERATURE_SCALE_BY_STRATEGY = Object.freeze({
 });
 
 function finiteNonNegative(value, fallback) {
+  if (value === null || value === undefined || value === "") return fallback;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
@@ -97,7 +98,10 @@ export function restartSeed(masterSeed, restartNumber) {
 }
 
 export function normalizeExecutionConfig(config = {}) {
-  const fixedBlockCount = Number.isFinite(Number(config.fixedBlockCount))
+  const fixedBlockCount = config.fixedBlockCount !== null
+    && config.fixedBlockCount !== undefined
+    && config.fixedBlockCount !== ""
+    && Number.isFinite(Number(config.fixedBlockCount))
     ? Math.max(1, Math.floor(Number(config.fixedBlockCount)))
     : null;
   const configuredIterations = Math.max(1, Math.floor(Number(config.iterations ?? 8_000) || 8_000));
@@ -113,7 +117,10 @@ export function normalizeExecutionConfig(config = {}) {
       Math.floor(Number(config.yieldChunkIterations ?? config.chunkSize ?? YIELD_CHUNK_ITERATIONS)
         || YIELD_CHUNK_ITERATIONS)
     ),
-    timeBudgetMs: Number.isFinite(Number(config.timeBudgetMs))
+    timeBudgetMs: config.timeBudgetMs !== null
+      && config.timeBudgetMs !== undefined
+      && config.timeBudgetMs !== ""
+      && Number.isFinite(Number(config.timeBudgetMs))
       ? Math.max(0, Math.floor(Number(config.timeBudgetMs)))
       : null
   };
