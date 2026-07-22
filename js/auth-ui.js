@@ -29,12 +29,16 @@ export async function requireSimpleAuthentication() {
   const error = document.querySelector("#authError");
   const submitButton = document.querySelector("#authSubmitButton");
   const environmentLabel = document.querySelector("#authEnvironmentLabel");
+  const note = document.querySelector("#authGate .auth-note");
   if (!gate || !form || !userIdInput || !passwordInput || !error || !submitButton || !environmentLabel) {
     throw new Error("簡易認証画面の構成が不正です。");
   }
 
   document.documentElement.dataset.appBooted = "1";
   environmentLabel.textContent = AUTH_CONFIG.environmentLabel;
+  if (note) {
+    note.textContent = "このログインはテスト環境での誤操作防止用です。端末内データの暗号化、利用者の識別、権限分離、操作記録は行いません。";
+  }
   bindLogout();
   if (authenticatedSession()) return;
 

@@ -19,6 +19,7 @@ import { requireSimpleAuthentication, showAuthenticatedApplication } from "./aut
 import { showFatalStorageLoadError } from "./fatal-storage-ui.js";
 import { RELEASE_ID } from "./release-version.js";
 import { assertReleaseIntegrity, showFatalReleaseMismatch } from "./release-integrity.js";
+import { initializeSolverExplanationUi } from "./solver-explanation-ui.js";
 
 const EXPECTED_RELEASE_ID = "2026.07.18.2";
 
@@ -90,6 +91,7 @@ async function initialize() {
 
   initializeStorageSafetyUi();
   render(elements);
+  initializeSolverExplanationUi();
   document.documentElement.dataset.appReady = "1";
   return true;
 }
